@@ -1,9 +1,9 @@
 import HeaderAuth from "@/components/HeaderAuth";
+import LogoAuth from "@/components/LogoAuth";
 import TitleAuth from "@/components/TitleAuth";
 import { Link } from "expo-router";
 import { Image, ScrollView, Text, View } from "react-native";
 import SuccessImg from "../../assets/images/vector/Success.png";
-import LogoAuth from "../../src/components/LogoAuth";
 
 export default function OtpPage() {
   return (
@@ -37,7 +37,7 @@ export default function OtpPage() {
               <TitleAuth />
 
               <Link
-                href={"/CreatePassword"}
+                href={"/createPassword"}
                 className={`my-5 py-5 rounded-2xl shadow-lg flex-row justify-center items-center bg-primary`}
               >
                 <Text className="text-white font-bold text-lg text-center">

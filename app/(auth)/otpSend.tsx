@@ -1,4 +1,5 @@
 import HeaderAuth from "@/components/HeaderAuth";
+import LogoAuth from "@/components/LogoAuth";
 import TitleAuth from "@/components/TitleAuth";
 import { Link } from "expo-router";
 import React, { useState } from "react";
@@ -12,7 +13,6 @@ import {
 } from "react-native";
 import OTPVerification from "../../assets/images/vector/OTPVerification.png";
 import "../../global.css";
-import LogoAuth from "../../src/components/LogoAuth";
 
 export default function OtpPage() {
   const [number] = useState("09123123123");
@@ -73,7 +73,7 @@ export default function OtpPage() {
               </View>
 
               <Link
-                href={"/OtpVerification"}
+                href={"/otpVerification"}
                 className={`mt-5 py-5 rounded-2xl shadow-lg flex-row justify-center items-center bg-primary`}
               >
                 <Text className="text-white font-bold text-lg text-center">

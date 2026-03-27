@@ -1,3 +1,6 @@
+import HeaderAuth from "@/components/HeaderAuth";
+import LogoAuth from "@/components/LogoAuth";
+import TitleAuth from "@/components/TitleAuth";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import React, { useState } from "react";
@@ -9,9 +12,6 @@ import {
   View,
 } from "react-native";
 import "../../global.css";
-import HeaderAuth from "../../src/components/HeaderAuth";
-import LogoAuth from "../../src/components/LogoAuth";
-import TitleAuth from "../../src/components/TitleAuth";
 
 export default function RegisterPage() {
   // State for inputs

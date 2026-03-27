@@ -115,7 +115,7 @@ export default function OtpPage() {
               </View>
 
               <Link
-                href={"/SuccessVerification"}
+                href={"/successVerification"}
                 className={`mt-5 py-5 rounded-2xl shadow-lg flex-row justify-center items-center bg-primary`}
               >
                 <Text className="text-white font-bold text-lg text-center">

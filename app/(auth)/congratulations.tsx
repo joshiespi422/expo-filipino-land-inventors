@@ -1,9 +1,9 @@
 import HeaderAuth from "@/components/HeaderAuth";
+import LogoAuth from "@/components/LogoAuth";
 import TitleAuth from "@/components/TitleAuth";
 import { Link } from "expo-router";
 import { Image, ScrollView, Text, View } from "react-native";
 import CongratulationsImg from "../../assets/images/vector/Congratulations.png";
-import LogoAuth from "../../src/components/LogoAuth";
 
 export default function OtpPage() {
   return (

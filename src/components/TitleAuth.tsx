@@ -7,8 +7,8 @@ export default function TitleAuth() {
   const isLoginPage = pathname === "/login";
   const isRegisterPage = pathname === "/register";
   const isOtpSendPage = pathname === "/otpSend";
-  const isSuccessVerificationPage = pathname === "/SuccessVerification";
-  const isCreatePasswordPage = pathname === "/CreatePassword";
+  const isSuccessVerificationPage = pathname === "/successVerification";
+  const isCreatePasswordPage = pathname === "/createPassword";
   const isCongratulationsPage = pathname === "/congratulations";
 
   return (
