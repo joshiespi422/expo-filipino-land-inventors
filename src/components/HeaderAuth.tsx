@@ -1,18 +1,25 @@
-import { usePathname } from "expo-router";
 import { Text, View } from "react-native";
+import "../../global.css";
 
-export default function OtpPage() {
-  const pathname = usePathname();
-  const isLoginPage = pathname === "/login";
+interface HeaderAuthProps {
+  title: string;
+  subtitle?: string;
+}
 
+export default function HeaderAuth({ title, subtitle }: HeaderAuthProps) {
   return (
     <View className="bg-primary pt-14 pb-28 items-center justify-center">
       <Text className="font-bold text-4xl text-white tracking-tight">
-        {isLoginPage ? "Hello" : "Join Us"}
+        {title}
       </Text>
 
-      <Text className="text-lg text-white opacity-80 pb-4 font-medium">
-        {isLoginPage ? "Welcome back!" : ""}
+      {/* We always render the Text component to keep the height consistent.
+         If there's no subtitle, we set opacity-0 so it's invisible but takes up space.
+      */}
+      <Text
+        className={`text-lg text-white pb-4 font-medium ${subtitle ? "opacity-80" : "opacity-0"}`}
+      >
+        {subtitle || ""}
       </Text>
     </View>
   );
