@@ -1,11 +1,14 @@
 import HeaderAuth from "@/components/HeaderAuth";
+import LinkAuth from "@/components/LinkAuth";
 import LogoAuth from "@/components/LogoAuth";
 import TitleAuth from "@/components/TitleAuth";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Ionicons } from "@expo/vector-icons";
-import { Link } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react"; // Added useRef
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -19,140 +22,205 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [navigating, setNavigating] = useState(false);
+
+  const isProcessing = useRef(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setPageLoading(false), 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleLogin = () => {
-    if (!number || !password) return alert("Please fill in all fields");
+    if (isProcessing.current || isLoading || navigating) return;
+
+    if (!number || !password) {
+      return Alert.alert("Error", "Please fill in all fields");
+    }
+
+    isProcessing.current = true;
     setIsLoading(true);
+
     setTimeout(() => {
       setIsLoading(false);
-      console.log("Form submitted locally:", { number, password });
-    }, 1500);
+    }, 800);
   };
 
   return (
     <ScrollView
       contentContainerStyle={{ flexGrow: 1 }}
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === "android"}
       showsVerticalScrollIndicator={false}
     >
       <View className="flex-1 bg-slate-50">
-        {/* Header title */}
-        <HeaderAuth />
+        <HeaderAuth title="Hello" subtitle="Welcome back!" />
 
-        {/* MAIN CONTENT */}
         <View className="flex-1 -mt-10">
           <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
           <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
-            <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md [shadow-offset:0px_3px] [shadow-opacity:0.24] [shadow-radius:8px] elevation-4">
-              {/* Logo */}
-              <LogoAuth />
-
-              {/* title */}
-              <TitleAuth />
-
-              {/* Form Inputs */}
-              <View className="gap-y-5">
-                <View>
-                  <Text className="text-primary mb-2 ml-2 font-medium text-xs uppercase">
-                    Mobile Number
-                  </Text>
-                  <TextInput
-                    className="bg-white p-4 rounded-2xl text-slate-800 border border-slate-200"
-                    placeholder="09123123123"
-                    placeholderTextColor="#94a3b8"
-                    value={number}
-                    onChangeText={setNumber}
-                    keyboardType="phone-pad"
-                    autoCapitalize="none"
-                  />
+            <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4 mb-10">
+              {pageLoading ? (
+                <View className="items-center mb-4">
+                  <View className="mt-[-76px] bg-white rounded-full shadow-sm">
+                    <Skeleton className="w-32 h-32 rounded-full border-4 border-white" />
+                  </View>
                 </View>
+              ) : (
+                <LogoAuth />
+              )}
 
-                <View>
-                  <Text className="text-primary mb-2 ml-2 font-medium text-xs uppercase">
-                    Password
-                  </Text>
-                  <View className="relative">
-                    <TextInput
-                      className="bg-white p-4 pr-12 rounded-2xl text-slate-800 border border-slate-200"
-                      placeholder="••••••••"
-                      placeholderTextColor="#94a3b8"
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={!showPassword}
-                    />
-                    <TouchableOpacity
-                      onPress={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2"
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={showPassword ? "eye-off-outline" : "eye-outline"}
-                        size={22}
-                        color="#94a3b8"
+              {pageLoading ? (
+                <View className="gap-y-6">
+                  <View className="items-center gap-y-3">
+                    <Skeleton className="h-8 w-48 rounded-lg" />
+                    <View className="items-center gap-y-1.5 w-full">
+                      <Skeleton className="h-3 w-[90%] rounded-md" />
+                      <Skeleton className="h-3 w-[80%] rounded-md" />
+                      <Skeleton className="h-3 w-[60%] rounded-md" />
+                    </View>
+                  </View>
+
+                  <View className="gap-y-5 mt-2">
+                    <View>
+                      <Skeleton className="h-3 w-24 mb-2 ml-2 rounded-full" />
+                      <Skeleton className="h-[58px] w-full rounded-2xl" />
+                    </View>
+                    <View>
+                      <Skeleton className="h-3 w-20 mb-2 ml-2 rounded-full" />
+                      <Skeleton className="h-[58px] w-full rounded-2xl" />
+                    </View>
+                  </View>
+
+                  <View className="flex-row justify-between items-center px-1">
+                    <Skeleton className="h-5 w-28 rounded-md" />
+                    <Skeleton className="h-5 w-28 rounded-md" />
+                  </View>
+
+                  <Skeleton className="h-[64px] w-full rounded-2xl mt-4" />
+                  <Skeleton className="h-4 w-40 self-center rounded-md" />
+                </View>
+              ) : (
+                <>
+                  <TitleAuth
+                    title="Login Account"
+                    description={
+                      <View>
+                        <Text className="text-center text-slate-900 text-sm">
+                          Log in to your account to securely access
+                        </Text>
+                        <Text className="text-center text-slate-900 text-sm">
+                          your dashboard, manage your information,
+                        </Text>
+                        <Text className="text-center text-slate-900 text-sm">
+                          and use all available features.
+                        </Text>
+                      </View>
+                    }
+                  />
+
+                  <View className="gap-y-5">
+                    <View>
+                      <Text className="text-primary mb-2 ml-2 font-medium text-xs uppercase">
+                        Mobile Number
+                      </Text>
+                      <TextInput
+                        className="bg-white p-4 rounded-2xl text-slate-800 border border-slate-200"
+                        placeholder="Mobile Number"
+                        value={number}
+                        onChangeText={setNumber}
+                        keyboardType="phone-pad"
+                        editable={!isLoading && !navigating}
                       />
+                    </View>
+
+                    <View>
+                      <Text className="text-primary mb-2 ml-2 font-medium text-xs uppercase">
+                        Password
+                      </Text>
+                      <View className="relative">
+                        <TextInput
+                          className="bg-white p-4 pr-12 rounded-2xl text-slate-800 border border-slate-200"
+                          placeholder="Password"
+                          value={password}
+                          onChangeText={setPassword}
+                          secureTextEntry={!showPassword}
+                          editable={!isLoading && !navigating}
+                        />
+                        <TouchableOpacity
+                          onPress={() => setShowPassword(!showPassword)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2"
+                          disabled={isLoading || navigating}
+                        >
+                          <Ionicons
+                            name={
+                              showPassword ? "eye-off-outline" : "eye-outline"
+                            }
+                            size={22}
+                            color="#94a3b8"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View className="flex-row justify-between items-center mt-4 px-1">
+                    <TouchableOpacity
+                      onPress={() => setRememberMe(!rememberMe)}
+                      className="flex-row items-center"
+                      activeOpacity={0.7}
+                      disabled={isLoading || navigating}
+                    >
+                      <View
+                        className={`w-5 h-5 rounded border mr-2 items-center justify-center ${
+                          rememberMe
+                            ? "bg-primary border-primary"
+                            : "border-slate-300 bg-slate-50"
+                        }`}
+                      >
+                        {rememberMe && (
+                          <View className="w-1.5 h-1.5 bg-white rounded-sm" />
+                        )}
+                      </View>
+                      <Text className="text-primary text-sm">Remember me</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      disabled={isLoading || navigating}
+                    >
+                      <Text className="text-primary text-sm underline">
+                        Forgot Password?
+                      </Text>
                     </TouchableOpacity>
                   </View>
-                </View>
-              </View>
 
-              {/* Remember Me & Forgot Password */}
-              <View className="flex-row justify-between items-center mt-4 px-1">
-                <TouchableOpacity
-                  onPress={() => setRememberMe(!rememberMe)}
-                  className="flex-row items-center"
-                  activeOpacity={0.7}
-                >
-                  <View
-                    className={`w-5 h-5 rounded border mr-2 items-center justify-center ${
-                      rememberMe
-                        ? "bg-primary border-primary"
-                        : "border-slate-300 bg-slate-50"
+                  <TouchableOpacity
+                    onPress={handleLogin}
+                    disabled={isLoading || navigating}
+                    activeOpacity={0.8}
+                    className={`mt-7 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                      isLoading || navigating ? "bg-slate-400" : "bg-primary"
                     }`}
                   >
-                    {rememberMe && (
-                      <View className="w-2 h-2 bg-white rounded-sm" />
+                    {isLoading ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <Text className="text-white font-bold text-lg text-center">
+                        {navigating ? "Redirecting..." : "Log in"}
+                      </Text>
                     )}
-                  </View>
-                  <Text className="text-slate-500 text-sm font-medium">
-                    Remember me
-                  </Text>
-                </TouchableOpacity>
+                  </TouchableOpacity>
 
-                <TouchableOpacity activeOpacity={0.7}>
-                  <Text className="text-primary text-sm underline">
-                    Forgot Password?
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Sign In Button */}
-              <TouchableOpacity
-                onPress={handleLogin}
-                disabled={isLoading}
-                className={`mt-8 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
-                  isLoading ? "bg-slate-400" : "bg-primary"
-                }`}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="text-white font-bold text-lg">Log in</Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Footer */}
-              <View className="flex-row justify-center mt-5">
-                <TouchableOpacity>
-                  <Link
-                    href={"/register"}
-                    className="text-primary text-lg font-bold"
-                  >
-                    Create New Account?
-                  </Link>
-                </TouchableOpacity>
-              </View>
+                  <LinkAuth
+                    onNavigating={setNavigating}
+                    isNavigating={navigating}
+                  />
+                </>
+              )}
             </View>
           </View>
         </View>
