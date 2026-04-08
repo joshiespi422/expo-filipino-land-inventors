@@ -12,6 +12,9 @@ module.exports = {
         primary: "#034194",
         accent: "#e2e8f0",
       },
+      boxShadow: {
+        brand: "0px 6px 16px rgba(3, 65, 148, 0.35)",
+      },
       fontFamily: {
         calibri: ["Calibri"],
       },
