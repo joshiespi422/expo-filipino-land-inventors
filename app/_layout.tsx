@@ -37,7 +37,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <StatusBar hidden={true} />
 
-      <View className="flex-1 bg-slate-50">
+      <View className="flex-1 bg-white">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           className="flex-1"
@@ -53,7 +53,7 @@ export default function RootLayout() {
                 className="bg-white rounded-full border border-primary/20 p-2 shadow-brand"
                 style={{ elevation: 4 }}
               >
-                <Ionicons name="call" size={36} color="#034194" />
+                <Ionicons name="call" size={35} color="#034194" />
               </View>
             </View>
 
@@ -62,7 +62,11 @@ export default function RootLayout() {
               className="absolute bottom-[-43px] bg-white rounded-full shadow-brand"
               style={{ elevation: 6 }}
             >
-              <Image source={logo} className="w-24 h-24" resizeMode="contain" />
+              <Image
+                source={logo}
+                className="!w-24 !h-24"
+                resizeMode="contain"
+              />
             </View>
 
             {/* RIGHT ICON */}
@@ -74,7 +78,7 @@ export default function RootLayout() {
                 className="bg-white rounded-full border border-primary/20 p-2 shadow-brand"
                 style={{ elevation: 4 }}
               >
-                <Entypo name="message" size={36} color="#034194" />
+                <Entypo name="message" size={35} color="#034194" />
               </View>
             </View>
           </View>

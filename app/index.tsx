@@ -1,45 +1,18 @@
-import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import { Link } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { Image, ScrollView, Text, View } from "react-native";
+import Businessicon from "../assets/images/icon/Businessicon.png";
+import image from "../assets/images/image.png";
+
 import "../global.css";
 
 export default function LoginPage() {
-  const [number, setNumber] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
-
-  const isProcessing = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setPageLoading(false), 400);
     return () => clearTimeout(timer);
   }, []);
-
-  const handleLogin = () => {
-    if (isProcessing.current || isLoading) return;
-
-    if (!number || !password) {
-      return Alert.alert("Error", "Please fill in all fields");
-    }
-
-    isProcessing.current = true;
-    setIsLoading(true);
-
-    // Simulate API Call
-    setTimeout(() => {
-      setIsLoading(false);
-      isProcessing.current = false;
-      Alert.alert("Success", "Logged in!");
-    }, 1500);
-  };
-
-  if (pageLoading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-slate-50">
-        <ActivityIndicator size="large" color="#ef4444" />
-      </View>
-    );
-  }
 
   return (
     <ScrollView
@@ -48,11 +21,81 @@ export default function LoginPage() {
       showsVerticalScrollIndicator={false}
       className="flex-1"
     >
-      <View className="flex-1 p-6 justify-center">
-        <View className="space-y-4">
-          <Text className="text-2xl font-bold text-slate-800 mb-6 text-center">
-            Hello, Juan
-          </Text>
+      <View className="flex-1 bg-white items-center">
+        <View className="px-6 pt-2 w-full max-w-[500px] border mx-auto">
+          <View>
+            {/* text */}
+            <Text className="text-2xl text-slate-800 text-center">
+              Hello, <Text className="font-bold">Juan Dela Cruz!</Text>
+            </Text>
+            <Text className="text-md text-slate-800 text-center">
+              How can we help you today?
+            </Text>
+
+            {/* Image  */}
+            <Image
+              source={image}
+              className="!w-full !h-32 mt-5"
+              resizeMode="contain"
+            />
+
+            {/* Button Link */}
+            <View className="pt-5 grid gap-4 grid-cols-3">
+              <Link href="/" className="grid gap-0 text-center !w-20">
+                <Image
+                  source={Businessicon}
+                  className="!w-12 !h-12 mx-auto"
+                  resizeMode="contain"
+                />
+                <Text>Business Training</Text>
+              </Link>
+
+              <Link href="/" className="grid text-center !w-20">
+                <Image
+                  source={Businessicon}
+                  className="!w-12 !h-12 mx-auto"
+                  resizeMode="contain"
+                />
+                Intellectual Property Assistance
+              </Link>
+
+              <Link href="/" className="grid text-center !w-20">
+                <Image
+                  source={Businessicon}
+                  className="!w-12 !h-12 mx-auto"
+                  resizeMode="contain"
+                />
+                Funding & Invest Opportunities
+              </Link>
+
+              <Link href="/" className="grid text-center !w-20">
+                <Image
+                  source={Businessicon}
+                  className="!w-12 !h-12 mx-auto"
+                  resizeMode="contain"
+                />
+                Licensing & Permit Assistant
+              </Link>
+
+              <Link href="/" className="grid text-center !w-20">
+                <Image
+                  source={Businessicon}
+                  className="!w-12 !h-12 mx-auto"
+                  resizeMode="contain"
+                />
+                R & D Collaboration
+              </Link>
+
+              <Link href="/" className="grid text-center !w-20">
+                <Image
+                  source={Businessicon}
+                  className="!w-12 !h-12 mx-auto"
+                  resizeMode="contain"
+                />
+                Ask an Expert Assistance
+              </Link>
+            </View>
+          </View>
         </View>
       </View>
     </ScrollView>
