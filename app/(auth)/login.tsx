@@ -4,10 +4,10 @@ import LogoAuth from "@/components/LogoAuth";
 import TitleAuth from "@/components/TitleAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef, useState } from "react"; // Added useRef
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   Text,
@@ -18,6 +18,7 @@ import {
 import "../../global.css";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [number, setNumber] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -36,15 +37,12 @@ export default function LoginPage() {
   const handleLogin = () => {
     if (isProcessing.current || isLoading || navigating) return;
 
-    if (!number || !password) {
-      return Alert.alert("Error", "Please fill in all fields");
-    }
-
     isProcessing.current = true;
     setIsLoading(true);
 
     setTimeout(() => {
       setIsLoading(false);
+      router.push("../(main)/");
     }, 800);
   };
 
@@ -202,7 +200,7 @@ export default function LoginPage() {
                     onPress={handleLogin}
                     disabled={isLoading || navigating}
                     activeOpacity={0.8}
-                    className={`mt-7 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                    className={`mt-5 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
                       isLoading || navigating ? "bg-slate-400" : "bg-primary"
                     }`}
                   >
