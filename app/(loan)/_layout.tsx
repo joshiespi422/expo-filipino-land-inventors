@@ -70,7 +70,7 @@ export default function RootLayout() {
           </View>
 
           {/* --- MAIN CONTENT AREA --- */}
-          <View className="flex-1 pt-8">
+          <View className="flex-1">
             <Stack
               screenOptions={{
                 headerShown: false,
