@@ -2,7 +2,7 @@ import HeaderAuth from "@/components/HeaderAuth";
 import LogoAuth from "@/components/LogoAuth";
 import TitleAuth from "@/components/TitleAuth";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,14 +18,15 @@ import "../../global.css";
 
 export default function SuccessVerificationPage() {
   const router = useRouter();
-
-  // EXTRA LOCK: Prevents "double-fire" clicks instantly
+  const { phone, token } = useLocalSearchParams<{
+    phone: string;
+    token: string;
+  }>();
   const isProcessing = useRef(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
 
-  // Snappy loading (0.4s) to match the flow
   useEffect(() => {
     const timer = setTimeout(() => setPageLoading(false), 400);
     return () => clearTimeout(timer);
@@ -39,7 +40,11 @@ export default function SuccessVerificationPage() {
 
     setTimeout(() => {
       setIsLoading(false);
-      router.replace("/createPassword");
+      // Passing the data to the password page
+      router.replace({
+        pathname: "/createPassword",
+        params: { phone, token },
+      });
     }, 800);
   };
 
@@ -52,14 +57,10 @@ export default function SuccessVerificationPage() {
     >
       <View className="flex-1 bg-slate-50">
         <HeaderAuth title="Join Us" />
-
         <View className="flex-1 -mt-10">
-          {/* Blue Background Header */}
           <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
-
           <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
             <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
-              {/* --- LOGO SECTION --- */}
               {pageLoading ? (
                 <View className="items-center mb-4">
                   <View className="mt-[-76px] bg-white rounded-full shadow-sm">
@@ -71,7 +72,6 @@ export default function SuccessVerificationPage() {
               )}
 
               {pageLoading ? (
-                /* --- SUCCESS SKELETON --- */
                 <View className="gap-y-6">
                   <Skeleton className="h-52 w-full rounded-3xl mt-3" />
                   <View className="items-center gap-y-3">
@@ -84,7 +84,6 @@ export default function SuccessVerificationPage() {
                   <Skeleton className="h-[64px] w-full rounded-2xl my-5" />
                 </View>
               ) : (
-                /* --- ACTUAL CONTENT --- */
                 <>
                   <View className="pt-3">
                     <Image
@@ -93,7 +92,6 @@ export default function SuccessVerificationPage() {
                       resizeMode="contain"
                     />
                   </View>
-
                   <TitleAuth
                     title="Success!!!"
                     containerClass="mb-5 mt-4"
@@ -108,14 +106,11 @@ export default function SuccessVerificationPage() {
                       </>
                     }
                   />
-
                   <TouchableOpacity
                     onPress={handleContinue}
                     disabled={isLoading}
                     activeOpacity={0.8}
-                    className={`my-5 py-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
-                      isLoading ? "bg-slate-400" : "bg-primary"
-                    }`}
+                    className={`my-5 py-5 rounded-2xl shadow-lg flex-row justify-center items-center ${isLoading ? "bg-slate-400" : "bg-primary"}`}
                   >
                     {isLoading ? (
                       <ActivityIndicator color="white" />

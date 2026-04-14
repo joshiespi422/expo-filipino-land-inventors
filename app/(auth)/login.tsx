@@ -3,11 +3,14 @@ import LinkAuth from "@/components/LinkAuth";
 import LogoAuth from "@/components/LogoAuth";
 import TitleAuth from "@/components/TitleAuth";
 import { Skeleton } from "@/components/ui/skeleton";
+import { authService } from "@/services/authService";
+import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   Text,
@@ -19,6 +22,8 @@ import "../../global.css";
 
 export default function LoginPage() {
   const router = useRouter();
+  const setAuth = useAuthStore((state) => state.setAuth);
+
   const [number, setNumber] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -34,16 +39,35 @@ export default function LoginPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (isProcessing.current || isLoading || navigating) return;
+
+    if (!number || !password) {
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
 
     isProcessing.current = true;
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      // 1. Call the API Service
+      const data = await authService.login(number, password);
+
+      // 2. Save to Zustand & SecureStore
+      await setAuth(data.token, data.user);
+
+      setNavigating(true);
+      // 3. Navigate to Main Dashboard
+      router.replace("/(main)");
+    } catch (error: any) {
+      const errorMsg =
+        error.message || "Invalid credentials. Please try again.";
+      Alert.alert("Login Failed", errorMsg);
+    } finally {
       setIsLoading(false);
-      router.push("../(main)/");
-    }, 800);
+      isProcessing.current = false;
+    }
   };
 
   return (

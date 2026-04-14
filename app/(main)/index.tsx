@@ -29,10 +29,14 @@ export default function DashboardPage() {
   }, []);
 
   const menuItems = [
-    { label: "Business Training", href: "/", source: Businessicon },
+    {
+      label: "Business Training",
+      href: "/(business)/",
+      source: Businessicon,
+    },
     {
       label: "Intellectual Property Assistant",
-      href: "/",
+      href: "/(intellectual)/",
       source: Intellectual,
     },
     {
@@ -40,7 +44,11 @@ export default function DashboardPage() {
       href: "/(auth)/login",
       source: Funding,
     },
-    { label: "Licensing & Permit Assistance", href: "/", source: Licensing },
+    {
+      label: "Licensing & Permit Assistance",
+      href: "/(business)/",
+      source: Licensing,
+    },
     { label: "R & D Collaboration", href: "/", source: RD },
     { label: "Ask an Expert Assistance", href: "/", source: Ask },
     { label: "Loan Assistance", href: "../(loan)/", source: Loan },

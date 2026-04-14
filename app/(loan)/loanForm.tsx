@@ -1,6 +1,7 @@
+import { Skeleton } from "@/components/ui/skeleton"; // Ensure this path is correct
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -13,29 +14,33 @@ import "../../global.css";
 
 export default function LoanFormPage() {
   const router = useRouter();
+
+  // States
+  const [pageLoading, setPageLoading] = useState(true);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const isProcessing = useRef(false);
-
   const [isLoading, setIsLoading] = useState(false);
   const [navigating] = useState(false);
 
   const [amount, setAmount] = useState("");
   const [months, setMonths] = useState("6");
 
-  // FUTURE: Replace 16000 with a value from your database/API
   const MAX_LIMIT = 16000;
   const MONTHLY_INTEREST_RATE = 0.03; // 3%
 
-  const handleChange = (value: string) => {
-    // 1. Strip all non-numeric characters
-    let rawValue = value.replace(/[^0-9]/g, "");
+  // Effect: Initial Page Load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPageLoading(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
 
-    // 2. Use the MAX_LIMIT variable here
+  const handleChange = (value: string) => {
+    let rawValue = value.replace(/[^0-9]/g, "");
     if (rawValue && parseInt(rawValue) > MAX_LIMIT) {
       rawValue = MAX_LIMIT.toString();
     }
-
-    // 3. Format the input display (e.g., "16,000")
     const formattedValue = rawValue ? parseInt(rawValue).toLocaleString() : "";
     setAmount(formattedValue);
   };
@@ -56,7 +61,6 @@ export default function LoanFormPage() {
     for (let i = 1; i <= n; i++) {
       const interestForMonth = currentBalance * r;
       const totalMonthlyPayment = fixedPrincipal + interestForMonth;
-
       const dueDate = new Date(
         today.getFullYear(),
         today.getMonth() + i,
@@ -105,84 +109,125 @@ export default function LoanFormPage() {
       >
         <View className="items-center py-8">
           <View className="mx-5 pb-10 max-w-[500px] w-full self-center">
-            {/* HEADER */}
+            {/* 1. HEADER */}
             <View className="pb-8 pt-5 px-4">
-              <Text className="text-center font-bold text-primary text-2xl">
-                Loan Computation
-              </Text>
-              <Text className="text-center text-slate-500 text-sm pt-2">
-                Review your diminishing interest monthly breakdown
-              </Text>
+              {pageLoading ? (
+                <View className="items-center gap-y-2">
+                  <Skeleton className="h-8 w-60" />
+                  <Skeleton className="h-4 w-72" />
+                </View>
+              ) : (
+                <>
+                  <Text className="text-center font-bold text-primary text-2xl">
+                    Loan Computation
+                  </Text>
+                  <Text className="text-center text-slate-500 text-sm pt-2">
+                    Review your diminishing interest monthly breakdown
+                  </Text>
+                </>
+              )}
             </View>
 
-            {/* AMOUNT INPUT */}
+            {/* 2. AMOUNT INPUT */}
             <View className="px-4">
               <View>
                 <View className="flex-row items-center border-b-2 border-primary w-full py-2 justify-center">
                   <Text className="text-primary text-3xl font-bold mr-2">
                     ₱
                   </Text>
-                  <TextInput
-                    value={amount}
-                    onChangeText={handleChange}
-                    keyboardType="numeric"
-                    placeholder="0"
-                    placeholderTextColor="#9CA3AF"
-                    className="text-primary text-3xl font-bold flex-1"
-                  />
+                  {pageLoading ? (
+                    <Skeleton className="h-10 flex-1" />
+                  ) : (
+                    <TextInput
+                      value={amount}
+                      onChangeText={handleChange}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#9CA3AF"
+                      className="text-primary text-3xl font-bold flex-1"
+                    />
+                  )}
                 </View>
-                <Text className="p-1 text-slate-400">
-                  Available ₱
-                  {MAX_LIMIT.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                  })}
-                </Text>
+                {pageLoading ? (
+                  <Skeleton className="h-3 w-32 mt-2" />
+                ) : (
+                  <Text className="p-1 text-slate-400">
+                    Available ₱
+                    {MAX_LIMIT.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </Text>
+                )}
               </View>
 
-              {/* REPAYMENT PERIOD PICKER */}
+              {/* 3. REPAYMENT PERIOD PICKER */}
               <View className="w-full pt-6">
                 <Text className="text-xs font-bold text-slate-400 uppercase mb-2">
                   Repayment Period
                 </Text>
-                <View className="border border-slate-200 rounded-xl bg-slate-50 overflow-hidden h-14 justify-center">
-                  <Picker
-                    selectedValue={months}
-                    onValueChange={(value) => setMonths(value)}
-                    dropdownIconColor="#000"
-                  >
-                    {[...Array(12)].map((_, i) => (
-                      <Picker.Item
-                        key={i + 1}
-                        label={`${i + 1} Month${i > 0 ? "s" : ""}`}
-                        value={String(i + 1)}
-                      />
-                    ))}
-                  </Picker>
-                </View>
+                {pageLoading ? (
+                  <Skeleton className="h-14 w-full rounded-xl" />
+                ) : (
+                  <View className="border border-slate-200 rounded-xl bg-slate-50 overflow-hidden h-14 justify-center">
+                    <Picker
+                      selectedValue={months}
+                      onValueChange={(value) => setMonths(value)}
+                      dropdownIconColor="#000"
+                    >
+                      {[...Array(12)].map((_, i) => (
+                        <Picker.Item
+                          key={i + 1}
+                          label={`${i + 1} Month${i > 0 ? "s" : ""}`}
+                          value={String(i + 1)}
+                        />
+                      ))}
+                    </Picker>
+                  </View>
+                )}
               </View>
 
-              {/* REPAYMENT TABLE */}
-              {schedule.length > 0 && (
-                <View className="mt-8 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                  <View className="bg-primary p-3">
-                    <Text className="text-white font-bold text-center text-sm">
-                      Monthly Repayment
-                    </Text>
-                  </View>
+              {/* 4. REPAYMENT TABLE */}
+              <View className="mt-8 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <View className="bg-primary p-3">
+                  <Text className="text-white font-bold text-center text-sm">
+                    Monthly Repayment
+                  </Text>
+                </View>
 
-                  <View className="flex-row bg-slate-100 py-3 border-b border-slate-200">
-                    <Text className="w-[20%] text-[12px] font-bold text-slate-600 text-center">
-                      Installment
-                    </Text>
-                    <Text className="flex-1 text-[12px] font-bold text-slate-600 text-center">
-                      Repayment Amount
-                    </Text>
-                    <Text className="flex-1 text-[12px] font-bold text-slate-600 text-center">
-                      Estimated Due Date
-                    </Text>
-                  </View>
+                {/* Table Header */}
+                <View className="flex-row bg-slate-100 py-3 border-b border-slate-200">
+                  <Text className="w-[20%] text-[12px] font-bold text-slate-600 text-center">
+                    Installment
+                  </Text>
+                  <Text className="flex-1 text-[12px] font-bold text-slate-600 text-center">
+                    Repayment Amount
+                  </Text>
+                  <Text className="flex-1 text-[12px] font-bold text-slate-600 text-center">
+                    Estimated Due Date
+                  </Text>
+                </View>
 
-                  {schedule.map((item) => (
+                {/* Table Body (Data or Skeleton) */}
+                {pageLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <View
+                      key={`table-skeleton-${i}`}
+                      className="flex-row py-4 border-b border-slate-100 bg-white items-center"
+                    >
+                      <View className="w-[20%] items-center">
+                        <Skeleton className="h-4 w-6" />
+                      </View>
+                      <View className="flex-1 items-center gap-y-1">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-3 w-12" />
+                      </View>
+                      <View className="flex-1 items-center">
+                        <Skeleton className="h-4 w-24" />
+                      </View>
+                    </View>
+                  ))
+                ) : schedule.length > 0 ? (
+                  schedule.map((item) => (
                     <View
                       key={item.month}
                       className="flex-row py-4 border-b border-slate-100 bg-white items-center"
@@ -210,45 +255,66 @@ export default function LoanFormPage() {
                         </Text>
                       </View>
                     </View>
-                  ))}
-                </View>
-              )}
+                  ))
+                ) : (
+                  <View className="py-8 bg-white">
+                    <Text className="text-center text-slate-400 italic text-xs">
+                      Enter an amount to see the schedule
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         </View>
       </ScrollView>
 
-      {/* BOTTOM ACTION AREA */}
+      {/* 5. BOTTOM ACTION AREA */}
       <View className="px-6 pb-10 bg-white shadow-2xl max-w-[500px] w-full self-center">
-        <TouchableOpacity
-          onPress={() => setAgreeToTerms(!agreeToTerms)}
-          className="flex-row py-5 items-center"
-        >
-          <View
-            className={`w-5 h-5 rounded border mr-3 items-center justify-center ${
-              agreeToTerms ? "bg-primary border-primary" : "border-slate-300"
-            }`}
-          >
-            {agreeToTerms && <View className="w-2 h-2 bg-white rounded-full" />}
+        {pageLoading ? (
+          <View className="py-5">
+            <Skeleton className="h-6 w-full mb-5" />
+            <Skeleton className="h-16 w-full rounded-2xl" />
           </View>
-          <Text className="text-xs text-slate-600 flex-1">
-            I agree to the diminishing interest computation and terms.
-          </Text>
-        </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity
+              onPress={() => setAgreeToTerms(!agreeToTerms)}
+              className="flex-row py-5 items-center"
+            >
+              <View
+                className={`w-5 h-5 rounded border mr-3 items-center justify-center ${
+                  agreeToTerms
+                    ? "bg-primary border-primary"
+                    : "border-slate-300"
+                }`}
+              >
+                {agreeToTerms && (
+                  <View className="w-2 h-2 bg-white rounded-full" />
+                )}
+              </View>
+              <Text className="text-xs text-slate-600 flex-1">
+                I agree to the diminishing interest computation and terms.
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={handleLoanCongrats}
-          disabled={!agreeToTerms || !amount}
-          className={`h-16 rounded-2xl flex-row justify-center items-center ${
-            !agreeToTerms || !amount ? "bg-slate-300" : "bg-primary"
-          }`}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text className="text-white font-bold text-lg">Submit Loan</Text>
-          )}
-        </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleLoanCongrats}
+              disabled={!agreeToTerms || !amount}
+              className={`h-16 rounded-2xl flex-row justify-center items-center ${
+                !agreeToTerms || !amount ? "bg-slate-300" : "bg-primary"
+              }`}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="text-white font-bold text-lg">
+                  Submit Loan
+                </Text>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );

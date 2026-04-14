@@ -3,6 +3,11 @@ import LinkAuth from "@/components/LinkAuth";
 import LogoAuth from "@/components/LogoAuth";
 import TitleAuth from "@/components/TitleAuth";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  accountRegisterService,
+  RegisterPayload,
+} from "@/services/accountRegister";
+import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -22,23 +27,49 @@ export default function RegisterPage() {
   const router = useRouter();
   const phoneInputRef = useRef<TextInput>(null);
 
-  // EXTRA LOCK: This prevents "double-fire" clicks instantly
-  const isProcessing = useRef(false);
-
+  // Form States
   const [fullName, setFullName] = useState("");
   const [number, setNumber] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [navigating, setNavigating] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
 
-  // Very snappy loading (0.4s)
   useEffect(() => {
     const timer = setTimeout(() => setPageLoading(false), 400);
     return () => clearTimeout(timer);
   }, []);
 
+  // --- TANSTACK QUERY MUTATION ---
+  const mutation = useMutation({
+    mutationFn: (data: RegisterPayload) => {
+      return accountRegisterService.register(data);
+    },
+    onSuccess: () => {
+      router.push({
+        pathname: "/otpVerification",
+        params: { phone: `09${number}` },
+      });
+    },
+    onError: (error: any) => {
+      const status = error.response?.status;
+      const message = error.response?.data?.message || "";
+
+      // Check for the 429 status you set in Laravel
+      if (status === 429) {
+        // Option 1: Silent Redirect (Smoothest)
+        router.push({
+          pathname: "/otpVerification",
+          params: { phone: `09${number}` },
+        });
+      } else {
+        const errorMessage =
+          message || "Registration failed. Please try again.";
+        Alert.alert("Error", errorMessage);
+      }
+    },
+  });
+
   const handleRegister = () => {
-    if (isProcessing.current || isLoading || navigating) return;
+    if (mutation.isPending || navigating) return;
 
     if (!fullName || !number) {
       return Alert.alert("Required", "Please fill in all fields");
@@ -51,14 +82,11 @@ export default function RegisterPage() {
       );
     }
 
-    // SET LOCKS IMMEDIATELY
-    isProcessing.current = true;
-    setIsLoading(true);
-
-    setTimeout(() => {
-      setIsLoading(false);
-      router.push("/otpSend");
-    }, 800);
+    // Pass the '63' prefix to the API for Movider compatibility
+    mutation.mutate({
+      name: fullName,
+      phone: `639${number}`,
+    });
   };
 
   return (
@@ -72,7 +100,6 @@ export default function RegisterPage() {
         <HeaderAuth title="Join Us" />
 
         <View className="flex-1 -mt-10">
-          {/* Blue Background Header */}
           <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
           <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
@@ -89,6 +116,7 @@ export default function RegisterPage() {
               )}
 
               {pageLoading ? (
+                /* --- SKELETON UI --- */
                 <View className="gap-y-6">
                   <View className="items-center gap-y-3">
                     <Skeleton className="h-8 w-56 rounded-lg" />
@@ -111,6 +139,7 @@ export default function RegisterPage() {
                   <Skeleton className="h-4 w-40 self-center rounded-md" />
                 </View>
               ) : (
+                /* --- ACTUAL CONTENT --- */
                 <>
                   <TitleAuth
                     title="Register Account"
@@ -140,7 +169,7 @@ export default function RegisterPage() {
                         onChangeText={setFullName}
                         autoCapitalize="words"
                         autoCorrect={false}
-                        editable={!isLoading && !navigating}
+                        editable={!mutation.isPending && !navigating}
                       />
                     </View>
 
@@ -150,7 +179,7 @@ export default function RegisterPage() {
                       </Text>
                       <Pressable
                         onPress={() =>
-                          !isLoading &&
+                          !mutation.isPending &&
                           !navigating &&
                           phoneInputRef.current?.focus()
                         }
@@ -172,7 +201,7 @@ export default function RegisterPage() {
                           }
                           keyboardType="phone-pad"
                           maxLength={9}
-                          editable={!isLoading && !navigating}
+                          editable={!mutation.isPending && !navigating}
                         />
                       </Pressable>
                     </View>
@@ -180,17 +209,19 @@ export default function RegisterPage() {
 
                   <TouchableOpacity
                     onPress={handleRegister}
-                    disabled={isLoading || navigating}
+                    disabled={mutation.isPending || navigating}
                     activeOpacity={0.8}
                     className={`mt-7 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
-                      isLoading || navigating ? "bg-slate-400" : "bg-primary"
+                      mutation.isPending || navigating
+                        ? "bg-slate-400"
+                        : "bg-primary"
                     }`}
                   >
-                    {isLoading ? (
+                    {mutation.isPending ? (
                       <ActivityIndicator color="white" />
                     ) : (
                       <Text className="text-white font-bold text-lg">
-                        {navigating ? "Redirecting..." : "Verify Now?"}
+                        {navigating ? "Redirecting..." : "Register Now"}
                       </Text>
                     )}
                   </TouchableOpacity>
