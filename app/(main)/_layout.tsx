@@ -3,12 +3,11 @@ import { Ionicons } from "@expo/vector-icons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
-import { Redirect, Stack } from "expo-router";
+import { Redirect, Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -22,7 +21,7 @@ import History from "../../assets/images/icon/History.png";
 import Home from "../../assets/images/icon/Home.png";
 import Status from "../../assets/images/icon/Status.png";
 import Camera from "../../assets/images/icon/camera.png";
-import Profile from "../../assets/images/icon/profile.png";
+import ProfileIcon from "../../assets/images/icon/profile.png";
 import logo from "../../assets/images/logo.png";
 
 import "../../global.css";
@@ -30,10 +29,10 @@ import "../../global.css";
 const queryClient = new QueryClient();
 
 export default function MainLayout() {
-  const { token, isLoading, initialize, clearAuth } = useAuthStore();
+  const { token, isLoading, initialize } = useAuthStore();
+  const router = useRouter();
 
   useEffect(() => {
-    // Ensure the store is synchronized with SecureStore on mount
     initialize();
 
     const hideNavBar = async () => {
@@ -49,24 +48,6 @@ export default function MainLayout() {
     hideNavBar();
   }, []);
 
-  // Logout Confirmation Handler
-  const handleLogoutPress = () => {
-    Alert.alert("Logout", "Are you sure you want to log out of your account?", [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          await clearAuth();
-        },
-      },
-    ]);
-  };
-
-  // 1. LOADING GATE: Prevents the Redirect from firing while checking SecureStore
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
@@ -75,7 +56,6 @@ export default function MainLayout() {
     );
   }
 
-  // 2. SECURITY GATE: Redirect to login if NO token exists after loading is done
   if (!token) {
     return <Redirect href="/login" />;
   }
@@ -91,7 +71,6 @@ export default function MainLayout() {
         >
           {/* --- GLOBAL HEADER --- */}
           <View className="bg-primary z-10 w-full h-28 items-center justify-between pt-8">
-            {/* LEFT ICON (Call) */}
             <View
               className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full shadow-brand"
               style={{ elevation: 8 }}
@@ -104,19 +83,17 @@ export default function MainLayout() {
               </View>
             </View>
 
-            {/* CENTER LOGO */}
             <View
               className="absolute bottom-[-43px] bg-white rounded-full shadow-brand"
               style={{ elevation: 6 }}
             >
               <Image
                 source={logo}
-                className="!w-24 !h-24"
+                style={{ width: 96, height: 96 }}
                 resizeMode="contain"
               />
             </View>
 
-            {/* RIGHT ICON (Message) */}
             <View
               className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full shadow-brand"
               style={{ elevation: 8 }}
@@ -140,6 +117,7 @@ export default function MainLayout() {
               }}
             >
               <Stack.Screen name="index" />
+              <Stack.Screen name="profile/index" />
             </Stack>
           </View>
 
@@ -159,10 +137,10 @@ export default function MainLayout() {
               className="flex-row w-full max-w-[600px] px-4 items-center"
               style={{ overflow: "visible" }}
             >
-              {/* Home */}
               <TouchableOpacity
                 className="items-center flex-1"
                 activeOpacity={0.7}
+                onPress={() => router.push("/")}
               >
                 <Image
                   style={{ width: 31, height: 31 }}
@@ -172,7 +150,6 @@ export default function MainLayout() {
                 <Text className="text-white text-[10px] mt-1">Home</Text>
               </TouchableOpacity>
 
-              {/* Status */}
               <TouchableOpacity
                 className="items-center pe-2 flex-1"
                 activeOpacity={0.7}
@@ -185,7 +162,6 @@ export default function MainLayout() {
                 <Text className="text-white text-[10px] mt-1">Status</Text>
               </TouchableOpacity>
 
-              {/* Central Camera Action */}
               <View
                 className="flex-1 items-center justify-center"
                 style={{
@@ -222,7 +198,6 @@ export default function MainLayout() {
                 </TouchableOpacity>
               </View>
 
-              {/* History */}
               <TouchableOpacity
                 className="items-center ps-2 flex-1"
                 activeOpacity={0.7}
@@ -235,18 +210,18 @@ export default function MainLayout() {
                 <Text className="text-white text-[10px] mt-1">History</Text>
               </TouchableOpacity>
 
-              {/* Logout/Profile */}
+              {/* Profile Button */}
               <TouchableOpacity
                 className="items-center flex-1"
                 activeOpacity={0.7}
-                onPress={handleLogoutPress}
+                onPress={() => router.push("/profile")}
               >
                 <Image
                   style={{ width: 31, height: 31 }}
-                  source={Profile}
+                  source={ProfileIcon}
                   resizeMode="contain"
                 />
-                <Text className="text-white text-[10px] mt-1">Logout</Text>
+                <Text className="text-white text-[10px] mt-1">Profile</Text>
               </TouchableOpacity>
             </View>
           </View>

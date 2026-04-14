@@ -1,11 +1,13 @@
 import { useAuthStore } from "@/store/useAuthStore";
 import axios from "axios";
 
-// Your development machine IP
-const devIP = "192.168.1.53:8000";
+// 1. Define base constants
+export const devIP = "192.168.1.53:8000";
+export const BASE_URL = `http://${devIP}`;
+export const ICON_PATH = `${BASE_URL}/storage/businessIcon`;
 
 const api = axios.create({
-  baseURL: `http://${devIP}/api`,
+  baseURL: `${BASE_URL}/api`,
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -16,15 +18,12 @@ const api = axios.create({
 api.interceptors.request.use(
   async (config) => {
     const token = useAuthStore.getState().token;
-
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  },
+  (error) => Promise.reject(error),
 );
 
 api.interceptors.response.use(

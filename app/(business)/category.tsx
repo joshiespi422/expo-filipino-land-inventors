@@ -3,13 +3,17 @@ import { trainingService } from "@/services/trainingService";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 export default function CategoryPage() {
-  const { typeSlug, typeName } = useLocalSearchParams();
+  // 1. Destructure typeIcon from params
+  const { typeSlug, typeName, typeIcon } = useLocalSearchParams();
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  // 2. Format the URL using our service
+  const iconUrl = trainingService.getIconUrl(typeIcon as string);
 
   useEffect(() => {
     if (typeSlug) {
@@ -23,19 +27,33 @@ export default function CategoryPage() {
   }, [typeSlug]);
 
   return (
-    <View className="flex-1">
+    <View className="flex-1 bg-white">
       <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
-        <View className=" pt-10 pb-5">
-          <Text className="text-2xl text-center font-extrabold text-primary tracking-tight">
+        {/* HEADER SECTION WITH ICON */}
+        <View className="pt-10 pb-5 items-center">
+          <Text className="text-2xl text-center font-extrabold pt-4 pb-1 text-primary tracking-tight">
             Choose Specific Business
           </Text>
-          <Text className="text-2xl text-center font-extrabold pt-4 text-primary tracking-tight">
+          <Text className="text-2xl text-center font-extrabold py-4 text-primary tracking-tight">
             {typeName || "Business"}
           </Text>
+
+          {/* DYNAMIC ICON DISPLAY */}
+          <View className="w-36 h-36 my-5">
+            {iconUrl ? (
+              <Image
+                source={{ uri: iconUrl }}
+                className="w-full h-full"
+                resizeMode="cover"
+              />
+            ) : (
+              <Ionicons name="business" size={40} color="#007AFF" />
+            )}
+          </View>
         </View>
 
+        {/* CATEGORIES LIST */}
         {loading ? (
-          // Consistency with BusinessTypesPage skeletons
           [1, 2, 3, 4].map((i) => (
             <View key={i} className="mb-4">
               <Skeleton className="h-20 rounded-2xl" />

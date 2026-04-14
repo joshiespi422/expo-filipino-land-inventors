@@ -24,7 +24,7 @@ export default function DashboardPage() {
   const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => setPageLoading(false), 400);
+    const timer = setTimeout(() => setPageLoading(false), 200);
     return () => clearTimeout(timer);
   }, []);
 

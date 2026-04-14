@@ -1,10 +1,17 @@
-import api from "./api";
+import api, { ICON_PATH } from "./api";
 
 export const trainingService = {
+  /**
+   * Helper to format the icon URL if it exists
+   */
+  getIconUrl: (iconName: string | null) => {
+    return iconName ? `${ICON_PATH}/${iconName}` : null;
+  },
+
   getTypes: async () => {
     try {
       const response = await api.get("/business-training/types");
-      return response.data.data; // ✅ FIXED
+      return response.data.data;
     } catch (error: any) {
       throw error.response?.data || error.message;
     }
@@ -43,7 +50,6 @@ export const trainingService = {
     }
   },
 
-  // services/trainingService.ts
   getModule: async (categorySlug: string, moduleNumber: number) => {
     try {
       const response = await api.get(
