@@ -39,6 +39,7 @@ export default function DashboardPage() {
       href: "/(intellectual)/",
       source: Intellectual,
     },
+    { label: "Loan Assistance", href: "../(loan)/", source: Loan },
     {
       label: "Funding & Invest Opportunities",
       href: "/(auth)/login",
@@ -51,7 +52,6 @@ export default function DashboardPage() {
     },
     { label: "R & D Collaboration", href: "/", source: RD },
     { label: "Ask an Expert Assistance", href: "/", source: Ask },
-    { label: "Loan Assistance", href: "../(loan)/", source: Loan },
     { label: "FISMPC Online Store", href: "/", source: FISMPC },
     { label: "Product Validation Services", href: "/", source: Product },
     { label: "Lost & Found", href: "/", source: Lost },

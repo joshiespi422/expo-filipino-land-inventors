@@ -6,11 +6,12 @@ interface AuthState {
   user: any | null;
   isLoading: boolean;
   setAuth: (token: string, user: any) => Promise<void>;
+  setUser: (user: any) => Promise<void>; // Added this to fix your error
   clearAuth: () => Promise<void>;
   initialize: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   user: null,
   isLoading: true,
@@ -28,7 +29,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
     } catch (e) {
       console.error("Failed to initialize auth store:", e);
-      // If data is corrupt, clear it
       await SecureStore.deleteItemAsync("auth_token");
       await SecureStore.deleteItemAsync("user_data");
     } finally {
@@ -36,27 +36,39 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  // This handles the initial Login
   setAuth: async (token, user) => {
     try {
-      // Robust Handling: Determine if user is already a string or an object
       const userString = typeof user === "string" ? user : JSON.stringify(user);
       const userObject = typeof user === "string" ? JSON.parse(user) : user;
 
-      // 1. Save to physical storage
       await SecureStore.setItemAsync("auth_token", token);
       await SecureStore.setItemAsync("user_data", userString);
 
-      // 2. Update Zustand state
       set({
         token,
         user: userObject,
         isLoading: false,
       });
-
-      console.log("Auth Store: Session saved successfully");
     } catch (e) {
       console.error("Error saving auth session:", e);
       throw e;
+    }
+  },
+
+  // NEW: Specifically for updating profile data without touching the token
+  setUser: async (user) => {
+    try {
+      const userObject = typeof user === "string" ? JSON.parse(user) : user;
+      const currentState = get();
+      const updatedUser = { ...currentState.user, ...userObject };
+
+      await SecureStore.setItemAsync("user_data", JSON.stringify(updatedUser));
+
+      set({ user: updatedUser });
+      console.log("Auth Store: User data merged and saved");
+    } catch (e) {
+      console.error("Error updating user data:", e);
     }
   },
 
