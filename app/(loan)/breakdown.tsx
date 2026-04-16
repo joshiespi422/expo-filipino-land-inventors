@@ -1,74 +1,141 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { getLoan, payLoan } from "@/services/loanService";
-import { Loan } from "@/types/loan.types";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import "../../global.css";
+
+import { computeLoan, getLoan, payLoan } from "@/services/loanService";
 
 export default function LoanPaymentPage() {
   const { id } = useLocalSearchParams();
-  const router = useRouter();
+
   const [pageLoading, setPageLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [loanData, setLoanData] = useState<Loan | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
+  const [schedule, setSchedule] = useState<any[]>([]);
+  const [loanData, setLoanData] = useState<any>(null);
+
+  // 🔥 FETCH LOAN + COMPUTE SCHEDULE
   useEffect(() => {
-    if (id) fetchLoanDetails();
+    const fetchLoan = async () => {
+      try {
+        setPageLoading(true);
+
+        const loan = await getLoan(id as string);
+
+        const computed = await computeLoan({
+          amount: Number(loan.attributes.amount),
+          term: loan.attributes.term_months,
+          start_date: loan.attributes.start_date,
+        });
+
+        const formatted = computed.schedule.map((item: any, index: number) => ({
+          id: index + 1,
+          month: item.month,
+          totalPayment: Number(item.monthly_payment),
+          interest: Number(item.interest),
+          principal: Number(item.principal),
+          penalties: 0,
+          lateFees: 0,
+          dueDate: item.due_date,
+          status: "Unpaid",
+        }));
+
+        setSchedule(formatted);
+        setLoanData(loan);
+      } catch (error) {
+        console.log("FETCH ERROR:", error);
+      } finally {
+        setPageLoading(false);
+      }
+    };
+
+    if (id) fetchLoan();
   }, [id]);
 
-  async function fetchLoanDetails() {
-    try {
-      setPageLoading(true);
-      const response = await getLoan(id as string);
-      setLoanData(response);
+  // ✅ AUTO SELECT FIRST UNPAID
+  useEffect(() => {
+    if (pageLoading || schedule.length === 0) return;
 
-      const scheduleList = response.relationships?.loanSchedules?.data || [];
-      const firstUnpaid = scheduleList.find(
-        (i) => i.status.toLowerCase() !== "paid",
-      );
-      if (firstUnpaid) setSelectedIds([firstUnpaid.id]);
-    } catch (e) {
-      Alert.alert("Error", "Failed to load loan data");
-    } finally {
-      setPageLoading(false);
+    const firstUnpaid = schedule.find((item) => item.status === "Unpaid");
+
+    if (firstUnpaid) {
+      setSelectedIds([firstUnpaid.id]);
     }
-  }
+  }, [schedule, pageLoading]);
 
-  const schedule = loanData?.relationships?.loanSchedules?.data || [];
-
-  const totalToPay = selectedIds.reduce((sum, sId) => {
-    const item = schedule.find((s) => s.id === sId);
-    return sum + (Number(item?.total_payment) || 0);
+  // TOTAL
+  const totalToPay = selectedIds.reduce((sum, id) => {
+    const item = schedule.find((s) => s.id === id);
+    return sum + (item?.totalPayment || 0);
   }, 0);
 
-  const handlePayment = async () => {
-    if (selectedIds.length === 0) return;
-    setIsLoading(true);
-    try {
-      const targetId = selectedIds[0];
-      const targetItem = schedule.find((s) => s.id === targetId);
+  // OUTSTANDING
+  const outstandingBalance = schedule.reduce((sum, item) => {
+    return item.status === "Unpaid" ? sum + item.totalPayment : sum;
+  }, 0);
 
-      await payLoan(id as string, {
-        loan_schedule_id: targetId,
-        amount: Number(targetItem?.total_payment),
-        payment_method_id: 1,
+  const toggleSelection = (id: number) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter((x) => x !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  // PAYMENT
+  const handlePayment = async () => {
+    try {
+      setIsLoading(true);
+
+      for (const schedId of selectedIds) {
+        const item = schedule.find((s) => s.id === schedId);
+        if (!item) continue;
+
+        await payLoan(loanData.id, {
+          amount: item.totalPayment,
+          payment_date: new Date().toISOString(),
+          schedule_id: schedId,
+        });
+      }
+
+      alert("Payment successful!");
+
+      // refresh
+      const loan = await getLoan(id as string);
+
+      const computed = await computeLoan({
+        amount: Number(loan.attributes.amount),
+        term: loan.attributes.term_months,
+        start_date: loan.attributes.start_date,
       });
 
-      Alert.alert("Success", "Payment verified", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
-    } catch (e) {
-      Alert.alert("Error", "Payment failed");
+      const formatted = computed.schedule.map((item: any, index: number) => ({
+        id: index + 1,
+        month: item.month,
+        totalPayment: Number(item.monthly_payment),
+        interest: Number(item.interest),
+        principal: Number(item.principal),
+        penalties: 0,
+        lateFees: 0,
+        dueDate: item.due_date,
+        status: "Unpaid",
+      }));
+
+      setSchedule(formatted);
+      setSelectedIds([]);
+    } catch (err) {
+      console.log("PAY ERROR:", err);
+      alert("Payment failed");
     } finally {
       setIsLoading(false);
     }
@@ -78,135 +145,132 @@ export default function LoanPaymentPage() {
     <View className="flex-1 bg-[#F8FAFC]">
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingTop: 20, paddingBottom: 150 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: 20, paddingBottom: 180 }}
       >
-        {/* Balance Card */}
+        {/* SUMMARY */}
         <View className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mb-6">
-          <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-            Remaining Balance
-          </Text>
-          {pageLoading ? (
-            <Skeleton className="h-10 w-40 mt-2" />
-          ) : (
-            <Text className="text-primary text-3xl font-black mt-1">
-              ₱
-              {schedule
-                .filter((i) => i.status.toLowerCase() !== "paid")
-                .reduce((s, i) => s + Number(i.total_payment), 0)
-                .toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </Text>
-          )}
+          <View className="flex-row justify-between items-start">
+            {pageLoading ? (
+              <View className="gap-y-2">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-10 w-48" />
+              </View>
+            ) : (
+              <View>
+                <Text className="text-slate-400 text-xs font-bold uppercase">
+                  Outstanding Balance
+                </Text>
+                <Text className="text-primary text-3xl font-black mt-1">
+                  ₱{outstandingBalance.toFixed(2)}
+                </Text>
+              </View>
+            )}
+
+            <View className="bg-primary/10 p-2 rounded-full">
+              <Ionicons name="wallet-outline" size={24} color="#034194" />
+            </View>
+          </View>
         </View>
 
         <Text className="text-slate-800 font-black text-lg mb-4 px-2">
           Repayment Plan
         </Text>
 
-        {pageLoading ? (
-          <ActivityIndicator className="mt-10" color="#034194" />
-        ) : (
-          schedule.map((item) => {
-            const isPaid = item.status.toLowerCase() === "paid";
-            const isSelected = selectedIds.includes(item.id);
-            const isExpanded = expandedId === item.id;
-
-            return (
-              <View key={item.id} className="mb-3">
-                <TouchableOpacity
-                  onPress={() => setExpandedId(isExpanded ? null : item.id)}
-                  className={`flex-row items-center p-4 rounded-t-2xl border-t border-x ${isPaid ? "bg-slate-50" : isSelected ? "bg-primary" : "bg-white"} ${!isExpanded ? "rounded-b-2xl border-b" : ""}`}
+        {/* LIST */}
+        <View>
+          {pageLoading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <View
+                  key={i}
+                  className="bg-white p-4 rounded-2xl mb-3 flex-row items-center"
                 >
-                  <TouchableOpacity
-                    onPress={() => !isPaid && setSelectedIds([item.id])}
-                    className="mr-3"
-                  >
-                    <Ionicons
-                      name={
-                        isPaid
-                          ? "checkmark-circle"
-                          : isSelected
-                            ? "radio-button-on"
-                            : "radio-button-off"
-                      }
-                      size={24}
-                      color={
-                        isPaid ? "#22c55e" : isSelected ? "white" : "#cbd5e1"
-                      }
-                    />
-                  </TouchableOpacity>
-
-                  <View className="flex-1">
-                    <Text
-                      className={`font-bold ${isSelected ? "text-white" : "text-slate-800"}`}
-                    >
-                      Month {item.month_no}
-                    </Text>
-                    <Text
-                      className={`text-[10px] ${isSelected ? "text-white/70" : "text-slate-400"}`}
-                    >
-                      {item.due_date}
-                    </Text>
+                  <Skeleton className="w-7 h-7 mr-4" />
+                  <View className="flex-1 gap-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-20" />
                   </View>
+                </View>
+              ))
+            : schedule.map((item) => {
+                const isPaid = item.status === "Paid";
+                const isSelected = selectedIds.includes(item.id);
+                const isExpanded = expandedId === item.id;
 
-                  <View className="items-end mr-2">
-                    <Text
-                      className={`font-black ${isSelected ? "text-white" : "text-primary"}`}
+                return (
+                  <View key={item.id} className="mb-3">
+                    <TouchableOpacity
+                      onPress={() => setExpandedId(isExpanded ? null : item.id)}
+                      className={`flex-row items-center p-4 rounded-2xl ${
+                        isSelected ? "bg-primary" : "bg-white"
+                      }`}
                     >
-                      ₱{Number(item.total_payment).toFixed(2)}
-                    </Text>
-                    <Text
-                      className={`text-[9px] uppercase font-bold ${isPaid ? "text-green-500" : "text-orange-400"}`}
-                    >
-                      {item.status}
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name={isExpanded ? "chevron-up" : "chevron-down"}
-                    size={16}
-                    color={isSelected ? "white" : "#cbd5e1"}
-                  />
-                </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => toggleSelection(item.id)}
+                        className="mr-4"
+                      >
+                        <Ionicons
+                          name={isSelected ? "checkbox" : "square-outline"}
+                          size={22}
+                          color={isSelected ? "white" : "#94a3b8"}
+                        />
+                      </TouchableOpacity>
 
-                {isExpanded && (
-                  <View className="p-4 bg-white border-x border-b rounded-b-2xl shadow-sm">
-                    <BreakdownRow
-                      label="Principal"
-                      value={item.principal_amount}
-                    />
-                    <BreakdownRow
-                      label="Interest"
-                      value={item.interest_amount}
-                    />
-                    <BreakdownRow
-                      label="Remaining"
-                      value={item.ending_balance}
-                    />
+                      <View className="flex-1">
+                        <Text
+                          className={`font-bold ${
+                            isSelected ? "text-white" : "text-slate-800"
+                          }`}
+                        >
+                          Installment {item.month}
+                        </Text>
+                        <Text
+                          className={`text-xs ${
+                            isSelected ? "text-white/70" : "text-slate-400"
+                          }`}
+                        >
+                          {item.dueDate}
+                        </Text>
+                      </View>
+
+                      <Text
+                        className={`font-bold ${
+                          isSelected ? "text-white" : "text-primary"
+                        }`}
+                      >
+                        ₱{item.totalPayment.toFixed(2)}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {isExpanded && (
+                      <View className="bg-white p-4 rounded-b-2xl border">
+                        <BreakdownRow
+                          label="Principal"
+                          value={item.principal}
+                        />
+                        <BreakdownRow label="Interest" value={item.interest} />
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-            );
-          })
-        )}
+                );
+              })}
+        </View>
       </ScrollView>
 
-      {/* Footer Action */}
-      <View className="absolute bottom-0 w-full bg-white p-6 border-t border-slate-100 shadow-2xl">
-        <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-slate-500 font-bold">Total to Pay</Text>
-          <Text className="text-primary text-2xl font-black">
-            ₱{totalToPay.toFixed(2)}
-          </Text>
-        </View>
+      {/* BUTTON */}
+      <View className="px-6 pb-10 pt-4 bg-white absolute bottom-0 w-full border-t">
         <TouchableOpacity
           onPress={handlePayment}
           disabled={isLoading || selectedIds.length === 0}
-          className={`p-4 rounded-2xl items-center ${isLoading || selectedIds.length === 0 ? "bg-slate-300" : "bg-primary"}`}
+          className={`p-5 rounded-2xl ${
+            isLoading || selectedIds.length === 0 ? "bg-gray-400" : "bg-primary"
+          }`}
         >
           {isLoading ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-white font-bold text-lg">
-              Confirm Payment
+            <Text className="text-white text-center font-bold">
+              Pay ₱{totalToPay.toFixed(2)}
             </Text>
           )}
         </TouchableOpacity>
@@ -215,11 +279,11 @@ export default function LoanPaymentPage() {
   );
 }
 
-function BreakdownRow({ label, value }: { label: string; value: string }) {
+function BreakdownRow({ label, value }: any) {
   return (
     <View className="flex-row justify-between mb-1">
       <Text className="text-slate-500 text-xs">{label}</Text>
-      <Text className="text-slate-800 text-xs font-bold">
+      <Text className="text-slate-700 text-xs font-bold">
         ₱{Number(value).toFixed(2)}
       </Text>
     </View>
