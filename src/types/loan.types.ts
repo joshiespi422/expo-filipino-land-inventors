@@ -3,6 +3,8 @@ export type LoanStatus =
   | "active"
   | "finished"
   | "rejected"
+  | "paid"
+  | "unpaid"
   | string;
 
 export interface Loan {
@@ -17,10 +19,14 @@ export interface Loan {
     end_date: string;
     status: LoanStatus;
   };
-  // Relationships usually sit outside attributes in JSON:API
+
   relationships?: {
-    loanSchedules?: { data: LoanSchedule[] };
-    loanPayments?: { data: LoanPayment[] };
+    loanSchedules?: {
+      data: LoanSchedule[];
+    };
+    loanPayments?: {
+      data: LoanPayment[];
+    };
   };
 }
 
@@ -33,7 +39,14 @@ export interface LoanSchedule {
   total_payment: string;
   ending_balance: string;
   due_date: string;
-  status: string;
+
+  // IMPORTANT FIX
+  status:
+    | {
+        id: number;
+        name: string;
+      }
+    | string;
 }
 
 export interface LoanPayment {
@@ -41,10 +54,6 @@ export interface LoanPayment {
   amount: string;
   payment_date: string;
   payment_method?: string;
-}
-
-export interface LoanableAmountResponse {
-  loanable_amount: string;
 }
 
 export interface ComputeLoanRequest {

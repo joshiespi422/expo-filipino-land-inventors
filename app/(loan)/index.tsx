@@ -86,7 +86,9 @@ export default function IndexPage() {
   }, [activeFilter]);
 
   const handleViewDetails = (id: number) => {
-    router.push(`/breakdown?id=${id}`);
+    router.push(
+      `/breakdown?id=${id}&include=user,status,loanSchedules,loanPayments`,
+    );
   };
 
   const handleLoanForm = () => {

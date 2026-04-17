@@ -6,7 +6,9 @@ import {
 } from "@/types/loan.types";
 import api from "./api";
 
-// Ensure this matches your backend response fields
+/**
+ * Loan Schedule (backend representation if ever needed separately)
+ */
 export interface LoanSchedule {
   id: number;
   month_no: number;
@@ -19,6 +21,9 @@ export interface LoanSchedule {
   status: string;
 }
 
+/**
+ * GET /loans response
+ */
 export interface LoanIndexResponse {
   data: Loan[];
   meta: {
@@ -41,11 +46,13 @@ export const getLoans = async (): Promise<LoanIndexResponse> => {
 
 /**
  * GET /loans/{id}
- * Handle both string and number for the ID
+ * FIX: JSON:API safe unwrap
  */
 export const getLoan = async (id: number | string): Promise<Loan> => {
   const res = await api.get(`/loans/${id}`);
-  // Check if your API returns the object inside a 'data' key
+
+  // IMPORTANT FIX:
+  // backend sometimes returns { data: {...} } OR direct object
   return res.data?.data ?? res.data;
 };
 
@@ -79,6 +86,7 @@ export const computeLoan = async (
   const res = await api.get("/loans/compute", {
     params: payload,
   });
+
   return res.data?.data;
 };
 
