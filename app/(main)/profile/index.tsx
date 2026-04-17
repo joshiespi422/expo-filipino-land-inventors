@@ -1,12 +1,14 @@
 import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -17,6 +19,19 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { clearAuth, user, setUser } = useAuthStore();
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const [showOptions, setShowOptions] = useState(false);
+  const [showFullImage, setShowFullImage] = useState(false);
+
+  // Logic Variables
+  const userTypeName = user?.user_type?.name?.toUpperCase() || "";
+  const statusName = user?.status?.name?.toLowerCase() || "";
+
+  const isBasic = userTypeName === "BASIC";
+  const isActive = statusName === "active";
+  const isPendingMember = statusName === "pending_for_member";
 
   useEffect(() => {
     fetchProfile();
@@ -26,11 +41,47 @@ export default function ProfileScreen() {
     try {
       const data = await profileService.getProfile();
       setUser(data);
-    } catch (error) {
-      console.error("Failed to load profile", error);
+    } catch (error: any) {
+      console.error("Profile Fetch Error:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const pickAndUploadImage = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+      const file = result.assets?.[0];
+      if (!file) return;
+
+      setUploading(true);
+      setShowOptions(false);
+
+      const response = await profileService.updateAvatar({
+        uri: file.uri,
+        name: file.name ?? "avatar.jpg",
+        type: file.mimeType ?? "image/jpeg",
+      });
+
+      if (response.success) {
+        setUser({ ...(user || {}), avatar: response.data.avatar });
+        Alert.alert("Success", "Profile picture updated!");
+      }
+    } catch (error: any) {
+      Alert.alert("Upload Failed", "Network Error");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleAvatarPress = () => {
+    if (!user?.avatar) pickAndUploadImage();
+    else setShowOptions(true);
   };
 
   const handleLogout = () => {
@@ -40,8 +91,14 @@ export default function ProfileScreen() {
         text: "Logout",
         style: "destructive",
         onPress: async () => {
-          await clearAuth();
-          router.replace("/login");
+          try {
+            setLoggingOut(true);
+            await clearAuth();
+            router.replace("/login");
+          } catch (error) {
+            setLoggingOut(false);
+            Alert.alert("Error", "Logout failed. Please try again.");
+          }
         },
       },
     ]);
@@ -49,60 +106,10 @@ export default function ProfileScreen() {
 
   const getStatusColor = (statusName: string) => {
     const status = statusName?.toLowerCase() || "";
-    if (status.includes("pending")) return "text-orange-500 bg-orange-50";
+    if (status.includes("pending")) return "text-[#C6890F] bg-orange-50";
     if (status.includes("active") || status.includes("approved"))
       return "text-green-500 bg-green-50";
     return "text-gray-500 bg-gray-50";
-  };
-
-  // --- LOGIC FOR MESSAGES ---
-  const userTypeName = user?.user_type?.name?.toLowerCase() || "";
-  const statusName = user?.status?.name?.toLowerCase() || "";
-
-  const renderStatusMessage = () => {
-    // 1. BASIC User + ACTIVE Status = Needs to complete profile
-    if (userTypeName === "basic" && statusName === "active") {
-      return (
-        <View className="mx-4 mt-4 p-4 bg-blue-50 border border-blue-100 rounded-2xl">
-          <View className="flex-row items-center mb-1">
-            <Ionicons name="information-circle" size={20} color="#034194" />
-            <Text className="ml-2 font-bold text-[#034194]">
-              Complete Your Profile
-            </Text>
-          </View>
-          <Text className="text-blue-700 text-sm mb-3">
-            Please complete your account details to access all features.
-          </Text>
-          <TouchableOpacity
-            onPress={() => router.push("/profile/editProfile")}
-            className="bg-[#034194] py-2 rounded-lg items-center"
-          >
-            <Text className="text-white font-bold text-xs">
-              Update Profile Now
-            </Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    // 2. BASIC User + PENDING Status = Waiting for approval
-    if (userTypeName === "basic" && statusName.includes("pending")) {
-      return (
-        <View className="mx-4 mt-4 p-4 bg-orange-50 border border-orange-100 rounded-2xl">
-          <View className="flex-row items-center mb-1">
-            <Ionicons name="time" size={20} color="#f97316" />
-            <Text className="ml-2 font-bold text-orange-700">Under Review</Text>
-          </View>
-          <Text className="text-orange-600 text-xs">
-            Your account details have been completed. Please wait 2-3 days for
-            approval. Updates will be sent to your email.
-          </Text>
-        </View>
-      );
-    }
-
-    // 3. MEMBER User + ACTIVE Status = No message (Fully verified)
-    return null;
   };
 
   if (loading) {
@@ -115,62 +122,232 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
-      {/* --- USER PROFILE CARD --- */}
-      <View className="bg-white p-8 items-center shadow-sm border-b border-gray-100">
-        <View className="w-24 h-24 rounded-full bg-primary/10 items-center justify-center border-4 border-primary/20 overflow-hidden">
-          {user?.avatar ? (
-            <Image source={{ uri: user.avatar }} className="w-full h-full" />
-          ) : (
-            <Ionicons name="person" size={50} color="#034194" />
-          )}
-        </View>
+      {/* --- PROFILE HEADER --- */}
+      <View className="bg-white px-8 py-12 items-center shadow-sm border-b border-gray-100">
+        <TouchableOpacity
+          onPress={handleAvatarPress}
+          activeOpacity={0.8}
+          className="relative"
+        >
+          <View className="w-24 h-24 rounded-full bg-blue-50 items-center justify-center border-4 border-[#03419420] overflow-hidden">
+            {uploading ? (
+              <ActivityIndicator color="#034194" />
+            ) : user?.avatar ? (
+              <Image source={{ uri: user.avatar }} className="w-full h-full" />
+            ) : (
+              <Ionicons name="person" size={50} color="#034194" />
+            )}
+          </View>
+          <View className="absolute bottom-0 right-0 bg-[#034194] p-1.5 rounded-full border-2 border-white shadow-sm">
+            <Ionicons name="camera" size={14} color="white" />
+          </View>
+        </TouchableOpacity>
 
         <Text className="text-2xl font-bold mt-4 text-[#034194]">
-          {user?.name || "Loading Name..."}
+          {user?.name || "Member"}
         </Text>
 
         <View
           className={`mt-2 px-4 py-1 rounded-full ${getStatusColor(user?.status?.name)}`}
         >
           <Text className="font-bold text-xs uppercase tracking-tighter">
-            {user?.user_type?.name || "Member"} • Account
+            {user?.user_type?.name || "Basic"} • Account
           </Text>
         </View>
       </View>
 
-      {/* --- CONDITIONAL STATUS BANNER --- */}
-      {renderStatusMessage()}
+      {/* --- WARNING SECTION: BASIC & ACTIVE --- */}
+      {isBasic && isActive && (
+        <View className="mt-6 px-4">
+          <View className="bg-orange-50 border border-orange-200 p-5 rounded-[30px]">
+            <View className="flex-row items-center">
+              <View className="bg-[#C6890F] p-2 rounded-full">
+                <Ionicons name="warning" size={20} color="white" />
+              </View>
+              <View className="flex-1 ml-4">
+                <Text className="text-[#C6890F] font-bold text-lg">
+                  Complete Your Profile
+                </Text>
+              </View>
+            </View>
 
-      {/* --- MENU OPTIONS --- */}
-      <View className="mt-6 px-4">
-        <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
-          Account Settings
-        </Text>
+            <Text className="text-[#C6890F] text-sm mt-2 leading-5">
+              To upgrade to Member status and unlock all features, please
+              provide your information, address, and a valid ID.
+            </Text>
 
-        <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
-          <ProfileMenuItem
-            icon="person-outline"
-            title="Edit Profile"
-            onPress={() => router.push("/profile/editProfile")}
-          />
-          <ProfileMenuItem
-            icon="lock-closed-outline"
-            title="Security & Password"
-            onPress={() => router.push("/profile/changePassword")}
-          />
+            <TouchableOpacity
+              onPress={() => router.push("/profile/editProfile")}
+              className="bg-[#C6890F] mt-4 py-3 rounded-2xl items-center flex-row justify-center"
+            >
+              <Text className="text-white font-bold text-base mr-2">
+                Complete Now
+              </Text>
+              <Ionicons name="arrow-forward" size={18} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
+      )}
 
-        <TouchableOpacity
-          onPress={handleLogout}
-          activeOpacity={0.7}
-          className="mt-8 mb-10 flex-row items-center p-4 bg-red-50 rounded-2xl border border-red-100"
-        >
-          <MaterialIcons name="logout" size={22} color="#D70127" />
-          <Text className="text-[#D70127] font-bold ml-3 text-base">
-            Logout Account
+      {/* --- PENDING NOTIFICATION: BASIC & PENDING_FOR_MEMBER --- */}
+      {isBasic && isPendingMember && (
+        <View className="mt-6 px-4">
+          <View className="bg-blue-50 border border-blue-200 p-5 rounded-[30px] flex-row items-center">
+            <View className="bg-[#034194] p-2 rounded-full">
+              <Ionicons name="time" size={20} color="white" />
+            </View>
+            <View className="flex-1 ml-4">
+              <Text className="text-[#034194] font-bold text-lg">
+                Review in Progress
+              </Text>
+              <Text className="text-blue-800 text-sm leading-5">
+                We are currently reviewing your information. Please wait for
+                approval to become a full member.
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* --- MENU ITEMS --- */}
+      {(!isBasic || isPendingMember) && (
+        <View className="mt-6 px-4">
+          <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
+            Account Settings
           </Text>
-        </TouchableOpacity>
-      </View>
+
+          <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+            <ProfileMenuItem
+              icon="person-outline"
+              title="Information"
+              onPress={() => router.push("/profile/editProfile")}
+            />
+            <ProfileMenuItem
+              icon="location-outline"
+              title="Address"
+              onPress={() => router.push("/profile/editProfile")}
+            />
+            <ProfileMenuItem
+              icon="id-card-outline"
+              title="Valid ID"
+              onPress={() => router.push("/profile/editProfile")}
+            />
+            <ProfileMenuItem
+              icon="lock-closed-outline"
+              title="Security & Password"
+              onPress={() => router.push("/profile/changePassword")}
+            />
+          </View>
+
+          <TouchableOpacity
+            onPress={handleLogout}
+            disabled={loggingOut}
+            className="mt-8 mb-10 flex-row items-center p-4 bg-red-50 rounded-2xl border border-red-100"
+          >
+            {loggingOut ? (
+              <ActivityIndicator color="#D70127" className="mx-auto" />
+            ) : (
+              <>
+                <MaterialIcons name="logout" size={22} color="#D70127" />
+                <Text className="text-[#D70127] font-bold ml-3 text-base">
+                  Logout Account
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Logic: If Basic & Active (Settings Hidden), show Logout below the warning */}
+      {isBasic && isActive && (
+        <View className="px-4">
+          <TouchableOpacity
+            onPress={handleLogout}
+            disabled={loggingOut}
+            className="mt-4 mb-10 flex-row items-center p-4 bg-[#D7012710] rounded-2xl border border-[#D7012730]"
+          >
+            {loggingOut ? (
+              <ActivityIndicator color="#D70127" className="mx-auto" />
+            ) : (
+              <>
+                <MaterialIcons name="logout" size={22} color="#D70127" />
+                <Text className="text-[#D70127] font-bold ml-3 text-base">
+                  Logout Account
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* --- MODALS --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showOptions}
+        statusBarTranslucent={true}
+        onRequestClose={() => setShowOptions(false)}
+      >
+        <View className="flex-1 bg-black/40 justify-center items-center px-5">
+          <View className="bg-white p-8 rounded-[40px] items-center w-full max-w-[380px] shadow-2xl">
+            <View className="w-16 h-16 bg-blue-50 rounded-full items-center justify-center mb-4">
+              <Ionicons name="image" size={32} color="#034194" />
+            </View>
+            <Text className="text-xl font-bold text-[#333] mb-2 text-center">
+              Profile Photo
+            </Text>
+            <View className="w-full gap-y-3 mt-4">
+              <TouchableOpacity
+                onPress={() => {
+                  setShowOptions(false);
+                  setShowFullImage(true);
+                }}
+                className="w-full flex-row items-center p-4 bg-gray-50 rounded-2xl border border-gray-100"
+              >
+                <Ionicons name="eye-outline" size={20} color="#034194" />
+                <Text className="ml-3 font-bold text-gray-700">View Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={pickAndUploadImage}
+                className="w-full flex-row items-center p-4 bg-blue-50 rounded-2xl border border-blue-100"
+              >
+                <Ionicons
+                  name="cloud-upload-outline"
+                  size={20}
+                  color="#034194"
+                />
+                <Text className="ml-3 font-bold text-[#034194]">
+                  Upload New
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowOptions(false)}
+                className="w-full mt-2 p-4 items-center"
+              >
+                <Text className="text-gray-400 font-bold">Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showFullImage} transparent={false} animationType="fade">
+        <View className="flex-1 bg-black items-center justify-center">
+          <TouchableOpacity
+            onPress={() => setShowFullImage(false)}
+            className="absolute top-12 right-6 p-2 bg-white/20 rounded-full z-10"
+          >
+            <Ionicons name="close" size={28} color="white" />
+          </TouchableOpacity>
+          {user?.avatar && (
+            <Image
+              source={{ uri: user.avatar }}
+              className="w-full h-auto aspect-square"
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -179,8 +356,7 @@ function ProfileMenuItem({ icon, title, onPress }: any) {
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.6}
-      className="flex-row items-center justify-between p-4 border-b border-gray-50 active:bg-gray-50"
+      className="flex-row items-center justify-between p-4 border-b border-gray-50"
     >
       <View className="flex-row items-center">
         <View className="bg-blue-50 p-2 rounded-lg">

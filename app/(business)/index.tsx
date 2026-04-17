@@ -70,7 +70,7 @@ export default function BusinessTypesPage() {
                           resizeMode="cover"
                         />
                       ) : (
-                        <Ionicons name="business" size={28} color="red" />
+                        <Ionicons name="business" size={28} color="#034194" />
                       )}
                     </View>
 

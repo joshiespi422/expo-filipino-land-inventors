@@ -1,101 +1,103 @@
 import { Platform } from "react-native";
 import api, { BASE_URL } from "./api";
 
-// STORAGE BASE (IMPORTANT FIX)
 const STORAGE_URL = `${BASE_URL}/storage/`;
 
 const normalizeImageUrl = (path: string | null) => {
   if (!path) return null;
-
-  // already full URL
   if (path.startsWith("http")) return path;
-
-  return `${STORAGE_URL}${path}`;
+  const cleanPath = path.startsWith("/") ? path.substring(1) : path;
+  return `${STORAGE_URL}${cleanPath}`;
 };
 
 const normalizeFile = (file: any, fallbackName: string) => {
-  if (!file?.uri) return null;
+  // If there's no uri or the uri is a web URL, it's not a new file to upload
+  if (!file?.uri || file.uri.startsWith("http")) return null;
 
   return {
     uri: Platform.OS === "ios" ? file.uri.replace("file://", "") : file.uri,
-    name: file.name ?? fallbackName,
-    type: file.type ?? "image/jpeg",
+    name: file.name || fallbackName,
+    type: file.type || "image/jpeg",
   };
 };
 
 export const profileService = {
-  // =========================
-  // GET PROFILE
-  // =========================
   getProfile: async () => {
     const response = await api.get("/profile");
     const rawData = response.data.data;
-
-    const attrs = rawData.attributes || {};
+    const attrs = rawData.attributes || rawData || {};
 
     return {
       id: rawData.id,
       ...attrs,
-
-      status: attrs.status || null,
-      user_type: attrs.user_type || null,
-
-      // ✅ FIX IMAGE DISPLAY
       avatar: normalizeImageUrl(attrs.avatar),
       front_valid_id_picture: normalizeImageUrl(attrs.front_valid_id_picture),
       back_valid_id_picture: normalizeImageUrl(attrs.back_valid_id_picture),
     };
   },
 
-  // =========================
-  // UPDATE PROFILE
-  // =========================
   updateProfile: async (data: any) => {
     const formData = new FormData();
 
+    // 1. Append Text Fields
     Object.keys(data).forEach((key) => {
+      const skipKeys = [
+        "front_valid_id_picture",
+        "back_valid_id_picture",
+        "avatar",
+        "id",
+      ];
       if (
-        key !== "front_valid_id_picture" &&
-        key !== "back_valid_id_picture" &&
-        key !== "avatar"
+        !skipKeys.includes(key) &&
+        data[key] !== null &&
+        data[key] !== undefined
       ) {
-        if (data[key] !== null && data[key] !== undefined) {
-          formData.append(key, data[key]);
-        }
+        formData.append(key, String(data[key]));
       }
     });
 
+    // 2. Append Files (Only if they are new local URIs)
     const frontFile = normalizeFile(data.front_valid_id_picture, "front.jpg");
     if (frontFile) {
-      formData.append("front_valid_id_picture", frontFile as any);
+      // @ts-ignore
+      formData.append("front_valid_id_picture", frontFile);
     }
 
     const backFile = normalizeFile(data.back_valid_id_picture, "back.jpg");
     if (backFile) {
-      formData.append("back_valid_id_picture", backFile as any);
+      // @ts-ignore
+      formData.append("back_valid_id_picture", backFile);
     }
 
     const response = await api.post("/profile/update", formData, {
       headers: {
-        "Content-Type": "multipart/form-data",
         Accept: "application/json",
+        "Content-Type": "multipart/form-data",
       },
+      transformRequest: (data) => data, // Very important for React Native FormData
     });
 
-    const rawData = response.data.data;
-    const attrs = rawData.attributes || {};
+    return response.data;
+  },
 
-    return {
-      success: response.data.success,
-      message: response.data.message,
-      data: {
-        id: rawData.id,
-        ...attrs,
-        // ✅ FIX UPDATED IMAGE RETURN
-        front_valid_id_picture: normalizeImageUrl(attrs.front_valid_id_picture),
-        back_valid_id_picture: normalizeImageUrl(attrs.back_valid_id_picture),
+  updateAvatar: async (fileData: any) => {
+    const formData = new FormData();
+    const fileToUpload = normalizeFile(fileData, "avatar.jpg");
+
+    if (!fileToUpload) throw new Error("No new image selected");
+
+    // @ts-ignore
+    formData.append("avatar", fileToUpload);
+
+    const response = await api.post("/profile/avatar", formData, {
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "multipart/form-data",
       },
-    };
+      transformRequest: (data) => data,
+    });
+
+    return response.data;
   },
 
   changePassword: async (passwords: any) => {

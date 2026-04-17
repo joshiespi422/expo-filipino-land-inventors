@@ -1,10 +1,12 @@
 import { profileService } from "@/services/profileService";
+import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   Text,
@@ -12,10 +14,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 export default function EditProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [regions, setRegions] = useState<any[]>([]);
@@ -29,21 +31,42 @@ export default function EditProfileScreen() {
     email: "",
     gender: "",
     birthdate: "",
-
     region: "",
     province: "",
     city: "",
     barangay: "",
-
     valid_id_type: "",
     valid_id_number: "",
-
     street: "",
     postal_code: "",
-
     front_valid_id_picture: null,
     back_valid_id_picture: null,
   });
+
+  // --- VALIDATION LOGIC ---
+  const isFormComplete = () => {
+    const requiredFields = [
+      "name",
+      "phone",
+      "email",
+      "gender",
+      "birthdate",
+      "region",
+      "province",
+      "city",
+      "barangay",
+      "valid_id_type",
+      "valid_id_number",
+      "street",
+      "postal_code",
+    ];
+
+    const fieldsFilled = requiredFields.every((field) => !!form[field]);
+    const imagesUploaded =
+      !!form.front_valid_id_picture && !!form.back_valid_id_picture;
+
+    return fieldsFilled && imagesUploaded;
+  };
 
   useEffect(() => {
     fetchProfile();
@@ -51,36 +74,22 @@ export default function EditProfileScreen() {
   }, []);
 
   const fetchProfile = async () => {
-    const res = await profileService.getProfile();
-
-    setForm({
-      name: res.name || "",
-      phone: res.phone || "",
-      email: res.email || "",
-      gender: res.gender || "",
-      birthdate: res.birthdate || "",
-
-      region: res.region || "",
-      province: res.province || "",
-      city: res.city || "",
-      barangay: res.barangay || "",
-
-      valid_id_type: res.valid_id_type || "",
-      valid_id_number: res.valid_id_number || "",
-
-      street: res.street || "",
-      postal_code: res.postal_code || "",
-
-      front_valid_id_picture: res.front_valid_id_picture
-        ? { uri: res.front_valid_id_picture }
-        : null,
-
-      back_valid_id_picture: res.back_valid_id_picture
-        ? { uri: res.back_valid_id_picture }
-        : null,
-    });
-
-    setLoading(false);
+    try {
+      const res = await profileService.getProfile();
+      setForm({
+        ...res,
+        front_valid_id_picture: res.front_valid_id_picture
+          ? { uri: res.front_valid_id_picture }
+          : null,
+        back_valid_id_picture: res.back_valid_id_picture
+          ? { uri: res.back_valid_id_picture }
+          : null,
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchRegions = async () => {
@@ -120,6 +129,13 @@ export default function EditProfileScreen() {
     const file = result.assets?.[0];
     if (!file) return;
 
+    // Validation for 5120 KB (5MB)
+    const maxSize = 5120 * 1024;
+    if (file.size && file.size > maxSize) {
+      Alert.alert("File Too Large", "Please select an image smaller than 5MB.");
+      return;
+    }
+
     setForm((prev: any) => ({
       ...prev,
       [field]: {
@@ -134,9 +150,9 @@ export default function EditProfileScreen() {
     setSaving(true);
     try {
       await profileService.updateProfile(form);
-      alert("Profile updated successfully!");
+      Alert.alert("Success", "Profile updated successfully!");
     } catch (err) {
-      console.log(err);
+      Alert.alert("Error", "Failed to update profile.");
     } finally {
       setSaving(false);
     }
@@ -144,69 +160,81 @@ export default function EditProfileScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-100">
-        <ActivityIndicator size="large" />
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="large" color="#034194" />
       </View>
     );
   }
 
-  const card = "bg-white p-4 rounded-2xl mb-4 shadow-sm";
-  const label = "text-gray-600 mb-1 font-medium";
-  const input =
-    "border border-gray-200 bg-gray-50 p-3 rounded-xl mb-3 text-gray-800";
+  // Styles
+  const card = "bg-white p-5 rounded-3xl mb-4 shadow-sm border border-gray-100";
+  const label =
+    "text-gray-500 mb-2 font-semibold text-xs uppercase tracking-wider";
+  const inputStyle =
+    "border border-gray-200 bg-gray-50 p-4 rounded-2xl mb-4 text-gray-800 font-medium";
+  const pickerContainer =
+    "border border-gray-200 rounded-2xl bg-gray-50 mb-4 overflow-hidden";
 
   return (
-    <ScrollView className="flex-1 bg-gray-100 px-4 pt-6">
-      <Text className="text-3xl font-bold mb-4">Edit Profile</Text>
-
-      {/* ================= BASIC INFO ================= */}
-      <View className={card}>
-        <Text className="text-lg font-semibold mb-3">Basic Information</Text>
+    <ScrollView
+      className="flex-1 bg-[#F8F9FB] px-4"
+      showsVerticalScrollIndicator={false}
+    >
+      {/* BASIC INFO */}
+      <View className={`${card} mt-4`}>
+        <View className="flex-row items-center mb-4">
+          <Ionicons name="person-circle-outline" size={24} color="#034194" />
+          <Text className="text-lg font-bold ml-2 text-gray-800">
+            Basic Information
+          </Text>
+        </View>
 
         <Text className={label}>Full Name</Text>
         <TextInput
           value={form.name}
+          placeholder="Juan Dela Cruz"
           onChangeText={(t) => setForm({ ...form, name: t })}
-          className={input}
+          className={inputStyle}
         />
 
-        <Text className={label}>Phone</Text>
+        <Text className={label}>Phone Number</Text>
         <TextInput
           value={form.phone}
+          keyboardType="phone-pad"
+          placeholder="09123456789"
           onChangeText={(t) => setForm({ ...form, phone: t })}
-          className={input}
+          className={inputStyle}
         />
 
-        <Text className={label}>Email</Text>
+        <Text className={label}>Email Address</Text>
         <TextInput
           value={form.email}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          placeholder="example@gmail.com"
           onChangeText={(t) => setForm({ ...form, email: t })}
-          className={input}
+          className={inputStyle}
         />
 
         <Text className={label}>Gender</Text>
-        <View className="border border-gray-200 rounded-xl bg-gray-50 mb-3">
+        <View className={pickerContainer}>
           <Picker
             selectedValue={form.gender}
             onValueChange={(value) => setForm({ ...form, gender: value })}
           >
-            <Picker.Item label="Select Gender" value="" />
+            <Picker.Item label="Select Gender" value="" color="#9CA3AF" />
             <Picker.Item label="Male" value="Male" />
             <Picker.Item label="Female" value="Female" />
-            <Picker.Item label="Other" value="Other" />
-            <Picker.Item label="Prefer not to say" value="Prefer not to say" />
           </Picker>
         </View>
 
-        {/* ================= BIRTHDATE (NEW DATE PICKER) ================= */}
         <Text className={label}>Birthdate</Text>
-
         <TouchableOpacity
           onPress={() => setShowDatePicker(true)}
-          className={input}
+          className={inputStyle}
         >
-          <Text className="text-gray-800">
-            {form.birthdate || "Select Birthdate"}
+          <Text className={form.birthdate ? "text-gray-800" : "text-gray-400"}>
+            {form.birthdate || "YYYY-MM-DD"}
           </Text>
         </TouchableOpacity>
 
@@ -216,17 +244,14 @@ export default function EditProfileScreen() {
               form.birthdate ? new Date(form.birthdate) : new Date(2000, 0, 1)
             }
             mode="date"
-            display="default"
+            display="spinner"
             maximumDate={new Date()}
             onChange={(event, selectedDate) => {
               setShowDatePicker(false);
-
               if (selectedDate) {
-                const formatted = selectedDate.toISOString().split("T")[0];
-
                 setForm({
                   ...form,
-                  birthdate: formatted,
+                  birthdate: selectedDate.toISOString().split("T")[0],
                 });
               }
             }}
@@ -234,12 +259,17 @@ export default function EditProfileScreen() {
         )}
       </View>
 
-      {/* ================= ADDRESS ================= */}
+      {/* ADDRESS */}
       <View className={card}>
-        <Text className="text-lg font-semibold mb-3">Address</Text>
+        <View className="flex-row items-center mb-4">
+          <Ionicons name="location-outline" size={24} color="#034194" />
+          <Text className="text-lg font-bold ml-2 text-gray-800">
+            Address Details
+          </Text>
+        </View>
 
         <Text className={label}>Region</Text>
-        <View className="border border-gray-200 rounded-xl bg-gray-50 mb-3">
+        <View className={pickerContainer}>
           <Picker
             selectedValue={form.region}
             onValueChange={(value) => {
@@ -253,7 +283,7 @@ export default function EditProfileScreen() {
               fetchProvinces(value);
             }}
           >
-            <Picker.Item label="Select Region" value="" />
+            <Picker.Item label="Select Region" value="" color="#9CA3AF" />
             {regions.map((r) => (
               <Picker.Item key={r.code} label={r.name} value={r.code} />
             ))}
@@ -261,7 +291,7 @@ export default function EditProfileScreen() {
         </View>
 
         <Text className={label}>Province</Text>
-        <View className="border border-gray-200 rounded-xl bg-gray-50 mb-3">
+        <View className={pickerContainer}>
           <Picker
             selectedValue={form.province}
             onValueChange={(value) => {
@@ -269,15 +299,15 @@ export default function EditProfileScreen() {
               fetchCities(value);
             }}
           >
-            <Picker.Item label="Select Province" value="" />
+            <Picker.Item label="Select Province" value="" color="#9CA3AF" />
             {provinces.map((p) => (
               <Picker.Item key={p.code} label={p.name} value={p.code} />
             ))}
           </Picker>
         </View>
 
-        <Text className={label}>City / Municipality</Text>
-        <View className="border border-gray-200 rounded-xl bg-gray-50 mb-3">
+        <Text className={label}>City</Text>
+        <View className={pickerContainer}>
           <Picker
             selectedValue={form.city}
             onValueChange={(value) => {
@@ -285,7 +315,7 @@ export default function EditProfileScreen() {
               fetchBarangays(value);
             }}
           >
-            <Picker.Item label="Select City" value="" />
+            <Picker.Item label="Select City" value="" color="#9CA3AF" />
             {cities.map((c) => (
               <Picker.Item key={c.code} label={c.name} value={c.code} />
             ))}
@@ -293,46 +323,52 @@ export default function EditProfileScreen() {
         </View>
 
         <Text className={label}>Barangay</Text>
-        <View className="border border-gray-200 rounded-xl bg-gray-50 mb-3">
+        <View className={pickerContainer}>
           <Picker
             selectedValue={form.barangay}
             onValueChange={(value) => setForm({ ...form, barangay: value })}
           >
-            <Picker.Item label="Select Barangay" value="" />
+            <Picker.Item label="Select Barangay" value="" color="#9CA3AF" />
             {barangays.map((b) => (
               <Picker.Item key={b.code} label={b.name} value={b.code} />
             ))}
           </Picker>
         </View>
 
-        <Text className={label}>Street</Text>
+        <Text className={label}>Street / House No.</Text>
         <TextInput
           value={form.street}
           onChangeText={(t) => setForm({ ...form, street: t })}
-          className={input}
+          className={inputStyle}
         />
 
         <Text className={label}>Postal Code</Text>
         <TextInput
           value={form.postal_code}
+          keyboardType="numeric"
           onChangeText={(t) => setForm({ ...form, postal_code: t })}
-          className={input}
+          className={inputStyle}
         />
       </View>
 
-      {/* ================= VALID ID ================= */}
+      {/* VALID ID */}
       <View className={card}>
-        <Text className="text-lg font-semibold mb-3">Valid ID</Text>
+        <View className="flex-row items-center mb-4">
+          <Ionicons name="id-card-outline" size={24} color="#034194" />
+          <Text className="text-lg font-bold ml-2 text-gray-800">
+            Identity Verification
+          </Text>
+        </View>
 
         <Text className={label}>ID Type</Text>
-        <View className="border border-gray-200 rounded-xl bg-gray-50 mb-3">
+        <View className={pickerContainer}>
           <Picker
             selectedValue={form.valid_id_type}
             onValueChange={(value) =>
               setForm({ ...form, valid_id_type: value })
             }
           >
-            <Picker.Item label="Select ID Type" value="" />
+            <Picker.Item label="Select ID Type" value="" color="#9CA3AF" />
             <Picker.Item label="National ID" value="National ID" />
             <Picker.Item label="Passport" value="Passport" />
             <Picker.Item label="Driver License" value="Driver License" />
@@ -343,50 +379,61 @@ export default function EditProfileScreen() {
         <TextInput
           value={form.valid_id_number}
           onChangeText={(t) => setForm({ ...form, valid_id_number: t })}
-          className={input}
+          className={inputStyle}
         />
 
-        {/* FRONT ID */}
-        <TouchableOpacity
-          onPress={() => pickImage("front_valid_id_picture")}
-          className="border border-dashed border-gray-300 rounded-xl p-3 mb-3 items-center bg-gray-50"
-        >
-          {form.front_valid_id_picture?.uri ? (
-            <Image
-              source={{ uri: form.front_valid_id_picture.uri }}
-              className="w-full h-40 rounded-xl"
-            />
-          ) : (
-            <Text className="text-gray-500">Upload Front ID</Text>
-          )}
-        </TouchableOpacity>
+        <View className="flex-row justify-between">
+          <TouchableOpacity
+            onPress={() => pickImage("front_valid_id_picture")}
+            className="w-[48%] border-2 border-dashed border-gray-200 rounded-3xl p-2 items-center justify-center bg-gray-50 h-32"
+          >
+            {form.front_valid_id_picture?.uri ? (
+              <Image
+                source={{ uri: form.front_valid_id_picture.uri }}
+                className="w-full h-full rounded-2xl"
+              />
+            ) : (
+              <>
+                <Ionicons name="camera-outline" size={24} color="#9CA3AF" />
+                <Text className="text-[10px] text-gray-400 mt-1 font-bold">
+                  FRONT ID
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-        {/* BACK ID */}
-        <TouchableOpacity
-          onPress={() => pickImage("back_valid_id_picture")}
-          className="border border-dashed border-gray-300 rounded-xl p-3 items-center bg-gray-50"
-        >
-          {form.back_valid_id_picture?.uri ? (
-            <Image
-              source={{ uri: form.back_valid_id_picture.uri }}
-              className="w-full h-40 rounded-xl"
-            />
-          ) : (
-            <Text className="text-gray-500">Upload Back ID</Text>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => pickImage("back_valid_id_picture")}
+            className="w-[48%] border-2 border-dashed border-gray-200 rounded-3xl p-2 items-center justify-center bg-gray-50 h-32"
+          >
+            {form.back_valid_id_picture?.uri ? (
+              <Image
+                source={{ uri: form.back_valid_id_picture.uri }}
+                className="w-full h-full rounded-2xl"
+              />
+            ) : (
+              <>
+                <Ionicons name="camera-outline" size={24} color="#9CA3AF" />
+                <Text className="text-[10px] text-gray-400 mt-1 font-bold">
+                  BACK ID
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* SAVE */}
+      {/* SAVE BUTTON */}
       <TouchableOpacity
         onPress={handleUpdate}
-        disabled={saving}
-        className="bg-primary py-4 rounded-2xl mb-16"
+        disabled={saving || !isFormComplete()}
+        style={{ opacity: saving || !isFormComplete() ? 0.5 : 1 }}
+        className="bg-primary py-5 rounded-3xl mb-12 shadow-lg shadow-primary/40"
       >
         {saving ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text className="text-white text-center font-semibold text-lg">
+          <Text className="text-white text-center font-bold text-lg">
             Save Changes
           </Text>
         )}

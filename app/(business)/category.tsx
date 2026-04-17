@@ -47,7 +47,12 @@ export default function CategoryPage() {
                 resizeMode="cover"
               />
             ) : (
-              <Ionicons name="business" size={40} color="#007AFF" />
+              <Ionicons
+                name="business"
+                size={100}
+                className="mx-auto"
+                color="#034194"
+              />
             )}
           </View>
         </View>
