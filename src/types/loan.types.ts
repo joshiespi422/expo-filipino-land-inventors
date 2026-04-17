@@ -40,7 +40,6 @@ export interface LoanSchedule {
   ending_balance: string;
   due_date: string;
 
-  // IMPORTANT FIX
   status:
     | {
         id: number;

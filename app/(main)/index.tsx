@@ -1,10 +1,19 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Image, ScrollView, Text, View } from "react-native";
+import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import "../../global.css";
 
+// Hooks & Services
+import {
+  getWalletBalance,
+  updateWalletVisibility,
+} from "@/services/walletService";
+import { useAuthStore } from "@/store/useAuthStore";
+
 // Assets
+import { Ionicons } from "@expo/vector-icons";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Ask from "../../assets/images/icon/Ask.png";
 import Businessicon from "../../assets/images/icon/Businessicon.png";
 import Coop from "../../assets/images/icon/coop.png";
@@ -21,19 +30,45 @@ import Suggest from "../../assets/images/icon/Suggest.png";
 import image from "../../assets/images/image.png";
 
 export default function DashboardPage() {
+  const { user } = useAuthStore();
   const [pageLoading, setPageLoading] = useState(true);
+  const [balance, setBalance] = useState<string>("0.00");
+  const [showBalance, setShowBalance] = useState(false);
+
+  const isMember = user?.user_type_id === 3;
 
   useEffect(() => {
-    const timer = setTimeout(() => setPageLoading(false), 200);
-    return () => clearTimeout(timer);
-  }, []);
+    const initializeDashboard = async () => {
+      if (isMember) {
+        try {
+          const walletData = await getWalletBalance();
+          setBalance(walletData.data.balance);
+          setShowBalance(walletData.data.show);
+        } catch (error) {
+          console.error("Failed to fetch wallet:", error);
+        }
+      }
+      setPageLoading(false);
+    };
+
+    initializeDashboard();
+  }, [isMember]);
+
+  const handleToggleBalance = async () => {
+    const currentState = showBalance;
+    setShowBalance(!currentState);
+
+    try {
+      // 2. Update the backend
+      await updateWalletVisibility();
+    } catch (error) {
+      console.error("Failed to update visibility on server:", error);
+      setShowBalance(currentState);
+    }
+  };
 
   const menuItems = [
-    {
-      label: "Business Training",
-      href: "/(business)/",
-      source: Businessicon,
-    },
+    { label: "Business Training", href: "/(business)/", source: Businessicon },
     {
       label: "Intellectual Property Assistant",
       href: "/(intellectual)/",
@@ -69,16 +104,14 @@ export default function DashboardPage() {
     >
       <View className="flex-1 bg-white items-center">
         <View className="px-6 pt-2 w-full max-w-[500px] mx-auto">
-          {/* 1. WELCOME TEXT SKELETON */}
           <View className="items-center">
             {pageLoading ? (
-              <>
-                <Skeleton className="h-10 w-50 rounded-md" />
-              </>
+              <Skeleton className="h-10 w-50 rounded-md" />
             ) : (
               <>
                 <Text className="text-2xl text-slate-800 text-center">
-                  Hello, <Text className="font-bold">Juan Dela Cruz!</Text>
+                  Hello,{" "}
+                  <Text className="font-bold">{user?.name || "User"}!</Text>
                 </Text>
                 <Text className="text-md text-slate-800 text-center">
                   How can we help you today?
@@ -87,8 +120,43 @@ export default function DashboardPage() {
             )}
           </View>
 
-          {/* 2. BANNER IMAGE SKELETON */}
-          <View className="mt-5">
+          {/* WALLET SECTION */}
+          {isMember && !pageLoading && (
+            <View className="bg-primary p-4 mt-5 rounded-xl">
+              <View className="flex-row gap-6 justify-between">
+                <View className="flex-row gap-3 items-center">
+                  <Text className="text-white text-2xl font-bold">
+                    ₱{" "}
+                    {showBalance
+                      ? Number(balance).toLocaleString("en-PH", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
+                      : "**.**"}
+                  </Text>
+                  <TouchableOpacity onPress={handleToggleBalance}>
+                    <Ionicons
+                      name={showBalance ? "eye-off" : "eye"}
+                      size={22}
+                      color="white"
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <View className="flex-row gap-3 items-center">
+                  <TouchableOpacity className="bg-white h-10 w-10 flex items-center rounded-lg justify-center">
+                    <FontAwesome name="plus" size={24} color="#034194" />
+                  </TouchableOpacity>
+                  <TouchableOpacity className="bg-white h-10 w-10 flex items-center rounded-lg justify-center">
+                    <FontAwesome name="send" size={22} color="#034194" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* BANNER & MENU */}
+          <View className="mt-3">
             {pageLoading ? (
               <Skeleton className="!w-full !h-36 rounded-2xl" />
             ) : (
@@ -100,18 +168,15 @@ export default function DashboardPage() {
             )}
           </View>
 
-          {/* 3. GRID MENU SKELETON */}
           <View className="flex-row flex-wrap max-w-[300px] justify-between mx-auto mt-8 mb-5">
             {pageLoading
-              ? // Render 12 Skeleton Items to match the menu
-                Array.from({ length: 12 }).map((_, i) => (
+              ? Array.from({ length: 12 }).map((_, i) => (
                   <View key={i} className="!w-[80px] mb-5">
                     <Skeleton className="!w-12 !h-12 mx-auto" />
                     <Skeleton className="text-center h-5 mt-2" />
                   </View>
                 ))
-              : // Render Actual Menu Items
-                menuItems.map((item, index) => (
+              : menuItems.map((item, index) => (
                   <Link key={index} href={item.href as any} className="mb-5">
                     <View className="!w-[80px]">
                       <Image

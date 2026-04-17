@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import {
@@ -20,6 +20,15 @@ const queryClient = new QueryClient();
 
 export default function RootLayout() {
   const router = useRouter();
+  const segments = useSegments() as string[];
+
+  const isCongratulationsPage = segments.some((s) => s === "congratulations");
+
+  const isLoanIndex =
+    segments.length === 0 ||
+    segments[segments.length - 1] === "index" ||
+    (segments.includes("(loan)") && segments.length === 1);
+
   useEffect(() => {
     const hideNavBar = async () => {
       if (Platform.OS === "android") {
@@ -34,6 +43,17 @@ export default function RootLayout() {
     hideNavBar();
   }, []);
 
+  const handleBackPress = () => {
+    if (isLoanIndex) {
+      // Direct escape to main app with a fresh state
+      router.replace("../(main)/");
+      return;
+    }
+
+    // Default back behavior for other sub-pages
+    router.back();
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar hidden={true} />
@@ -46,22 +66,25 @@ export default function RootLayout() {
           {/* --- GLOBAL HEADER --- */}
           <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
             <View className="flex-row justify-between w-full px-6 items-center">
-              <View>
-                <TouchableOpacity onPress={() => router.back()}>
-                  <Ionicons name="chevron-back" size={28} color="white" />
-                </TouchableOpacity>
+              {/* --- DYNAMIC BACK BUTTON --- */}
+              <View className="w-[31px]">
+                {/* Back button is strictly hidden on the congratulations page */}
+                {!isCongratulationsPage && (
+                  <TouchableOpacity onPress={handleBackPress}>
+                    <Ionicons name="chevron-back" size={28} color="white" />
+                  </TouchableOpacity>
+                )}
               </View>
+
               <View>
                 <Text className="text-white text-2xl font-bold">
                   Loan Assistance
                 </Text>
               </View>
-              <View>
+
+              <View className="w-[31px] items-end">
                 <Image
-                  style={{
-                    width: 31,
-                    height: 31,
-                  }}
+                  style={{ width: 31, height: 31 }}
                   source={loanNotif}
                   resizeMode="contain"
                 />
@@ -79,6 +102,7 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="index" />
+              <Stack.Screen name="congratulations" />
             </Stack>
           </View>
         </KeyboardAvoidingView>

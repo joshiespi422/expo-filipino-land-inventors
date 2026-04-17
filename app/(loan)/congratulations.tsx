@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router"; // Added useLocalSearchParams
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,16 +14,16 @@ import "../../global.css";
 
 export default function CongratulationPage() {
   const router = useRouter();
+  const params = useLocalSearchParams(); // Get dynamic data
   const isProcessing = useRef(false);
 
   // States
   const [pageLoading, setPageLoading] = useState(true);
   const [navigating, setNavigating] = useState(false);
 
-  // Database Mock
-  const APPLIED_AMOUNT = 16000;
+  // Get dynamic amount from params (fallback to 0)
+  const appliedAmount = params.amount ? parseFloat(params.amount as string) : 0;
 
-  // Effect: Initial Page Load Simulation
   useEffect(() => {
     const timer = setTimeout(() => {
       setPageLoading(false);
@@ -49,7 +49,7 @@ export default function CongratulationPage() {
       >
         <View className="items-center justify-center py-14 px-6">
           <View className="w-full max-w-[500px] items-center">
-            {/* 1. SUCCESS IMAGE SKELETON */}
+            {/* 1. STATUS IMAGE */}
             {pageLoading ? (
               <Skeleton className="w-[200px] h-[200px] rounded-full mb-14" />
             ) : (
@@ -61,28 +61,27 @@ export default function CongratulationPage() {
               />
             )}
 
-            {/* 2. HEADER & MESSAGE */}
+            {/* 2. DYNAMIC MESSAGE */}
             <View className="pb-8 w-full items-center">
               {pageLoading ? (
                 <View className="gap-y-3 items-center">
                   <Skeleton className="h-10 w-64" />
                   <Skeleton className="h-5 w-80" />
-                  <Skeleton className="h-5 w-48" />
                 </View>
               ) : (
                 <>
-                  <Text className="text-center font-bold text-primary text-3xl">
-                    Congratulations!
+                  <Text className="text-center font-bold text-primary text-2xl">
+                    Application Submitted
                   </Text>
-                  <Text className="text-center text-slate-500 text-base pt-3 leading-6">
+                  <Text className="text-center text-slate-500 text-base pt-3 leading-6 px-4">
                     Your loan application for{" "}
                     <Text className="font-bold text-primary">
                       ₱
-                      {APPLIED_AMOUNT.toLocaleString(undefined, {
+                      {appliedAmount.toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                       })}
                     </Text>{" "}
-                    has been successfully submitted.
+                    has been submitted. Please wait for approval.
                   </Text>
                 </>
               )}
@@ -93,14 +92,8 @@ export default function CongratulationPage() {
               {pageLoading ? (
                 <View className="gap-y-4">
                   <Skeleton className="h-4 w-32 mb-2" />
-                  <View className="flex-row gap-x-3">
-                    <Skeleton className="h-6 w-6 rounded-full" />
-                    <Skeleton className="h-12 flex-1" />
-                  </View>
-                  <View className="flex-row gap-x-3">
-                    <Skeleton className="h-6 w-6 rounded-full" />
-                    <Skeleton className="h-12 flex-1" />
-                  </View>
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
                 </View>
               ) : (
                 <>
@@ -108,27 +101,24 @@ export default function CongratulationPage() {
                     What happens next?
                   </Text>
 
-                  {/* Step 1 */}
                   <View className="flex-row mb-5">
                     <View className="w-6 h-6 rounded-full bg-primary items-center justify-center mr-3">
                       <Text className="text-white text-xs font-bold">1</Text>
                     </View>
                     <Text className="flex-1 text-slate-600 text-sm leading-5">
                       Our team is currently{" "}
-                      <Text className="font-bold">reviewing</Text> your loan
-                      details and documents.
+                      <Text className="font-bold">reviewing</Text> your request.
                     </Text>
                   </View>
 
-                  {/* Step 2 */}
                   <View className="flex-row">
                     <View className="w-6 h-6 rounded-full bg-primary items-center justify-center mr-3">
                       <Text className="text-white text-xs font-bold">2</Text>
                     </View>
                     <Text className="flex-1 text-slate-600 text-sm leading-5">
-                      Please{" "}
-                      <Text className="font-bold">wait for a notification</Text>{" "}
-                      or SMS. We will alert you once your loan is approved.
+                      We will notify you via{" "}
+                      <Text className="font-bold">SMS or App Notification</Text>{" "}
+                      once the status is updated.
                     </Text>
                   </View>
                 </>
@@ -138,16 +128,15 @@ export default function CongratulationPage() {
         </View>
       </ScrollView>
 
-      {/* 4. FOOTER ACTION BUTTON */}
-      <View className="px-6 pb-10 bg-white shadow-2xl max-w-[500px] w-full self-center">
+      {/* 4. FOOTER ACTION */}
+      <View className="px-6 pb-10 bg-white max-w-[500px] w-full self-center">
         {pageLoading ? (
           <Skeleton className="h-16 w-full rounded-2xl" />
         ) : (
           <TouchableOpacity
             onPress={handleReturnHome}
             disabled={navigating}
-            activeOpacity={0.8}
-            className={`p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+            className={`p-5 rounded-2xl flex-row justify-center items-center ${
               navigating ? "bg-slate-400" : "bg-primary"
             }`}
           >
