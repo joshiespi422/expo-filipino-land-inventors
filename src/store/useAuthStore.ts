@@ -17,15 +17,12 @@ interface AuthState {
 const flattenUser = (obj: any) => {
   if (!obj) return null;
 
-  // If it's wrapped in { data: { attributes: { ... } } }
   if (obj.data?.attributes) {
     return { id: obj.data.id, ...obj.data.attributes };
   }
-  // If it's wrapped in { attributes: { ... } }
   if (obj.attributes) {
     return { id: obj.id, ...obj.attributes };
   }
-  // If it's wrapped in just { data: { ... } }
   if (obj.data) {
     return obj.data;
   }

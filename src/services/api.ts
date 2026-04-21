@@ -2,8 +2,14 @@ import { useAuthStore } from "@/store/useAuthStore";
 import axios from "axios";
 
 // 1. Define base constants
+// local api
 export const devIP = "192.168.1.53:8000";
 export const BASE_URL = `http://${devIP}`;
+
+// online api
+// export const devIP = "fismulticoop.org";
+// export const BASE_URL = `https://${devIP}`;
+
 export const ICON_PATH = `${BASE_URL}/storage/businessIcon`;
 
 const api = axios.create({
@@ -31,7 +37,12 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       console.warn("Unauthorized request - Clearing local session.");
+
+      // local api
       await useAuthStore.getState().clearAuth();
+
+      // online api
+      // useAuthStore.getState().clearAuth();
     }
     return Promise.reject(error);
   },

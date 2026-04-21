@@ -32,8 +32,14 @@ export default function MainLayout() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Logic to determine which header to show
-  const isMainIndex = pathname === "/" || pathname === "/index";
+  // --- Logic for Main Index ---
+  // Check for Home
+  const isMainIndex = pathname === "/";
+
+  // Check for Profile: This catches "/profile" and "/profile/"
+  const isProfileIndex = pathname === "/profile" || pathname === "/profile/";
+
+  const showFooter = isMainIndex || isProfileIndex;
 
   // STICKY HIDE FUNCTION
   const forceHideNavBar = async () => {
@@ -133,7 +139,7 @@ export default function MainLayout() {
           )}
 
           {/* --- MAIN CONTENT AREA --- */}
-          <View className="flex-1">
+          <View className="flex-1 pt-12">
             <Stack
               screenOptions={{
                 headerShown: false,
@@ -147,116 +153,118 @@ export default function MainLayout() {
           </View>
 
           {/* --- GLOBAL FOOTER --- */}
-          <View
-            style={{
-              borderTopWidth: 5,
-              borderTopColor: "#D70127",
-              width: "100%",
-              height: 80,
-              overflow: "visible",
-              zIndex: 99,
-            }}
-            className="justify-center bg-primary items-center"
-          >
+          {showFooter && (
             <View
-              className="flex-row w-full max-w-[600px] px-4 items-center"
-              style={{ overflow: "visible" }}
+              style={{
+                borderTopWidth: 5,
+                borderTopColor: "#D70127",
+                width: "100%",
+                height: 80,
+                overflow: "visible",
+                zIndex: 99,
+              }}
+              className="justify-center bg-primary items-center"
             >
-              <TouchableOpacity
-                className="items-center flex-1"
-                activeOpacity={0.7}
-                onPress={() => router.push("/")}
-              >
-                <Image
-                  style={{ width: 31, height: 31 }}
-                  source={Home}
-                  resizeMode="contain"
-                />
-                <Text className="text-white text-[10px] mt-1">Home</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="items-center pe-2 flex-1"
-                activeOpacity={0.7}
-              >
-                <Image
-                  style={{ width: 31, height: 31 }}
-                  source={Status}
-                  resizeMode="contain"
-                />
-                <Text className="text-white text-[10px] mt-1">Status</Text>
-              </TouchableOpacity>
-
               <View
-                className="flex-1 items-center justify-center"
-                style={{
-                  overflow: "visible",
-                  position: "relative",
-                  height: 50,
-                }}
+                className="flex-row w-full max-w-[600px] px-4 items-center"
+                style={{ overflow: "visible" }}
               >
                 <TouchableOpacity
-                  activeOpacity={0.9}
-                  style={{
-                    position: "absolute",
-                    top: -43,
-                    width: 85,
-                    height: 85,
-                    borderRadius: 45,
-                    backgroundColor: "white",
-                    borderWidth: 3,
-                    borderColor: "#C6890F",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    elevation: 10,
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 5 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 5,
-                  }}
+                  className="items-center flex-1"
+                  activeOpacity={0.7}
+                  onPress={() => router.push("/")}
                 >
                   <Image
-                    source={Camera}
-                    style={{ width: 53, height: 53 }}
+                    style={{ width: 31, height: 31 }}
+                    source={Home}
                     resizeMode="contain"
                   />
+                  <Text className="text-white text-[10px] mt-1">Home</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="items-center pe-2 flex-1"
+                  activeOpacity={0.7}
+                >
+                  <Image
+                    style={{ width: 31, height: 31 }}
+                    source={Status}
+                    resizeMode="contain"
+                  />
+                  <Text className="text-white text-[10px] mt-1">Status</Text>
+                </TouchableOpacity>
+
+                <View
+                  className="flex-1 items-center justify-center"
+                  style={{
+                    overflow: "visible",
+                    position: "relative",
+                    height: 50,
+                  }}
+                >
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    style={{
+                      position: "absolute",
+                      top: -43,
+                      width: 85,
+                      height: 85,
+                      borderRadius: 45,
+                      backgroundColor: "white",
+                      borderWidth: 3,
+                      borderColor: "#C6890F",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      elevation: 10,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 5 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 5,
+                    }}
+                  >
+                    <Image
+                      source={Camera}
+                      style={{ width: 53, height: 53 }}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  className="items-center ps-2 flex-1"
+                  activeOpacity={0.7}
+                >
+                  <Image
+                    style={{ width: 31, height: 31 }}
+                    source={History}
+                    resizeMode="contain"
+                  />
+                  <Text className="text-white text-[10px] mt-1">History</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="items-center flex-1"
+                  activeOpacity={0.7}
+                  onPress={() => router.push("/profile")}
+                >
+                  <View className="w-[31px] h-[31px] items-center justify-center">
+                    {user?.avatar ? (
+                      <View className="w-full h-full rounded-full overflow-hidden border border-white/30">
+                        <Image
+                          source={{ uri: user.avatar }}
+                          style={{ width: "100%", height: "100%" }}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    ) : (
+                      <Ionicons name="person-circle" size={31} color="white" />
+                    )}
+                  </View>
+                  <Text className="text-white text-[10px] mt-1">Profile</Text>
                 </TouchableOpacity>
               </View>
-
-              <TouchableOpacity
-                className="items-center ps-2 flex-1"
-                activeOpacity={0.7}
-              >
-                <Image
-                  style={{ width: 31, height: 31 }}
-                  source={History}
-                  resizeMode="contain"
-                />
-                <Text className="text-white text-[10px] mt-1">History</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="items-center flex-1"
-                activeOpacity={0.7}
-                onPress={() => router.push("/profile")}
-              >
-                <View className="w-[31px] h-[31px] items-center justify-center">
-                  {user?.avatar ? (
-                    <View className="w-full h-full rounded-full overflow-hidden border border-white/30">
-                      <Image
-                        source={{ uri: user.avatar }}
-                        style={{ width: "100%", height: "100%" }}
-                        resizeMode="cover"
-                      />
-                    </View>
-                  ) : (
-                    <Ionicons name="person-circle" size={31} color="white" />
-                  )}
-                </View>
-                <Text className="text-white text-[10px] mt-1">Profile</Text>
-              </TouchableOpacity>
             </View>
-          </View>
+          )}
         </KeyboardAvoidingView>
       </View>
     </QueryClientProvider>

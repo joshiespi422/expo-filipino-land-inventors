@@ -121,7 +121,7 @@ export default function DashboardPage() {
     <ScrollView
       contentContainerStyle={{ flexGrow: 1 }}
       showsVerticalScrollIndicator={false}
-      className="flex-1 bg-white pt-12"
+      className="flex-1 bg-white"
     >
       <View className="px-6 pt-4 w-full max-w-[600px] mx-auto">
         {/* 1. WELCOME TEXT */}

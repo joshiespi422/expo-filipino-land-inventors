@@ -9,18 +9,16 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import businessend from "../../../assets/images/vector/businessend.png";
-import "../../../global.css";
+// Ensure this path is correct based on your assets folder
+import Congratulations from "../../../assets/images/vector/ProfileCongratulations.png";
 
 export default function CongratulationPage() {
   const router = useRouter();
   const isProcessing = useRef(false);
 
-  // States
   const [pageLoading, setPageLoading] = useState(true);
   const [navigating, setNavigating] = useState(false);
 
-  // Initial Load
   useEffect(() => {
     const timer = setTimeout(() => {
       setPageLoading(false);
@@ -34,8 +32,9 @@ export default function CongratulationPage() {
     isProcessing.current = true;
     setNavigating(true);
 
+    // Use replace instead of push to prevent going back to the setup forms
     setTimeout(() => {
-      router.push("../(main)/");
+      router.replace("/(main)");
     }, 500);
   };
 
@@ -45,36 +44,33 @@ export default function CongratulationPage() {
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="items-center justify-center py-16 px-6">
+        <View className="items-center justify-center py-1b px-6">
           <View className="w-full max-w-[500px] items-center">
-            {/* SUCCESS IMAGE */}
             {pageLoading ? (
-              <Skeleton className="w-[265px] h-[265px] mb-12" />
+              <Skeleton className="w-[265px] h-[265px] mb-12 rounded-full" />
             ) : (
               <Image
                 style={{ width: 265, height: 265 }}
-                className="mb-12"
-                source={businessend}
+                className="mb-8"
+                source={Congratulations}
                 resizeMode="contain"
               />
             )}
 
-            {/* HEADER + MESSAGE */}
             <View className="pb-6 w-full items-center">
               {pageLoading ? (
                 <View className="gap-y-3 items-center">
                   <Skeleton className="h-10 w-56" />
-                  <Skeleton className="h-40 w-72" />
+                  <Skeleton className="h-20 w-72" />
                 </View>
               ) : (
                 <>
-                  <Text className="text-center font-bold text-primary text-3xl">
+                  <Text className="text-center font-bold text-[#034194] text-3xl">
                     Congratulations!
                   </Text>
-
                   <Text className="text-center text-slate-500 text-lg/7 pt-3 px-2">
-                    Your Account details have been completed. Please wait 2-3
-                    days for approval. Updates will be sent to your email
+                    Your account details have been completed. Please wait 2-3
+                    days for approval. Updates will be sent to your email.
                   </Text>
                 </>
               )}
@@ -83,7 +79,6 @@ export default function CongratulationPage() {
         </View>
       </ScrollView>
 
-      {/* FOOTER BUTTON */}
       <View className="px-6 pb-10 bg-white max-w-[500px] w-full self-center">
         {pageLoading ? (
           <Skeleton className="h-16 w-full rounded-2xl" />
@@ -93,11 +88,8 @@ export default function CongratulationPage() {
             disabled={navigating}
             activeOpacity={0.85}
             className={`p-5 rounded-2xl flex-row justify-center items-center ${
-              navigating ? "bg-slate-400" : "bg-primary"
+              navigating ? "bg-slate-400" : "bg-[#034194]"
             }`}
-            style={{
-              elevation: navigating ? 0 : 4,
-            }}
           >
             {navigating ? (
               <ActivityIndicator color="white" />

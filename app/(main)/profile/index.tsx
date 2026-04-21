@@ -123,7 +123,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView className="flex-1 bg-gray-50">
       {/* --- PROFILE HEADER --- */}
-      <View className="bg-white px-8 py-12 items-center shadow-sm border-b border-gray-100">
+      <View className="bg-white px-8 pb-12 items-center shadow-sm border-b border-gray-100">
         <TouchableOpacity
           onPress={handleAvatarPress}
           activeOpacity={0.8}
@@ -177,7 +177,7 @@ export default function ProfileScreen() {
             </Text>
 
             <TouchableOpacity
-              onPress={() => router.push("/profile/editProfile")}
+              onPress={() => router.push("/profile/setupProfile")}
               className="bg-[#C6890F] mt-4 py-3 rounded-2xl items-center flex-row justify-center"
             >
               <Text className="text-white font-bold text-base mr-2">
@@ -201,8 +201,8 @@ export default function ProfileScreen() {
                 Review in Progress
               </Text>
               <Text className="text-blue-800 text-sm leading-5">
-                We are currently reviewing your information. Please wait for
-                approval to become a full member.
+                Your account details have been completed. Please wait 2-3 days
+                for approval. Updates will be sent to your email.
               </Text>
             </View>
           </View>
@@ -220,17 +220,17 @@ export default function ProfileScreen() {
             <ProfileMenuItem
               icon="person-outline"
               title="Information"
-              onPress={() => router.push("/profile/editProfile")}
+              onPress={() => router.push("/profile/editProfile?info")}
             />
             <ProfileMenuItem
               icon="location-outline"
               title="Address"
-              onPress={() => router.push("/profile/editProfile")}
+              onPress={() => router.push("/profile/editProfile?location")}
             />
             <ProfileMenuItem
               icon="id-card-outline"
               title="Valid ID"
-              onPress={() => router.push("/profile/editProfile")}
+              onPress={() => router.push("/profile/editProfile?vakidID")}
             />
             <ProfileMenuItem
               icon="lock-closed-outline"
@@ -239,22 +239,24 @@ export default function ProfileScreen() {
             />
           </View>
 
-          <TouchableOpacity
-            onPress={handleLogout}
-            disabled={loggingOut}
-            className="mt-8 mb-10 flex-row items-center p-4 bg-red-50 rounded-2xl border border-red-100"
-          >
-            {loggingOut ? (
-              <ActivityIndicator color="#D70127" className="mx-auto" />
-            ) : (
-              <>
-                <MaterialIcons name="logout" size={22} color="#D70127" />
-                <Text className="text-[#D70127] font-bold ml-3 text-base">
-                  Logout Account
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View>
+            <TouchableOpacity
+              onPress={handleLogout}
+              disabled={loggingOut}
+              className="mt-4 mb-10 flex-row items-center p-4 bg-[#D7012710] rounded-2xl border border-[#D7012730]"
+            >
+              {loggingOut ? (
+                <ActivityIndicator color="#D70127" className="mx-auto" />
+              ) : (
+                <>
+                  <MaterialIcons name="logout" size={22} color="#D70127" />
+                  <Text className="text-[#D70127] font-bold ml-3 text-base">
+                    Logout Account
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 

@@ -36,6 +36,8 @@ export const profileService = {
     };
   },
 
+  // @/services/profileService.ts
+
   updateProfile: async (data: any) => {
     const formData = new FormData();
 
@@ -47,6 +49,8 @@ export const profileService = {
         "avatar",
         "id",
       ];
+
+      // Only append if it's a valid value and not in skipKeys
       if (
         !skipKeys.includes(key) &&
         data[key] !== null &&
@@ -69,12 +73,14 @@ export const profileService = {
       formData.append("back_valid_id_picture", backFile);
     }
 
+    formData.append("_method", "PUT");
+
     const response = await api.post("/profile/update", formData, {
       headers: {
         Accept: "application/json",
         "Content-Type": "multipart/form-data",
       },
-      transformRequest: (data) => data, // Very important for React Native FormData
+      transformRequest: (data) => data,
     });
 
     return response.data;
