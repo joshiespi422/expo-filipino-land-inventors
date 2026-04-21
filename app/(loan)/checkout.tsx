@@ -1,10 +1,7 @@
-import {
-  checkPaymentStatus,
-  getPaymentMethods,
-  payLoan,
-} from "@/services/loanService";
+import { getPaymentMethods, payLoan } from "@/services/loanService";
+import { PaymentMethod } from "@/types/loan.types";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,16 +17,44 @@ export default function LoanCheckoutPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
-  const [methods, setMethods] = useState<any[]>([]);
-  const [selectedMethod, setSelectedMethod] = useState<any>(null);
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
+    null,
+  );
 
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
 
-  const pollingInterval = useRef<NodeJS.Timeout | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 💳 LOAD METHODS
+  // =========================
+  // FORMAT AMOUNT
+  // =========================
+  const formatAmount = (value: any) => {
+    const num = Number(String(value).replace(/,/g, ""));
+    if (isNaN(num)) return "0.00";
+
+    return num.toLocaleString("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  // =========================
+  // SAFE PARSE
+  // =========================
+  const parseAmount = (value: any) => {
+    const cleaned = String(value)
+      .replace(/,/g, "")
+      .replace(/[^\d.]/g, "");
+
+    const num = Number(cleaned);
+    return isNaN(num) ? 0 : Number(num.toFixed(2));
+  };
+
+  // =========================
+  // LOAD PAYMENT METHODS
+  // =========================
   const loadMethods = async () => {
     try {
       const res = await getPaymentMethods();
@@ -40,28 +65,20 @@ export default function LoanCheckoutPage() {
           ? res.data
           : [];
 
-      if (!list.length) {
-        setMethods([]);
-        return;
-      }
-
-      const formatted = list.map((item: any) => ({
+      const formatted: PaymentMethod[] = list.map((item: any) => ({
         id: item?.id,
         name: item?.attributes?.name,
         gateway_type: (item?.attributes?.gateway_type || "").toLowerCase(),
       }));
 
-      const filtered = formatted.filter((m: any) =>
-        ["card", "qrph", "paymaya", "billease", "grab_pay", "dob"].includes(
-          m.gateway_type,
-        ),
+      const filtered = formatted.filter((m) =>
+        ["qrph", "paymaya", "billease", "grab_pay"].includes(m.gateway_type),
       );
 
       setMethods(filtered);
       setSelectedMethod(filtered[0] || null);
     } catch (err) {
       console.log("❌ Failed to load payment methods", err);
-      setMethods([]);
     }
   };
 
@@ -69,34 +86,44 @@ export default function LoanCheckoutPage() {
     loadMethods();
   }, []);
 
-  // 💳 PAY
+  // =========================
+  // PAY LOAN
+  // =========================
   const handleProceed = async () => {
+    if (isSubmitting) return; // ⛔ prevent double click
+
     try {
       if (!selectedMethod) {
         Alert.alert("Select a payment method");
         return;
       }
 
+      const parsedAmount = parseAmount(amount);
+
+      if (parsedAmount <= 0) {
+        Alert.alert("Invalid amount");
+        return;
+      }
+
+      setIsSubmitting(true);
       setLoading(true);
 
-      const payload: any = {
+      const payload = {
         loan_schedule_id: Number(scheduleId),
         payment_method_id: selectedMethod.id,
-        amount: parseFloat(amount as string),
+        amount: parsedAmount,
         gateway: "paymongo",
       };
-
-      if (selectedMethod.gateway_type === "card") {
-        payload.gateway_payment_method_id = null;
-      }
 
       const response = await payLoan(id as string, payload);
       const result = response?.data;
 
-      const url = result?.data?.next_action?.redirect_url;
+      const nextAction = result?.data?.next_action;
+      const url = nextAction?.redirect_url;
+      const qr = nextAction?.qr_code_url;
       const intentId = result?.data?.payment?.gateway_payment_intent_id;
 
-      if (!url || !intentId) {
+      if (!intentId) {
         Alert.alert(
           "Payment Error",
           result?.message || "Unable to create payment session",
@@ -105,45 +132,52 @@ export default function LoanCheckoutPage() {
       }
 
       setPaymentIntentId(intentId);
-      setCheckoutUrl(url);
-      setIsPolling(true);
+
+      // 🌐 Redirect Web
+      if (url) {
+        setCheckoutUrl(url);
+        return;
+      }
+
+      // 📱 QR Flow
+      if (qr) {
+        router.push({
+          pathname: "/qrph",
+          params: {
+            qrUrl: qr,
+            paymentIntentId: intentId,
+          },
+        });
+        return;
+      }
+
+      Alert.alert("Payment Error", "No available payment action");
     } catch (error: any) {
       console.log("🔥 ERROR:", error?.response?.data);
 
-      Alert.alert(
-        "Payment Failed",
-        error?.response?.data?.message || "Something went wrong",
-      );
+      const message =
+        error?.response?.data?.message || "Failed to create payment session";
+
+      // =========================
+      // ⚠️ HANDLE YOUR BACKEND ERROR
+      // =========================
+      if (message.includes("pending")) {
+        Alert.alert(
+          "Payment Pending",
+          "You already have a recent pending payment for this schedule. Please wait a moment before trying again.",
+        );
+      } else {
+        Alert.alert("Payment Failed", message);
+      }
     } finally {
       setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  // 🔄 POLLING
-  useEffect(() => {
-    if (!isPolling || !paymentIntentId) return;
-
-    pollingInterval.current = setInterval(async () => {
-      try {
-        const res = await checkPaymentStatus(paymentIntentId);
-
-        const status = res?.data?.status || res?.status;
-
-        if (status === "paid" || status === "success") {
-          clearInterval(pollingInterval.current!);
-          router.replace("/payment-success");
-        }
-      } catch {}
-    }, 3000);
-
-    return () => {
-      if (pollingInterval.current) {
-        clearInterval(pollingInterval.current);
-      }
-    };
-  }, [isPolling, paymentIntentId]);
-
-  // 🌐 WEBVIEW
+  // =========================
+  // WEBVIEW
+  // =========================
   if (checkoutUrl) {
     return (
       <WebView
@@ -162,57 +196,48 @@ export default function LoanCheckoutPage() {
   return (
     <View className="flex-1 bg-gray-50">
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-        {/* HEADER */}
-        <View className="mb-6">
-          <Text className="text-2xl font-bold text-gray-900">
+        <View className="bg-white rounded-3xl p-6 mb-6">
+          <Text className="text-slate-400 text-xs font-bold uppercase">
             Checkout Payment
           </Text>
-          <Text className="text-gray-500 mt-1">Loan #{id}</Text>
+          {/* <Text className="text-gray-500 mt-1">Loan #{id}</Text> */}
 
-          <Text className="text-3xl font-bold text-primary mt-4">
-            ₱{Number(amount).toFixed(2)}
+          <Text className="text-primary text-3xl font-black mt-1">
+            ₱{formatAmount(amount)}
           </Text>
         </View>
 
-        {/* PAYMENT METHODS */}
         <Text className="font-semibold text-gray-800 mb-3">
           Select Payment Method
         </Text>
 
-        {methods.length === 0 ? (
-          <View className="p-4 bg-white rounded-xl border border-gray-200">
-            <Text className="text-gray-500 text-center">
-              No available payment methods
-            </Text>
-          </View>
-        ) : (
-          methods.map((m) => {
-            const active = selectedMethod?.id === m.id;
+        {methods.map((m) => {
+          const active = selectedMethod?.id === m.id;
 
-            return (
-              <TouchableOpacity
-                key={m.id}
-                onPress={() => setSelectedMethod(m)}
-                className={`p-4 mb-3 rounded-xl border ${
-                  active
-                    ? "border-primary bg-blue-50"
-                    : "border-gray-200 bg-white"
-                }`}
-              >
-                <Text className="font-semibold text-gray-900">{m.name}</Text>
-                <Text className="text-xs text-gray-500 mt-1">
-                  {m.gateway_type}
-                </Text>
-              </TouchableOpacity>
-            );
-          })
-        )}
+          return (
+            <TouchableOpacity
+              key={m.id}
+              onPress={() => setSelectedMethod(m)}
+              className={`p-4 mb-3 rounded-xl border ${
+                active
+                  ? "border-primary bg-blue-50"
+                  : "border-gray-200 bg-white"
+              }`}
+            >
+              <Text className="font-semibold text-gray-900">{m.name}</Text>
+              <Text className="text-xs text-gray-500 mt-1">
+                {m.gateway_type}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
-        {/* PAY BUTTON */}
+      <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
           onPress={handleProceed}
           disabled={loading}
-          className="mt-6 p-4 bg-primary rounded-xl"
+          className="bg-primary p-5 rounded-2xl"
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -222,7 +247,7 @@ export default function LoanCheckoutPage() {
             </Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </View>
     </View>
   );
 }
