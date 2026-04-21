@@ -154,7 +154,6 @@ export default function LoanPaymentPage() {
         id: loanData.id,
         scheduleId: selectedIds[0],
         amount: totalToPay.toFixed(2),
-        methodId: 1,
       },
     });
   };

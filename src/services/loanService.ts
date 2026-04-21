@@ -48,3 +48,8 @@ export const checkPaymentStatus = async (paymentIntentId: string) => {
   const res = await api.get(`/payment/status/${paymentIntentId}`);
   return res.data;
 };
+
+export const getPaymentMethods = async () => {
+  const res = await api.get("/payment-methods");
+  return res.data;
+};

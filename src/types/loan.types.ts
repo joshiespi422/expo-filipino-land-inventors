@@ -97,3 +97,9 @@ export interface PayLoanRequest {
   amount: number;
   gateway: string;
 }
+
+export interface PaymentMethod {
+  id: number;
+  name: string;
+  gateway_type: string;
+}
