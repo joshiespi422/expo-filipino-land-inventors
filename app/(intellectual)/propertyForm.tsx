@@ -1,3 +1,4 @@
+import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import {
@@ -8,7 +9,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react-native";
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,8 +36,19 @@ interface Attachment {
 
 export default function PropertyForm() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+
+  // 🛡️ NAVIGATION & LOADING LOCKS
+  const isProcessing = useRef(false);
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(1);
+
+  // RESET LOCKS ON FOCUS
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(false);
+      isProcessing.current = false;
+    }, []),
+  );
 
   // --- Form States ---
   const [generalInfo, setGeneralInfo] = useState({
@@ -59,11 +71,10 @@ export default function PropertyForm() {
     setClaims(newClaims);
   };
 
-  // REAL FILE ACCESS FUNCTION
   const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*", // Allows all file types (Images, PDFs, etc.)
+        type: "*/*",
         copyToCacheDirectory: true,
       });
 
@@ -86,14 +97,10 @@ export default function PropertyForm() {
     setAttachments(attachments.filter((a) => a.id !== id));
   };
 
-  // --- Validation Logic ---
   const validateStep = () => {
     if (step === 1) {
       if (!generalInfo.title.trim() || !generalInfo.description.trim()) {
-        Alert.alert(
-          "Required",
-          "Title and Description are mandatory to proceed.",
-        );
+        Alert.alert("Required", "Title and Description are mandatory.");
         return false;
       }
     }
@@ -113,11 +120,17 @@ export default function PropertyForm() {
   const handleBack = () => setStep((prev) => prev - 1);
 
   const handleSubmit = () => {
+    if (isProcessing.current || loading) return;
+
     if (!agreed.original || !agreed.terms || !agreed.privacy) {
       Alert.alert("Required", "Please accept all terms and declarations.");
       return;
     }
+
+    isProcessing.current = true;
     setLoading(true);
+
+    // Simulate API Call
     setTimeout(() => {
       setLoading(false);
       Alert.alert("Success", "Application Submitted Successfully!", [
@@ -170,7 +183,7 @@ export default function PropertyForm() {
                 Description *
               </Text>
               <TextInput
-                placeholder="Detailed explanation of the invention..."
+                placeholder="Detailed explanation..."
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
@@ -188,7 +201,7 @@ export default function PropertyForm() {
         {step === 2 && (
           <View>
             <Text className="text-slate-500 mb-6 italic text-sm">
-              Define what makes your invention unique (At least 1 required).
+              Define what makes your invention unique.
             </Text>
             {claims.map((claim, index) => (
               <View key={index} className="flex-row items-center mb-4">
@@ -222,13 +235,12 @@ export default function PropertyForm() {
           </View>
         )}
 
-        {/* STEP 3: UPLOADS (Real File Access) */}
+        {/* STEP 3: UPLOADS */}
         {step === 3 && (
           <View className="gap-y-4">
             <Text className="text-slate-500 mb-2">
               Upload your Drawing, Diagram, or Photos below.
             </Text>
-
             {attachments.map((file) => (
               <View
                 key={file.id}
@@ -252,7 +264,6 @@ export default function PropertyForm() {
                 </TouchableOpacity>
               </View>
             ))}
-
             <TouchableOpacity
               onPress={handlePickFile}
               className="flex-row items-center justify-center bg-primary/10 p-5 rounded-2xl mt-2 border border-dashed border-primary"
@@ -262,7 +273,6 @@ export default function PropertyForm() {
                 Select File / Image
               </Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               onPress={handleNext}
               className="mt-10 p-4 items-center"
@@ -282,7 +292,7 @@ export default function PropertyForm() {
                 Industrial Applicability
               </Text>
               <TextInput
-                placeholder="How will this be used in the real world?"
+                placeholder="Real world usage..."
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
@@ -291,7 +301,6 @@ export default function PropertyForm() {
                 onChangeText={(text) => setIndustrial({ applicability: text })}
               />
             </View>
-
             <View className="gap-y-5 pt-4">
               {(Object.keys(agreed) as (keyof AgreedState)[]).map((key) => {
                 const labels = {
@@ -325,10 +334,11 @@ export default function PropertyForm() {
       </ScrollView>
 
       {/* Footer Navigation */}
-      <View className="p-6 bg-white border-t border-slate-100 flex-row gap-x-3">
+      <View className="p-5 bg-white border-t border-slate-200 flex-row gap-x-3">
         {step > 1 && (
           <TouchableOpacity
             onPress={handleBack}
+            disabled={loading}
             className="flex-1 h-16 rounded-2xl justify-center items-center border border-slate-200 bg-white"
           >
             <Text className="text-slate-600 font-bold text-lg">Previous</Text>
@@ -337,13 +347,13 @@ export default function PropertyForm() {
         <TouchableOpacity
           onPress={step === 4 ? handleSubmit : handleNext}
           disabled={loading}
-          className={`flex-[2] h-16 rounded-2xl flex-row justify-center items-center shadow-md ${loading ? "bg-slate-400" : "bg-primary"}`}
+          className={`flex-[2] h-16 rounded-2xl flex-row justify-center items-center shadow-sm ${loading ? "bg-slate-300" : "bg-primary"}`}
         >
           {loading ? (
             <ActivityIndicator color="white" />
           ) : (
             <Text className="text-white font-bold text-lg">
-              {step === 4 ? "Submit Files" : "Continue"}
+              {step === 4 ? "Submit Application" : "Continue"}
             </Text>
           )}
         </TouchableOpacity>

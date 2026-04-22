@@ -3,12 +3,13 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react"; // Added useCallback
 import {
   ActivityIndicator,
   Alert,
   Image,
   Modal,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -19,13 +20,13 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { clearAuth, user, setUser } = useAuthStore();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // Added refreshing state
   const [uploading, setUploading] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const [showOptions, setShowOptions] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
 
-  // Logic Variables
   const userTypeName = user?.user_type?.name?.toUpperCase() || "";
   const statusName = user?.status?.name?.toLowerCase() || "";
 
@@ -33,11 +34,9 @@ export default function ProfileScreen() {
   const isActive = statusName === "active";
   const isPendingMember = statusName === "pending_for_member";
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
-  const fetchProfile = async () => {
+  // Unified fetch function
+  const fetchProfile = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
       const data = await profileService.getProfile();
       setUser(data);
@@ -45,8 +44,19 @@ export default function ProfileScreen() {
       console.error("Profile Fetch Error:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false); // Stop refresh indicator
     }
   };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  // onRefresh Handler
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchProfile(true);
+  }, []);
 
   const pickAndUploadImage = async () => {
     try {
@@ -121,9 +131,19 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView
+      className="flex-1 bg-gray-50"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#034194"]}
+          tintColor="#034194"
+        />
+      }
+    >
       {/* --- PROFILE HEADER --- */}
-      <View className="bg-white px-8 pb-12 items-center shadow-sm border-b border-gray-100">
+      <View className="bg-white px-8 py-12 items-center shadow-sm border-b border-gray-100">
         <TouchableOpacity
           onPress={handleAvatarPress}
           activeOpacity={0.8}
@@ -148,7 +168,9 @@ export default function ProfileScreen() {
         </Text>
 
         <View
-          className={`mt-2 px-4 py-1 rounded-full ${getStatusColor(user?.status?.name)}`}
+          className={`mt-2 px-4 py-1 rounded-full ${getStatusColor(
+            user?.status?.name,
+          )}`}
         >
           <Text className="font-bold text-xs uppercase tracking-tighter">
             {user?.user_type?.name || "Basic"} • Account
@@ -189,7 +211,7 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      {/* --- PENDING NOTIFICATION: BASIC & PENDING_FOR_MEMBER --- */}
+      {/* --- PENDING NOTIFICATION --- */}
       {isBasic && isPendingMember && (
         <View className="mt-6 px-4">
           <View className="bg-blue-50 border border-blue-200 p-5 rounded-[30px] flex-row items-center">
@@ -260,7 +282,7 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      {/* Logic: If Basic & Active (Settings Hidden), show Logout below the warning */}
+      {/* --- LOGOUT FOR BASIC/ACTIVE --- */}
       {isBasic && isActive && (
         <View className="px-4">
           <TouchableOpacity

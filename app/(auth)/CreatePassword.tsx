@@ -6,10 +6,11 @@ import { passwordService } from "@/services/passwordService";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Platform,
   ScrollView,
   Text,
@@ -25,15 +26,37 @@ export default function CreatePasswordPage() {
     phone: string;
     token: string;
   }>();
-  const isProcessing = useRef(false);
 
+  // Form States
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeToTerms, setAgreeToTerms] = useState(false);
 
+  // UI States
   const [pageLoading, setPageLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Prevent going back since the verification process is mid-way
+  useEffect(() => {
+    const backAction = () => {
+      Alert.alert(
+        "Hold on!",
+        "You need to set your password to complete registration.",
+        [
+          { text: "Cancel", onPress: () => null, style: "cancel" },
+          { text: "Exit", onPress: () => router.replace("/login") },
+        ],
+      );
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+    return () => backHandler.remove();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setPageLoading(false), 400);
@@ -49,6 +72,7 @@ export default function CreatePasswordPage() {
         verification_token: token as string,
       }),
     onSuccess: (data) => {
+      // Backend returns 201 Created with the User and Sanctum token
       router.replace({
         pathname: "/congratulations",
         params: {
@@ -58,25 +82,62 @@ export default function CreatePasswordPage() {
       });
     },
     onError: (error: any) => {
-      const validationErrors = error.response?.data?.errors;
-      const message = validationErrors
-        ? Object.values(validationErrors).flat().join("\n")
-        : error.response?.data?.message || "Failed to set password.";
+      const status = error.response?.status;
+      const data = error.response?.data;
 
-      Alert.alert("Error", message);
+      if (status === 422) {
+        // Handle Laravel Validation Errors (SetPasswordRequest)
+        const validationErrors = data?.errors;
+        const message = validationErrors
+          ? Object.values(validationErrors).flat().join("\n")
+          : "Invalid data provided.";
+        Alert.alert("Validation Error", message);
+      } else if (status === 403) {
+        // Handle RuntimeException ('Invalid or expired verification token.')
+        Alert.alert(
+          "Session Expired",
+          data?.message ||
+            "Your verification token is invalid. Please verify your phone again.",
+          [{ text: "OK", onPress: () => router.replace("/register") }],
+        );
+      } else if (status === 429) {
+        // Handle 'throttle:5,1'
+        Alert.alert(
+          "Too Many Attempts",
+          "Please wait a moment before trying to set your password again.",
+        );
+      } else {
+        // Generic 500 error
+        Alert.alert(
+          "Error",
+          data?.message || "Failed to complete registration. Please try again.",
+        );
+      }
     },
   });
 
   const handleRegister = () => {
     if (mutation.isPending) return;
-    if (!password || !confirmPassword)
-      return Alert.alert("Error", "Please fill in all fields");
-    if (password.length < 8)
-      return Alert.alert("Error", "Password must be at least 8 characters");
-    if (password !== confirmPassword)
-      return Alert.alert("Error", "Passwords do not match");
-    if (!agreeToTerms)
-      return Alert.alert("Error", "Please agree to the Terms and Conditions");
+
+    // Frontend Pre-validation
+    if (!password || !confirmPassword) {
+      return Alert.alert("Required", "Please fill in both password fields.");
+    }
+    if (password.length < 8) {
+      return Alert.alert(
+        "Security",
+        "Password must be at least 8 characters long.",
+      );
+    }
+    if (password !== confirmPassword) {
+      return Alert.alert("Mismatch", "Passwords do not match.");
+    }
+    if (!agreeToTerms) {
+      return Alert.alert(
+        "Agreement",
+        "Please agree to the Terms and Conditions to proceed.",
+      );
+    }
 
     mutation.mutate();
   };
@@ -92,6 +153,7 @@ export default function CreatePasswordPage() {
         <HeaderAuth title="Join Us" />
         <View className="flex-1 -mt-10">
           <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
+
           <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
             <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
               {pageLoading ? (
@@ -133,12 +195,16 @@ export default function CreatePasswordPage() {
                     description={
                       <View>
                         <Text className="text-center text-slate-900 text-sm">
-                          Create a secure password to protect your account.
+                          Set a password for{" "}
+                          <Text className="font-bold">+{phone}</Text> to finish
+                          your registration.
                         </Text>
                       </View>
                     }
                   />
+
                   <View className="gap-y-5 mt-5">
+                    {/* Password Field */}
                     <View>
                       <Text className="text-primary mb-2 ml-2 font-medium text-xs uppercase">
                         Password
@@ -150,6 +216,8 @@ export default function CreatePasswordPage() {
                           value={password}
                           onChangeText={setPassword}
                           secureTextEntry={!showPassword}
+                          autoCapitalize="none"
+                          autoCorrect={false}
                         />
                         <TouchableOpacity
                           onPress={() => setShowPassword(!showPassword)}
@@ -166,6 +234,7 @@ export default function CreatePasswordPage() {
                       </View>
                     </View>
 
+                    {/* Confirm Password Field */}
                     <View>
                       <Text className="text-primary mb-2 ml-2 font-medium text-xs uppercase">
                         Retype Password
@@ -177,6 +246,8 @@ export default function CreatePasswordPage() {
                           value={confirmPassword}
                           onChangeText={setConfirmPassword}
                           secureTextEntry={!showConfirmPassword}
+                          autoCapitalize="none"
+                          autoCorrect={false}
                         />
                         <TouchableOpacity
                           onPress={() =>
@@ -198,12 +269,17 @@ export default function CreatePasswordPage() {
                     </View>
                   </View>
 
+                  {/* Terms Checkbox */}
                   <TouchableOpacity
                     onPress={() => setAgreeToTerms(!agreeToTerms)}
                     className="flex-row ps-2 pt-5 items-center"
                   >
                     <View
-                      className={`w-5 h-5 rounded border mr-2 items-center justify-center ${agreeToTerms ? "bg-primary border-primary" : "border-slate-300 bg-slate-50"}`}
+                      className={`w-5 h-5 rounded border mr-2 items-center justify-center ${
+                        agreeToTerms
+                          ? "bg-primary border-primary"
+                          : "border-slate-300 bg-slate-50"
+                      }`}
                     >
                       {agreeToTerms && (
                         <View className="w-1.5 h-1.5 bg-white rounded-sm" />
@@ -211,20 +287,25 @@ export default function CreatePasswordPage() {
                     </View>
                     <Text className="text-primary text-sm">
                       I agree to the{" "}
-                      <Text className="underline">Terms and Conditions</Text>
+                      <Text className="underline font-bold">
+                        Terms and Conditions
+                      </Text>
                     </Text>
                   </TouchableOpacity>
 
+                  {/* Submit Button */}
                   <TouchableOpacity
                     onPress={handleRegister}
                     disabled={mutation.isPending}
-                    className={`mt-8 mb-5 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${mutation.isPending ? "bg-slate-400" : "bg-primary"}`}
+                    className={`mt-8 mb-5 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                      mutation.isPending ? "bg-slate-400" : "bg-primary"
+                    }`}
                   >
                     {mutation.isPending ? (
                       <ActivityIndicator color="white" />
                     ) : (
                       <Text className="text-white font-bold text-lg">
-                        Create Account
+                        Complete Registration
                       </Text>
                     )}
                   </TouchableOpacity>

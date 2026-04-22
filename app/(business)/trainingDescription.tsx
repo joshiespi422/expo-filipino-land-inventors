@@ -66,7 +66,7 @@ export default function DescriptionPage() {
       </ScrollView>
 
       {/* FOOTER BUTTON */}
-      <View className="absolute bottom-0 left-0 right-0 p-6 bg-white/80 border-t border-slate-100">
+      <View className="w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
           disabled={loading}
           onPress={() => {
@@ -79,8 +79,8 @@ export default function DescriptionPage() {
               },
             });
           }}
-          className={`h-16 rounded-2xl flex-row items-center justify-center shadow-lg ${
-            loading ? "bg-slate-300" : "bg-primary shadow-primary/30"
+          className={`h-16 rounded-2xl justify-center items-center ${
+            loading ? "bg-slate-400" : "bg-primary"
           }`}
         >
           <Text className="text-white font-bold text-lg mr-2">

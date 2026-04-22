@@ -137,7 +137,7 @@ export default function ModulePage() {
       </ScrollView>
 
       {/* Footer Navigation */}
-      <View className="p-6 bg-white border-t border-slate-100 flex-row gap-x-3">
+      <View className="p-5 bg-white border-t border-slate-200 flex-row gap-x-3">
         {/* Changed logic from 'step' to 'meta.is_first' */}
         {!meta?.is_first && (
           <TouchableOpacity

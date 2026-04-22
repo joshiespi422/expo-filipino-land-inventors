@@ -85,7 +85,7 @@ export default function MainLayout() {
           {/* --- GLOBAL HEADER --- */}
           {isMainIndex ? (
             /* Main index only shows this */
-            <View className="bg-primary z-10 w-full h-28 items-center justify-between pt-8">
+            <View className="bg-primary mb-12 z-10 w-full h-28 items-center justify-between pt-8">
               <View
                 className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full shadow-brand"
                 style={{ elevation: 8 }}
@@ -139,7 +139,7 @@ export default function MainLayout() {
           )}
 
           {/* --- MAIN CONTENT AREA --- */}
-          <View className="flex-1 pt-12">
+          <View className="flex-1">
             <Stack
               screenOptions={{
                 headerShown: false,

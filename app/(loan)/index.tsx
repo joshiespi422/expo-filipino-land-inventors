@@ -1,9 +1,11 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { useFocusEffect } from "@react-navigation/native"; // Required to detect screen focus
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -21,6 +23,7 @@ export default function IndexPage() {
 
   // STATES
   const [pageLoading, setPageLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filterLoading, setFilterLoading] = useState(false);
 
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -31,20 +34,36 @@ export default function IndexPage() {
     default_interest_rate: number;
   } | null>(null);
 
+  // NAVIGATION STATES
   const isProcessing = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [navigating] = useState(false);
+  const [navigating, setNavigating] = useState(false);
 
   const [activeFilter, setActiveFilter] = useState("All");
 
   // =========================
+  // RESET NAVIGATION STATE ON FOCUS
+  // =========================
+  useFocusEffect(
+    useCallback(() => {
+      // When user comes back to this screen, reset all navigation locks
+      setIsLoading(false);
+      setNavigating(false);
+      isProcessing.current = false;
+    }, []),
+  );
+
+  // =========================
   // FETCH LOANS FROM API
   // =========================
-  const fetchLoans = async () => {
+  const fetchLoans = async (isRefresh = false) => {
     try {
-      setPageLoading(true);
-      const res = await getLoans();
-      const amount = await getLoanableAmount();
+      if (!isRefresh) setPageLoading(true);
+
+      const [res, amount] = await Promise.all([
+        getLoans(),
+        getLoanableAmount(),
+      ]);
 
       setLoans(res.data);
       setLoanableAmount(amount);
@@ -53,11 +72,17 @@ export default function IndexPage() {
       console.log("Failed to fetch loans:", error);
     } finally {
       setPageLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchLoans();
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchLoans(true);
   }, []);
 
   // =========================
@@ -68,12 +93,6 @@ export default function IndexPage() {
     return loan.attributes.status.toLowerCase() === activeFilter.toLowerCase();
   });
 
-  // REMOVED: const { amount, start_date, status } = loan.attributes;
-  // (You cannot do this here because "loan" is not defined yet)
-
-  // =========================
-  // FILTER LOADING UI
-  // =========================
   useEffect(() => {
     if (pageLoading) return;
 
@@ -93,13 +112,14 @@ export default function IndexPage() {
 
   const handleLoanForm = () => {
     if (isProcessing.current || isLoading || navigating) return;
+
     isProcessing.current = true;
     setIsLoading(true);
+    setNavigating(true);
 
     setTimeout(() => {
-      setIsLoading(false);
       router.push("/loanForm");
-    }, 600);
+    }, 300);
   };
 
   return (
@@ -108,8 +128,16 @@ export default function IndexPage() {
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="always"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#034194"]}
+            tintColor="#034194"
+          />
+        }
       >
-        <View className="items-center pb-10 px-5 pt-8">
+        <View className="items-center pb-12 px-5 pt-8">
           <View className="w-full max-w-[500px] mx-auto">
             {/* BANNER */}
             {pageLoading ? (
@@ -149,13 +177,13 @@ export default function IndexPage() {
                       Loanable Amount
                     </Text>
                     <Text className="text-primary text-3xl pt-2 font-bold">
-                      ₱{Number(loanableAmount).toLocaleString()}
+                      ₱{Number(loanableAmount || 0).toLocaleString()}
                     </Text>
                   </>
                 )}
               </View>
 
-              {/* LOAN DETAILS SECTION (Settings) */}
+              {/* LOAN DETAILS SECTION */}
               <View
                 style={{
                   elevation: 10,
@@ -284,9 +312,6 @@ export default function IndexPage() {
                       }).format(date);
                     };
 
-                    // =========================
-                    // STATUS STYLE PICKER
-                    // =========================
                     const getStatusStyles = (status: string) => {
                       switch (status) {
                         case "active":
@@ -317,7 +342,6 @@ export default function IndexPage() {
                         className="bg-white rounded-3xl overflow-hidden border border-slate-50"
                       >
                         <View className="p-5">
-                          {/* HEADER: DATES & STATUS */}
                           <View className="flex-row justify-between mb-4 items-center">
                             <View className="flex-1">
                               <View className="flex-row items-center">
@@ -335,7 +359,6 @@ export default function IndexPage() {
                                   </>
                                 )}
                               </View>
-                              {/* ADDED: MONTHS SUBTITLE */}
                               <Text className="text-[9px] text-primary font-bold uppercase mt-0.5">
                                 {term_months} Months Term
                               </Text>
@@ -352,7 +375,6 @@ export default function IndexPage() {
                             </View>
                           </View>
 
-                          {/* BODY: AMOUNT & ACTION */}
                           <View className="flex-row justify-between items-center border-t border-slate-50 pt-3">
                             <View>
                               <Text className="text-[9px] text-slate-400 uppercase font-bold">
@@ -363,10 +385,9 @@ export default function IndexPage() {
                               </Text>
                             </View>
 
-                            {/* ACTION BUTTON */}
                             <TouchableOpacity
                               onPress={() => handleViewDetails(loan.id)}
-                              className="bg-primary px-5 py-2.5 rounded-xl shadow-sm shadow-primary/20"
+                              className="bg-primary px-5 py-2.5 rounded-xl"
                             >
                               <Text className="text-white font-bold text-[11px]">
                                 View Details
@@ -376,13 +397,13 @@ export default function IndexPage() {
                         </View>
                         <View
                           className={`h-1 w-full ${
-                            status === "active"
+                            normalizedStatus === "active"
                               ? "bg-green-500"
-                              : status === "pending"
+                              : normalizedStatus === "pending"
                                 ? "bg-amber-500"
-                                : status === "finished"
+                                : normalizedStatus === "finished"
                                   ? "bg-blue-500"
-                                  : status === "rejected"
+                                  : normalizedStatus === "rejected"
                                     ? "bg-[#D70127]"
                                     : "bg-slate-500"
                           }`}
@@ -402,18 +423,18 @@ export default function IndexPage() {
       </ScrollView>
 
       {/* FOOTER BUTTON */}
-      <View className="px-6 pb-10 pt-5 bg-white max-w-[500px] w-full self-center">
+      <View className="w-full p-5 bg-white border-t border-slate-200">
         {pageLoading ? (
           <Skeleton className="h-[60px] w-full rounded-2xl" />
         ) : (
           <TouchableOpacity
             onPress={handleLoanForm}
             disabled={isLoading || navigating}
-            className={`p-5 rounded-2xl flex-row justify-center ${
-              isLoading ? "bg-slate-400" : "bg-primary"
+            className={`h-16 rounded-2xl justify-center items-center ${
+              isLoading || navigating ? "bg-slate-400" : "bg-primary"
             }`}
           >
-            {isLoading ? (
+            {isLoading || navigating ? (
               <ActivityIndicator color="white" />
             ) : (
               <Text className="text-white font-bold text-lg">Get Started</Text>

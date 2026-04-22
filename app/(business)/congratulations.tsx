@@ -86,15 +86,15 @@ export default function CongratulationPage() {
       </ScrollView>
 
       {/* FOOTER BUTTON */}
-      <View className="px-6 pb-10 bg-white max-w-[500px] w-full self-center">
+      <View className="w-full p-5 bg-white border-t border-slate-200">
         {pageLoading ? (
-          <Skeleton className="h-16 w-full rounded-2xl" />
+          <Skeleton className="h-[60px] w-full rounded-2xl" />
         ) : (
           <TouchableOpacity
             onPress={handleReturnHome}
             disabled={navigating}
             activeOpacity={0.85}
-            className={`p-5 rounded-2xl flex-row justify-center items-center ${
+            className={`h-16 rounded-2xl justify-center items-center ${
               navigating ? "bg-slate-400" : "bg-primary"
             }`}
             style={{

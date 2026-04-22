@@ -51,19 +51,24 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // 1. Call the API Service
       const data = await authService.login(number, password);
-
-      // 2. Save to Zustand & SecureStore
       await setAuth(data.token, data.user);
 
       setNavigating(true);
-      // 3. Navigate to Main Dashboard
       router.replace("/(main)");
     } catch (error: any) {
-      const errorMsg =
-        error.message || "Invalid credentials. Please try again.";
-      Alert.alert("Login Failed", errorMsg);
+      if (error.errors) {
+        const firstErrorKey = Object.keys(error.errors)[0];
+        const errorMessage = error.errors[firstErrorKey][0];
+        Alert.alert("Login Failed", errorMessage);
+      } else if (error.message) {
+        Alert.alert("Login Failed", error.message);
+      } else {
+        Alert.alert(
+          "Login Failed",
+          "An unexpected error occurred. Please try again.",
+        );
+      }
     } finally {
       setIsLoading(false);
       isProcessing.current = false;
@@ -171,6 +176,8 @@ export default function LoginPage() {
                           onChangeText={setPassword}
                           secureTextEntry={!showPassword}
                           editable={!isLoading && !navigating}
+                          autoCapitalize="none"
+                          autoCorrect={false}
                         />
                         <TouchableOpacity
                           onPress={() => setShowPassword(!showPassword)}

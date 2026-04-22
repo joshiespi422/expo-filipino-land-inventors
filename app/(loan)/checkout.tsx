@@ -1,7 +1,8 @@
 import { getPaymentMethods, payLoan } from "@/services/loanService";
 import { PaymentMethod } from "@/types/loan.types";
+import { useFocusEffect } from "@react-navigation/native"; // Added for back-button reset
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,38 +17,46 @@ export default function LoanCheckoutPage() {
   const { id, scheduleId, amount } = useLocalSearchParams();
   const router = useRouter();
 
+  // DATA STATES
   const [loading, setLoading] = useState(false);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
     null,
   );
-
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // ==========================================
+  // 🛡️ NAVIGATION LOCKS (STRICT PREVENT CLICK)
+  // ==========================================
+  const [navigating, setNavigating] = useState(false);
+  const isProcessing = useRef(false);
+
+  // RESET LOCKS ON FOCUS (If user comes back from QR or WebView)
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(false);
+      setNavigating(false);
+      isProcessing.current = false;
+    }, []),
+  );
 
   // =========================
-  // FORMAT AMOUNT
+  // FORMATTING & PARSING
   // =========================
   const formatAmount = (value: any) => {
     const num = Number(String(value).replace(/,/g, ""));
     if (isNaN(num)) return "0.00";
-
     return num.toLocaleString("en-PH", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
   };
 
-  // =========================
-  // SAFE PARSE
-  // =========================
   const parseAmount = (value: any) => {
     const cleaned = String(value)
       .replace(/,/g, "")
       .replace(/[^\d.]/g, "");
-
     const num = Number(cleaned);
     return isNaN(num) ? 0 : Number(num.toFixed(2));
   };
@@ -58,7 +67,6 @@ export default function LoanCheckoutPage() {
   const loadMethods = async () => {
     try {
       const res = await getPaymentMethods();
-
       const list = Array.isArray(res)
         ? res
         : Array.isArray(res?.data)
@@ -87,27 +95,29 @@ export default function LoanCheckoutPage() {
   }, []);
 
   // =========================
-  // PAY LOAN
+  // 💰 PAY LOAN (HANDLE PROCEED)
   // =========================
   const handleProceed = async () => {
-    if (isSubmitting) return; // ⛔ prevent double click
+    // 1. HARD STOP - Check all locks
+    if (isProcessing.current || navigating || loading) return;
+
+    if (!selectedMethod) {
+      Alert.alert("Error", "Please select a payment method");
+      return;
+    }
+
+    const parsedAmount = parseAmount(amount);
+    if (parsedAmount <= 0) {
+      Alert.alert("Error", "Invalid payment amount");
+      return;
+    }
+
+    // 2. SET LOCKS IMMEDIATELY
+    isProcessing.current = true;
+    setLoading(true);
+    setNavigating(true);
 
     try {
-      if (!selectedMethod) {
-        Alert.alert("Select a payment method");
-        return;
-      }
-
-      const parsedAmount = parseAmount(amount);
-
-      if (parsedAmount <= 0) {
-        Alert.alert("Invalid amount");
-        return;
-      }
-
-      setIsSubmitting(true);
-      setLoading(true);
-
       const payload = {
         loan_schedule_id: Number(scheduleId),
         payment_method_id: selectedMethod.id,
@@ -124,11 +134,7 @@ export default function LoanCheckoutPage() {
       const intentId = result?.data?.payment?.gateway_payment_intent_id;
 
       if (!intentId) {
-        Alert.alert(
-          "Payment Error",
-          result?.message || "Unable to create payment session",
-        );
-        return;
+        throw new Error(result?.message || "Unable to create payment session");
       }
 
       setPaymentIntentId(intentId);
@@ -137,6 +143,7 @@ export default function LoanCheckoutPage() {
       if (url) {
         setCheckoutUrl(url);
         return;
+        // Note: loading/navigating remains true to keep button disabled while WebView loads
       }
 
       // 📱 QR Flow
@@ -151,32 +158,33 @@ export default function LoanCheckoutPage() {
         return;
       }
 
-      Alert.alert("Payment Error", "No available payment action");
+      throw new Error("No available payment action");
     } catch (error: any) {
       console.log("🔥 ERROR:", error?.response?.data);
 
-      const message =
-        error?.response?.data?.message || "Failed to create payment session";
+      // 3. RELEASE LOCKS ONLY ON ERROR
+      setLoading(false);
+      setNavigating(false);
+      isProcessing.current = false;
 
-      // =========================
-      // ⚠️ HANDLE YOUR BACKEND ERROR
-      // =========================
+      const message =
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to create payment session";
+
       if (message.includes("pending")) {
         Alert.alert(
           "Payment Pending",
-          "You already have a recent pending payment for this schedule. Please wait a moment before trying again.",
+          "You already have a recent pending payment. Please wait a moment before trying again.",
         );
       } else {
         Alert.alert("Payment Failed", message);
       }
-    } finally {
-      setLoading(false);
-      setIsSubmitting(false);
     }
   };
 
   // =========================
-  // WEBVIEW
+  // WEBVIEW RENDER
   // =========================
   if (checkoutUrl) {
     return (
@@ -195,29 +203,27 @@ export default function LoanCheckoutPage() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
         <View className="bg-white rounded-3xl p-6 mb-6">
           <Text className="text-slate-400 text-xs font-bold uppercase">
             Checkout Payment
           </Text>
-          {/* <Text className="text-gray-500 mt-1">Loan #{id}</Text> */}
-
           <Text className="text-primary text-3xl font-black mt-1">
             ₱{formatAmount(amount)}
           </Text>
         </View>
 
-        <Text className="font-semibold text-gray-800 mb-3">
+        <Text className="font-semibold text-gray-800 mb-3 px-1">
           Select Payment Method
         </Text>
 
         {methods.map((m) => {
           const active = selectedMethod?.id === m.id;
-
           return (
             <TouchableOpacity
               key={m.id}
-              onPress={() => setSelectedMethod(m)}
+              onPress={() => !navigating && setSelectedMethod(m)}
+              disabled={navigating}
               className={`p-4 mb-3 rounded-xl border ${
                 active
                   ? "border-primary bg-blue-50"
@@ -225,7 +231,7 @@ export default function LoanCheckoutPage() {
               }`}
             >
               <Text className="font-semibold text-gray-900">{m.name}</Text>
-              <Text className="text-xs text-gray-500 mt-1">
+              <Text className="text-xs text-gray-500 mt-1 uppercase">
                 {m.gateway_type}
               </Text>
             </TouchableOpacity>
@@ -233,16 +239,19 @@ export default function LoanCheckoutPage() {
         })}
       </ScrollView>
 
+      {/* FOOTER ACTION */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
           onPress={handleProceed}
-          disabled={loading}
-          className="bg-primary p-5 rounded-2xl"
+          disabled={loading || navigating}
+          className={`h-16 rounded-2xl justify-center items-center ${
+            loading || navigating ? "bg-slate-300" : "bg-primary"
+          }`}
         >
-          {loading ? (
+          {loading || navigating ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text className="text-white text-center font-bold text-base">
+            <Text className="text-white text-center font-bold text-lg">
               Pay Now
             </Text>
           )}

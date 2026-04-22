@@ -1,12 +1,14 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   computeLoan,
   createLoan,
   getLoanableAmount,
-} from "@/services/loanService"; // Ensure these paths are correct
+} from "@/services/loanService";
 import { ComputeLoanResponse } from "@/types/loan.types";
 import { Picker } from "@react-native-picker/picker";
+import { useFocusEffect } from "@react-navigation/native"; // Added for back-button reset
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,11 +23,9 @@ import "../../global.css";
 export default function LoanFormPage() {
   const router = useRouter();
 
-  // States
+  // PAGE & DATA STATES
   const [pageLoading, setPageLoading] = useState(true);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
   const [amount, setAmount] = useState("");
   const [months, setMonths] = useState("6");
   const [maxLimit, setMaxLimit] = useState(0);
@@ -34,10 +34,27 @@ export default function LoanFormPage() {
   );
   const [isComputing, setIsComputing] = useState(false);
 
-  // 1. Initial Load: Fetch Max Loanable Amount
+  // NAVIGATION & SUBMIT LOCKS (The most important part)
+  const [isLoading, setIsLoading] = useState(false);
+  const [navigating, setNavigating] = useState(false);
+  const isProcessing = useRef(false);
+
+  // =========================
+  // RESET LOCKS ON FOCUS
+  // =========================
+  useFocusEffect(
+    useCallback(() => {
+      setIsLoading(false);
+      setNavigating(false);
+      isProcessing.current = false;
+    }, []),
+  );
+
+  // Initial Load: Fetch Max Loanable Amount
   useEffect(() => {
     const init = async () => {
       try {
+        setPageLoading(true);
         const limit = await getLoanableAmount();
         setMaxLimit(parseFloat(limit));
       } catch (error) {
@@ -49,7 +66,7 @@ export default function LoanFormPage() {
     init();
   }, []);
 
-  // 2. Compute Schedule: Trigger when amount or months change
+  // Compute Schedule
   useEffect(() => {
     const cleanAmount = parseFloat(amount.replace(/,/g, ""));
     if (cleanAmount > 0) {
@@ -66,7 +83,7 @@ export default function LoanFormPage() {
         } finally {
           setIsComputing(false);
         }
-      }, 500); // Debounce to avoid excessive API calls
+      }, 500);
       return () => clearTimeout(debounce);
     } else {
       setComputedData(null);
@@ -82,15 +99,39 @@ export default function LoanFormPage() {
     setAmount(formattedValue);
   };
 
-  // 3. Handle Submission: Create the Loan
+  // Validation Logic
+  const hasInvalidScheduleAmount = computedData?.schedule?.some(
+    (item) => parseFloat(item.monthly_payment) < 1,
+  );
+
+  const isAmountValid =
+    parseFloat(amount.replace(/,/g, "")) >= 1 && !hasInvalidScheduleAmount;
+
+  // =========================
+  // HANDLE SUBMIT
+  // =========================
   const handleLoanSubmit = async () => {
-    if (isLoading || !computedData) return;
+    // 1. Double-click prevention guard
+    if (isProcessing.current || isLoading || navigating) return;
 
+    const cleanAmount = parseFloat(amount.replace(/,/g, ""));
+
+    if (!cleanAmount || cleanAmount < 1 || hasInvalidScheduleAmount) {
+      Alert.alert(
+        "Invalid Amount",
+        "Monthly repayment must be at least ₱1.00.",
+      );
+      return;
+    }
+
+    if (!computedData) return;
+
+    // 2. Set Locks
+    isProcessing.current = true;
     setIsLoading(true);
-    try {
-      // Clean the amount (remove commas)
-      const cleanAmount = parseFloat(amount.replace(/,/g, ""));
+    setNavigating(true);
 
+    try {
       await createLoan({
         amount: cleanAmount,
         term: parseInt(months),
@@ -103,17 +144,26 @@ export default function LoanFormPage() {
         params: { amount: cleanAmount },
       });
     } catch (error: any) {
-      // Detailed error logging for debugging validation issues
-      console.log("Validation Errors:", error?.response?.data?.errors);
+      // 3. Reset locks ONLY if there is an error (so user can try again)
+      setIsLoading(false);
+      setNavigating(false);
+      isProcessing.current = false;
 
       Alert.alert(
         "Error",
         error?.response?.data?.message || "Something went wrong.",
       );
-    } finally {
-      setIsLoading(false);
     }
   };
+
+  if (pageLoading) {
+    return (
+      <View className="flex-1 bg-white p-5 pt-20">
+        <Skeleton className="h-10 w-3/4 self-center mb-4" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-white">
@@ -123,18 +173,14 @@ export default function LoanFormPage() {
       >
         <View className="items-center py-8">
           <View className="mx-5 pb-10 max-w-[500px] w-full self-center">
-            {/* HEADER */}
             <View className="pb-8 pt-5 px-4">
               <Text className="text-center font-bold text-primary text-2xl">
                 Loan Computation
               </Text>
-              <Text className="text-center text-slate-500 text-sm pt-2">
-                Review your diminishing interest monthly breakdown
-              </Text>
             </View>
 
-            {/* AMOUNT INPUT */}
             <View className="px-4">
+              {/* INPUT AMOUNT */}
               <View className="flex-row items-center border-b-2 border-primary w-full py-2 justify-center">
                 <Text className="text-primary text-3xl font-bold mr-2">₱</Text>
                 <TextInput
@@ -145,12 +191,6 @@ export default function LoanFormPage() {
                   className="text-primary text-3xl font-bold flex-1"
                 />
               </View>
-              <Text className="p-1 text-slate-400">
-                Available ₱
-                {maxLimit.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                })}
-              </Text>
 
               {/* REPAYMENT PERIOD */}
               <View className="w-full pt-6">
@@ -162,7 +202,7 @@ export default function LoanFormPage() {
                     selectedValue={months}
                     onValueChange={(v) => setMonths(v)}
                   >
-                    {[3, 6, 12, 24].map((m) => (
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
                       <Picker.Item
                         key={m}
                         label={`${m} Months`}
@@ -173,15 +213,14 @@ export default function LoanFormPage() {
                 </View>
               </View>
 
-              {/* REPAYMENT TABLE */}
-              <View className="mt-8 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              {/* SCHEDULE TABLE */}
+              <View className="mt-8 border bg-white border-slate-200 rounded-xl overflow-hidden shadow-sm">
                 <View className="bg-primary p-3">
                   <Text className="text-white font-bold text-center text-sm">
                     Monthly Repayment
                   </Text>
                 </View>
 
-                {/* Table Header */}
                 <View className="flex-row bg-slate-100 py-3 border-b border-slate-200">
                   <Text className="w-[20%] text-[12px] font-bold text-center">
                     Month
@@ -195,35 +234,34 @@ export default function LoanFormPage() {
                 </View>
 
                 {isComputing ? (
-                  <ActivityIndicator
-                    size="small"
-                    color="#000"
-                    className="py-10"
-                  />
+                  <View className="py-10">
+                    <ActivityIndicator size="small" color="#034194" />
+                  </View>
+                ) : hasInvalidScheduleAmount ? (
+                  <View className="py-8 bg-red-50 items-center">
+                    <Text className="text-red-500 font-bold text-xs">
+                      ₱0.00 Repayment not allowed
+                    </Text>
+                  </View>
                 ) : computedData?.schedule ? (
                   computedData.schedule.map((item) => (
                     <View
                       key={item.month}
-                      className="flex-row py-4 border-b border-slate-100 bg-white items-center"
+                      className="flex-row py-4 border-b border-slate-100 px-4 bg-white items-center"
                     >
-                      <Text className="w-[20%] text-[12px] text-center font-bold">
+                      <Text className="w-[20%] text-[12px] font-bold text-center">
                         {item.month}
                       </Text>
-                      <View className="flex-1">
-                        <Text className="text-[12px] font-bold text-primary text-center">
-                          ₱{parseFloat(item.monthly_payment).toLocaleString()}
-                        </Text>
-                        <Text className="text-[10px] text-slate-400 text-center">
-                          Int: ₱{item.interest}
-                        </Text>
-                      </View>
+                      <Text className="flex-1 text-[12px] font-bold text-primary text-center">
+                        ₱{parseFloat(item.monthly_payment).toLocaleString()}
+                      </Text>
                       <Text className="flex-1 text-[12px] text-slate-600 text-center">
                         {item.due_date}
                       </Text>
                     </View>
                   ))
                 ) : (
-                  <Text className="py-8 bg-white text-center text-slate-400 italic text-xs">
+                  <Text className="py-8 text-center text-slate-400 italic text-xs">
                     Enter amount to see schedule
                   </Text>
                 )}
@@ -233,26 +271,39 @@ export default function LoanFormPage() {
         </View>
       </ScrollView>
 
-      {/* BOTTOM ACTION */}
-      <View className="px-6 pb-10 bg-white shadow-2xl w-full self-center">
+      {/* FOOTER ACTION */}
+      <View className="w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
           onPress={() => setAgreeToTerms(!agreeToTerms)}
-          className="flex-row py-5 items-center"
+          className="flex-row pb-5 items-center"
         >
           <View
-            className={`w-5 h-5 rounded border mr-3 ${agreeToTerms ? "bg-primary" : "border-slate-300"}`}
-          />
-          <Text className="text-xs text-slate-600 flex-1">
-            I agree to the diminishing interest terms.
+            className={`w-5 h-5 rounded border mr-2 items-center justify-center ${
+              agreeToTerms
+                ? "bg-primary border-primary"
+                : "border-slate-300 bg-slate-50"
+            }`}
+          >
+            {agreeToTerms && (
+              <View className="w-1.5 h-1.5 bg-white rounded-sm" />
+            )}
+          </View>
+          <Text className="text-primary text-sm">
+            I agree to the{" "}
+            <Text className="underline font-bold">Terms and Conditions</Text>
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={handleLoanSubmit}
-          disabled={!agreeToTerms || !amount || isLoading}
-          className={`h-16 rounded-2xl justify-center items-center ${!agreeToTerms || !amount ? "bg-slate-300" : "bg-primary"}`}
+          disabled={!agreeToTerms || !isAmountValid || isLoading || navigating}
+          className={`h-16 rounded-2xl justify-center items-center ${
+            !agreeToTerms || !isAmountValid || isLoading || navigating
+              ? "bg-slate-300"
+              : "bg-primary"
+          }`}
         >
-          {isLoading ? (
+          {isLoading || navigating ? (
             <ActivityIndicator color="white" />
           ) : (
             <Text className="text-white font-bold text-lg">Submit Loan</Text>

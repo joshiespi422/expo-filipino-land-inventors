@@ -1,6 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -14,17 +15,21 @@ import "../../global.css";
 export default function IndexPage() {
   const router = useRouter();
 
-  // States
+  // 🛡️ STRICT LOCK STATES
+  const isProcessing = useRef(false);
+  const [navigating, setNavigating] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [filterLoading, setFilterLoading] = useState(false);
-  const isProcessing = useRef(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [navigating] = useState(false);
-
-  // Updated Filter State to match your request
   const [activeFilter, setActiveFilter] = useState("All");
 
-  // Updated Data to match Intellectual Property context
+  // RESET LOCKS ON FOCUS
+  useFocusEffect(
+    useCallback(() => {
+      setNavigating(false);
+      isProcessing.current = false;
+    }, []),
+  );
+
   const PROPERTY_HISTORY = [
     {
       id: 1,
@@ -58,7 +63,7 @@ export default function IndexPage() {
     return item.status === activeFilter;
   });
 
-  // Effect 1: Initial Page Load
+  // Effect: Initial Page Load
   useEffect(() => {
     const timer = setTimeout(() => {
       setPageLoading(false);
@@ -66,30 +71,37 @@ export default function IndexPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Effect 2: Filter Change Loading
+  // Effect: Filter Change Loading
   useEffect(() => {
     if (pageLoading) return;
-
     setFilterLoading(true);
     const timer = setTimeout(() => {
       setFilterLoading(false);
     }, 350);
-
     return () => clearTimeout(timer);
   }, [activeFilter]);
 
+  /**
+   * 🚀 HANDLE NAVIGATION ACTIONS
+   */
   const handleViewDetails = () => {
+    if (isProcessing.current || navigating) return;
+    isProcessing.current = true;
+    setNavigating(true);
     router.push("/breakdown");
   };
 
   const handleApplyForm = () => {
-    if (isProcessing.current || isLoading || navigating) return;
+    // ⛔ STRICT CLICK CHECK
+    if (isProcessing.current || navigating) return;
+
     isProcessing.current = true;
-    setIsLoading(true);
+    setNavigating(true);
+
+    // Minor delay to show loader before push
     setTimeout(() => {
-      setIsLoading(false);
-      router.push("/propertyForm"); // Updated route name
-    }, 800);
+      router.push("/propertyForm");
+    }, 100);
   };
 
   return (
@@ -121,6 +133,7 @@ export default function IndexPage() {
                   (filter) => (
                     <TouchableOpacity
                       key={filter}
+                      disabled={navigating}
                       onPress={() => setActiveFilter(filter)}
                       className={`mr-2 px-5 py-2 rounded-full border ${
                         activeFilter === filter
@@ -129,11 +142,7 @@ export default function IndexPage() {
                       }`}
                     >
                       <Text
-                        className={`text-xs font-bold ${
-                          activeFilter === filter
-                            ? "text-white"
-                            : "text-slate-400"
-                        }`}
+                        className={`text-xs font-bold ${activeFilter === filter ? "text-white" : "text-slate-400"}`}
                       >
                         {filter}
                       </Text>
@@ -166,14 +175,14 @@ export default function IndexPage() {
                   <View
                     key={`card-${item.id}`}
                     style={{
-                      elevation: 8,
+                      elevation: 4,
                       shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 12,
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 8,
                       marginTop: 15,
                     }}
-                    className="bg-white rounded-3xl overflow-hidden"
+                    className="bg-white rounded-3xl overflow-hidden border border-slate-50"
                   >
                     <View className="p-5">
                       <View className="flex-row justify-between items-center mb-4">
@@ -186,7 +195,7 @@ export default function IndexPage() {
                               ? "bg-green-100"
                               : item.status === "Pending"
                                 ? "bg-amber-100"
-                                : "bg-[#FFE6E9]"
+                                : "bg-red-50"
                           }`}
                         >
                           <Text
@@ -195,7 +204,7 @@ export default function IndexPage() {
                                 ? "text-green-700"
                                 : item.status === "Pending"
                                   ? "text-amber-700"
-                                  : "text-[#D70127]"
+                                  : "text-red-600"
                             }`}
                           >
                             {item.status}
@@ -204,7 +213,7 @@ export default function IndexPage() {
                       </View>
 
                       <View className="flex-row items-center justify-between">
-                        <View>
+                        <View className="flex-1 pr-4">
                           <Text className="text-slate-800 text-xl font-bold">
                             {item.title}
                           </Text>
@@ -216,7 +225,8 @@ export default function IndexPage() {
                         </View>
                         <TouchableOpacity
                           onPress={handleViewDetails}
-                          className="bg-primary/10 px-4 py-2 rounded-xl"
+                          disabled={navigating}
+                          className="bg-slate-50 px-4 py-2 rounded-xl border border-slate-100"
                         >
                           <Text className="text-primary font-bold text-[10px]">
                             Details
@@ -224,14 +234,13 @@ export default function IndexPage() {
                         </TouchableOpacity>
                       </View>
                     </View>
-                    {/* Bottom accent line */}
                     <View
                       className={`h-1 w-full ${
                         item.status === "Registered"
                           ? "bg-green-500"
                           : item.status === "Pending"
                             ? "bg-amber-500"
-                            : "bg-[#D70127]"
+                            : "bg-red-500"
                       }`}
                     />
                   </View>
@@ -249,18 +258,18 @@ export default function IndexPage() {
       </ScrollView>
 
       {/* FOOTER ACTION BUTTON */}
-      <View className="px-6 pb-10 pt-5 bg-white shadow-2xl max-w-[500px] w-full self-center">
+      <View className="w-full p-5 bg-white border-t border-slate-200">
         {pageLoading ? (
-          <Skeleton className="h-[60px] w-full rounded-2xl" />
+          <Skeleton className="h-16 w-full rounded-2xl" />
         ) : (
           <TouchableOpacity
             onPress={handleApplyForm}
-            disabled={isLoading || navigating}
-            className={`p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
-              isLoading || navigating ? "bg-slate-400" : "bg-primary"
+            disabled={navigating}
+            className={`h-16 rounded-2xl justify-center items-center ${
+              navigating ? "bg-slate-400" : "bg-primary"
             }`}
           >
-            {isLoading ? (
+            {navigating ? (
               <ActivityIndicator color="white" />
             ) : (
               <Text className="text-white font-bold text-lg">Apply New</Text>

@@ -7,7 +7,14 @@ export interface RegisterPayload {
 
 export const accountRegisterService = {
   register: async (payload: RegisterPayload) => {
-    const { data } = await api.post("/register", payload);
-    return data;
+    try {
+      const { data } = await api.post("/register", payload);
+      return data;
+    } catch (error: any) {
+      if (error.response && error.response.data) {
+        throw error.response.data;
+      }
+      throw new Error("Network error. Please try again.");
+    }
   },
 };

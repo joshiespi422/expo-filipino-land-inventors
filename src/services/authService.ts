@@ -7,13 +7,12 @@ export const authService = {
         phone: phone,
         password: password,
       });
-
       return response.data;
     } catch (error: any) {
-      if (error.response) {
+      if (error.response && error.response.data) {
         throw error.response.data;
       }
-      throw new Error("Network error. Please check your connection.");
+      throw { message: "Network error. Please check your connection." };
     }
   },
 

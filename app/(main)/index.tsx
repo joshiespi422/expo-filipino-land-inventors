@@ -5,6 +5,7 @@ import {
   Dimensions,
   Image,
   Modal,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -13,6 +14,7 @@ import {
 import "../../global.css";
 
 // Hooks & Services
+import { profileService } from "@/services/profileService";
 import {
   getWalletBalance,
   updateWalletVisibility,
@@ -41,33 +43,50 @@ import image from "../../assets/images/image.png";
 const { width } = Dimensions.get("window");
 
 export default function DashboardPage() {
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore(); // Added setUser
   const router = useRouter();
   const [pageLoading, setPageLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [balance, setBalance] = useState<string>("0.00");
   const [showBalance, setShowBalance] = useState(false);
-
-  // Modal State
   const [showAlert, setShowAlert] = useState(false);
   const [pendingFeature, setPendingFeature] = useState("");
 
   const isMember = user?.user_type_id === 3;
 
-  useEffect(() => {
-    const initializeDashboard = async () => {
-      if (isMember) {
-        try {
-          const walletData = await getWalletBalance();
-          setBalance(walletData.data.balance);
-          setShowBalance(walletData.data.show);
-        } catch (error) {
-          console.error("Failed to fetch wallet:", error);
-        }
+  // 1. Create a centralized data fetching function
+  const loadData = async (showLoading = false) => {
+    if (showLoading) setPageLoading(true);
+
+    try {
+      // First, fetch the latest profile to see if status changed from Basic to Member
+      const userData = await profileService.getProfile();
+      setUser(userData); // Update global store
+
+      // If they are now a member (or were already), fetch the wallet
+      if (userData?.user_type_id === 3) {
+        const walletData = await getWalletBalance();
+        setBalance(walletData.data.balance);
+        setShowBalance(walletData.data.show);
       }
+    } catch (error) {
+      console.error("Dashboard Load Error:", error);
+    } finally {
       setPageLoading(false);
-    };
-    initializeDashboard();
-  }, [isMember]);
+    }
+  };
+
+  // 2. Initial Load: Watch the user object
+  useEffect(() => {
+    loadData(true);
+  }, []); // Run once on mount
+
+  // 3. Updated onRefresh: Now refreshes Profile AND Wallet
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await loadData(false);
+    setRefreshing(false);
+  }, []);
 
   const handleToggleBalance = async () => {
     const currentState = showBalance;
@@ -80,7 +99,7 @@ export default function DashboardPage() {
   };
 
   const handleMenuPress = (item: any) => {
-    // If not a member and trying to access restricted features
+    // We check the latest isMember status derived from the updated user object
     if (!isMember) {
       setPendingFeature(item.label);
       setShowAlert(true);
@@ -122,6 +141,14 @@ export default function DashboardPage() {
       contentContainerStyle={{ flexGrow: 1 }}
       showsVerticalScrollIndicator={false}
       className="flex-1 bg-white"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#034194"]}
+          tintColor="#034194"
+        />
+      }
     >
       <View className="px-6 pt-4 w-full max-w-[600px] mx-auto">
         {/* 1. WELCOME TEXT */}

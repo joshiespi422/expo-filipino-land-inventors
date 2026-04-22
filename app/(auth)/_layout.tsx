@@ -4,12 +4,7 @@ import * as NavigationBar from "expo-navigation-bar";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  View,
-} from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import "../../global.css";
 
 const queryClient = new QueryClient();
@@ -20,13 +15,14 @@ export default function AuthLayout() {
   const { token, isLoading, initialize } = useAuthStore();
 
   useEffect(() => {
-    // Initialize the token from SecureStore
     initialize();
 
     const hideNavBar = async () => {
       if (Platform.OS === "android") {
         try {
-          await NavigationBar.setBehaviorAsync("sticky-immersive" as any);
+          // Using "padding" behavior usually avoids the black gap
+          // but we set behavior to 'sticky-immersive' for the system bars
+          await NavigationBar.setBehaviorAsync("sticky-immersive");
           await NavigationBar.setVisibilityAsync("hidden");
         } catch (e) {
           console.log("NavigationBar error:", e);
@@ -37,9 +33,7 @@ export default function AuthLayout() {
     hideNavBar();
   }, []);
 
-  // Redirect to main if token exists, UNLESS we are currently on the congratulations page
   useEffect(() => {
-    // We use .some() to check if 'congratulations' exists in the route segments
     const isCongratsPage = segments.some((s) => s.includes("congratulations"));
     if (!isLoading && token && !isCongratsPage) {
       router.replace("/(main)");
@@ -56,44 +50,28 @@ export default function AuthLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {/* Set hidden to true and ensure the background matches */}
       <StatusBar hidden={true} />
       <View className="flex-1 bg-slate-50">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1"
-          keyboardVerticalOffset={Platform.OS === "android" ? 40 : 0}
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: "fade",
+            // This ensures the background color is consistent during keyboard shifts
+            contentStyle: { backgroundColor: "#f8fafc" },
+          }}
         >
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: "fade",
-              contentStyle: { backgroundColor: "#f8fafc" },
-            }}
-          >
-            <Stack.Screen name="login" options={{ animation: "fade" }} />
-            <Stack.Screen
-              name="register"
-              options={{ animation: "slide_from_right" }}
-            />
-            <Stack.Screen name="otpSend" options={{ animation: "fade" }} />
-            <Stack.Screen
-              name="otpVerification"
-              options={{ animation: "fade" }}
-            />
-            <Stack.Screen
-              name="successVerification"
-              options={{ animation: "fade" }}
-            />
-            <Stack.Screen
-              name="createPassword"
-              options={{ animation: "fade" }}
-            />
-            <Stack.Screen
-              name="congratulations"
-              options={{ animation: "fade" }}
-            />
-          </Stack>
-        </KeyboardAvoidingView>
+          <Stack.Screen name="login" />
+          <Stack.Screen
+            name="register"
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen name="otpSend" />
+          <Stack.Screen name="otpVerification" />
+          <Stack.Screen name="successVerification" />
+          <Stack.Screen name="createPassword" />
+          <Stack.Screen name="congratulations" />
+        </Stack>
       </View>
     </QueryClientProvider>
   );
