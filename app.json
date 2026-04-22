@@ -24,7 +24,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": []
+      "permissions": [],
+      "package": "com.jospay.expofilipinolandinventors"
     },
     "androidStatusBar": {
       "hidden": true,

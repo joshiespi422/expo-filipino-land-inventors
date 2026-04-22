@@ -39,7 +39,7 @@ export default function CongratulationPage() {
   };
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-white pt-12">
       <ScrollView
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
