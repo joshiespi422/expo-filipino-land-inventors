@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert"; // Added
 import HeaderAuth from "@/components/HeaderAuth";
 import LinkAuth from "@/components/LinkAuth";
 import LogoAuth from "@/components/LogoAuth";
@@ -9,7 +10,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -50,6 +50,17 @@ export default function OtpVerificationPage() {
   const [navigating, setNavigating] = useState(false);
   const [timer, setTimer] = useState(300); // 5 minutes
   const inputRef = useRef<TextInput>(null);
+
+  // Alert State
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  const showAlert = (title: string, message: string) => {
+    setAlert({ visible: true, title, message });
+  };
 
   // Reset internal navigation states when the screen comes into focus
   useFocusEffect(
@@ -99,12 +110,12 @@ export default function OtpVerificationPage() {
         error.response?.data?.message || "Invalid OTP code. Please try again.";
 
       if (error.status === 429) {
-        Alert.alert(
+        showAlert(
           "Too Many Attempts",
-          "You have tried too many times. Please wait a minute.",
+          "You have tried too many times. Please wait a minute before trying again.",
         );
       } else {
-        Alert.alert("Verification Failed", message);
+        showAlert("Verification Failed", message);
       }
 
       setOtp(""); // Clear input on error to let them retry
@@ -117,15 +128,15 @@ export default function OtpVerificationPage() {
       phoneVerificationService.resend({ phone: phone as string }),
     onSuccess: (data) => {
       setTimer(300); // Reset timer to 5 mins
-      Alert.alert(
-        "Success",
-        data.message || "A new OTP has been sent to your device.",
+      showAlert(
+        "OTP Sent",
+        data.message || "A new verification code has been sent to your device.",
       );
     },
     onError: (error: any) => {
       const message =
         error.response?.data?.message || "Too many requests. Please wait.";
-      Alert.alert("Error", message);
+      showAlert("Resend Error", message);
     },
   });
 
@@ -136,148 +147,158 @@ export default function OtpVerificationPage() {
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={{ flexGrow: 1 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View className="flex-1 bg-slate-50">
-        <HeaderAuth title="Join Us" />
+    <>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View className="flex-1 bg-slate-50">
+          <HeaderAuth title="Join Us" />
 
-        <View className="flex-1 -mt-10">
-          <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
+          <View className="flex-1 -mt-10">
+            <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
-          <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
-            <View className="bg-white p-6 rounded-[40px] shadow-md elevation-4">
-              {pageLoading ? (
-                <View className="items-center mb-4">
-                  <Skeleton className="w-32 h-32 rounded-full mt-[-76px] border-4 border-white" />
-                </View>
-              ) : (
-                <LogoAuth />
-              )}
-
-              {pageLoading ? (
-                <View className="gap-y-6">
-                  <Skeleton className="w-40 h-48 self-center mt-3" />
-                  <Skeleton className="h-8 w-56 self-center" />
-                  <View className="flex-row justify-between px-2">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <Skeleton key={i} className="w-[14%] h-14 rounded-xl" />
-                    ))}
+            <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
+              <View className="bg-white p-6 rounded-[40px] shadow-md elevation-4">
+                {pageLoading ? (
+                  <View className="items-center mb-4">
+                    <Skeleton className="w-32 h-32 rounded-full mt-[-76px] border-4 border-white" />
                   </View>
-                  <Skeleton className="h-16 w-full rounded-2xl" />
-                </View>
-              ) : (
-                <>
-                  <Image
-                    source={OTPVerification}
-                    className="w-40 h-48 self-center"
-                    resizeMode="contain"
-                  />
+                ) : (
+                  <LogoAuth />
+                )}
 
-                  <TitleAuth
-                    title="OTP Verification"
-                    containerClass="mb-5 mt-4"
-                    description={
-                      <Text className="text-center text-slate-500 text-sm">
-                        Enter the OTP sent to{" "}
-                        <Text className="font-bold text-slate-800">
-                          {phone ? `+${phone}` : "+63 9XX XXX XXXX"}
-                        </Text>
-                      </Text>
-                    }
-                  />
-
-                  {/* OTP INPUT SECTION */}
-                  <View className="relative">
-                    <TextInput
-                      ref={inputRef}
-                      value={otp}
-                      onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, ""))}
-                      maxLength={6}
-                      keyboardType="number-pad"
-                      autoFocus
-                      style={{
-                        position: "absolute",
-                        width: "100%",
-                        height: "100%",
-                        opacity: 0,
-                        zIndex: 1,
-                      }}
-                    />
-                    <Pressable
-                      onPress={() => inputRef.current?.focus()}
-                      className="flex-row justify-between items-center px-2"
-                    >
-                      {[0, 1, 2, 3, 4, 5].map((i) => (
-                        <OtpInputBox
-                          key={i}
-                          digit={otp[i] || ""}
-                          isFocused={otp.length === i}
-                        />
+                {pageLoading ? (
+                  <View className="gap-y-6">
+                    <Skeleton className="w-40 h-48 self-center mt-3" />
+                    <Skeleton className="h-8 w-56 self-center" />
+                    <View className="flex-row justify-between px-2">
+                      {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <Skeleton key={i} className="w-[14%] h-14 rounded-xl" />
                       ))}
-                    </Pressable>
+                    </View>
+                    <Skeleton className="h-16 w-full rounded-2xl" />
                   </View>
+                ) : (
+                  <>
+                    <Image
+                      source={OTPVerification}
+                      className="w-40 h-48 self-center"
+                      resizeMode="contain"
+                    />
 
-                  <TouchableOpacity
-                    onPress={handleVerify}
-                    disabled={
-                      verifyMutation.isPending || navigating || otp.length < 6
-                    }
-                    className={`mt-5 p-5 rounded-2xl flex-row justify-center items-center ${
-                      otp.length < 6 || verifyMutation.isPending || navigating
-                        ? "bg-slate-300"
-                        : "bg-primary"
-                    }`}
-                  >
-                    {verifyMutation.isPending ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <Text className="text-white font-bold text-lg">
-                        {navigating ? "Verifying..." : "Verify OTP"}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-
-                  {/* RESEND SECTION */}
-                  <View className="mt-6 items-center">
-                    <Text className="text-slate-500 font-medium">
-                      Didn{"'"}t receive code?
-                    </Text>
-                    {timer > 0 ? (
-                      <Text className="text-slate-400 mt-1">
-                        Resend available in {formatTime(timer)}
-                      </Text>
-                    ) : (
-                      <TouchableOpacity
-                        onPress={() => resendMutation.mutate()}
-                        disabled={resendMutation.isPending}
-                      >
-                        {resendMutation.isPending ? (
-                          <ActivityIndicator
-                            size="small"
-                            color="#000"
-                            className="mt-1"
-                          />
-                        ) : (
-                          <Text className="text-primary font-bold underline mt-1">
-                            Resend Code
+                    <TitleAuth
+                      title="OTP Verification"
+                      containerClass="mb-5 mt-4"
+                      description={
+                        <Text className="text-center text-slate-500 text-sm">
+                          Enter the OTP sent to{" "}
+                          <Text className="font-bold text-slate-800">
+                            {phone ? `+${phone}` : "+63 9XX XXX XXXX"}
                           </Text>
-                        )}
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                        </Text>
+                      }
+                    />
 
-                  <LinkAuth
-                    onNavigating={setNavigating}
-                    isNavigating={navigating}
-                  />
-                </>
-              )}
+                    {/* OTP INPUT SECTION */}
+                    <View className="relative">
+                      <TextInput
+                        ref={inputRef}
+                        value={otp}
+                        onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, ""))}
+                        maxLength={6}
+                        keyboardType="number-pad"
+                        autoFocus
+                        style={{
+                          position: "absolute",
+                          width: "100%",
+                          height: "100%",
+                          opacity: 0,
+                          zIndex: 1,
+                        }}
+                      />
+                      <Pressable
+                        onPress={() => inputRef.current?.focus()}
+                        className="flex-row justify-between items-center px-2"
+                      >
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                          <OtpInputBox
+                            key={i}
+                            digit={otp[i] || ""}
+                            isFocused={otp.length === i}
+                          />
+                        ))}
+                      </Pressable>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={handleVerify}
+                      disabled={
+                        verifyMutation.isPending || navigating || otp.length < 6
+                      }
+                      className={`mt-5 p-5 rounded-2xl flex-row justify-center items-center ${
+                        otp.length < 6 || verifyMutation.isPending || navigating
+                          ? "bg-slate-300"
+                          : "bg-primary"
+                      }`}
+                    >
+                      {verifyMutation.isPending ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text className="text-white font-bold text-lg">
+                          {navigating ? "Verifying..." : "Verify OTP"}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* RESEND SECTION */}
+                    <View className="mt-6 items-center">
+                      <Text className="text-slate-500 font-medium">
+                        Didn{"'"}t receive code?
+                      </Text>
+                      {timer > 0 ? (
+                        <Text className="text-slate-400 mt-1">
+                          Resend available in {formatTime(timer)}
+                        </Text>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() => resendMutation.mutate()}
+                          disabled={resendMutation.isPending}
+                        >
+                          {resendMutation.isPending ? (
+                            <ActivityIndicator
+                              size="small"
+                              color="#000"
+                              className="mt-1"
+                            />
+                          ) : (
+                            <Text className="text-primary font-bold underline mt-1">
+                              Resend Code
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <LinkAuth
+                      onNavigating={setNavigating}
+                      isNavigating={navigating}
+                    />
+                  </>
+                )}
+              </View>
             </View>
           </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Global Styled Alert */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => setAlert({ ...alert, visible: false })}
+      />
+    </>
   );
 }

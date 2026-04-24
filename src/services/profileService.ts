@@ -49,8 +49,6 @@ export const profileService = {
         "avatar",
         "id",
       ];
-
-      // Only append if it's a valid value and not in skipKeys
       if (
         !skipKeys.includes(key) &&
         data[key] !== null &&
@@ -60,26 +58,16 @@ export const profileService = {
       }
     });
 
-    // 2. Append Files (Only if they are new local URIs)
     const frontFile = normalizeFile(data.front_valid_id_picture, "front.jpg");
-    if (frontFile) {
-      // @ts-ignore
-      formData.append("front_valid_id_picture", frontFile);
-    }
+    if (frontFile) formData.append("front_valid_id_picture", frontFile as any);
 
     const backFile = normalizeFile(data.back_valid_id_picture, "back.jpg");
-    if (backFile) {
-      // @ts-ignore
-      formData.append("back_valid_id_picture", backFile);
-    }
+    if (backFile) formData.append("back_valid_id_picture", backFile as any);
 
     formData.append("_method", "PUT");
 
     const response = await api.post("/profile/update", formData, {
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "multipart/form-data",
-      },
+      headers: { "Content-Type": "multipart/form-data" },
       transformRequest: (data) => data,
     });
 

@@ -17,12 +17,16 @@ export default function AuthLayout() {
   useEffect(() => {
     initialize();
 
-    const hideNavBar = async () => {
+    const configureSystemUI = async () => {
       if (Platform.OS === "android") {
         try {
-          // Using "padding" behavior usually avoids the black gap
-          // but we set behavior to 'sticky-immersive' for the system bars
+          // Set behavior to sticky so swipes still work
           await NavigationBar.setBehaviorAsync("sticky-immersive");
+          // Make the background transparent so the View's bg color shows through
+          await NavigationBar.setBackgroundColorAsync("#ffffff00");
+          // Position absolute allows the app to draw under the nav buttons
+          await NavigationBar.setPositionAsync("absolute");
+          // Hide it, but if it triggers, it's now transparent
           await NavigationBar.setVisibilityAsync("hidden");
         } catch (e) {
           console.log("NavigationBar error:", e);
@@ -30,7 +34,7 @@ export default function AuthLayout() {
       }
     };
 
-    hideNavBar();
+    configureSystemUI();
   }, []);
 
   useEffect(() => {
@@ -50,14 +54,17 @@ export default function AuthLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Set hidden to true and ensure the background matches */}
-      <StatusBar hidden={true} />
+      {/* Ensure Status bar is translucent to match the theme */}
+      <StatusBar
+        style="light"
+        translucent={true}
+        backgroundColor="transparent"
+      />
       <View className="flex-1 bg-slate-50">
         <Stack
           screenOptions={{
             headerShown: false,
             animation: "fade",
-            // This ensures the background color is consistent during keyboard shifts
             contentStyle: { backgroundColor: "#f8fafc" },
           }}
         >

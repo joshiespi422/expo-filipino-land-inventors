@@ -79,20 +79,39 @@ export default function CongratulationPage() {
         </View>
       </ScrollView>
 
-      <View className="px-6 pb-10 bg-white max-w-[500px] w-full self-center">
+      {/* <View className="w-full p-5 bg-white border-t border-slate-200">
+        <TouchableOpacity
+          onPress={handleUpdate}
+          disabled={saving || !isFormComplete()}
+          activeOpacity={0.8}
+          className={`h-16 rounded-2xl justify-center items-center ${
+            saving || !isFormComplete() ? "bg-slate-300" : "bg-[#034194]"
+          }`}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text className="text-white font-bold text-lg">
+              {isFormComplete() ? "Submit for Approval" : "Complete All Fields"}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View> */}
+
+      <View className="w-full p-5 bg-white border-t border-slate-200">
         {pageLoading ? (
           <Skeleton className="h-16 w-full rounded-2xl" />
         ) : (
           <TouchableOpacity
             onPress={handleReturnHome}
             disabled={navigating}
-            activeOpacity={0.85}
-            className={`p-5 rounded-2xl flex-row justify-center items-center ${
+            activeOpacity={0.8}
+            className={`h-16 rounded-2xl justify-center items-center ${
               navigating ? "bg-slate-400" : "bg-[#034194]"
             }`}
           >
             {navigating ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color="#fff" />
             ) : (
               <Text className="text-white font-bold text-lg">Back to Home</Text>
             )}

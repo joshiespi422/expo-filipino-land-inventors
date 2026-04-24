@@ -36,33 +36,35 @@ export default function CongratulationsPage() {
   }, []);
 
   const handleContinue = async () => {
+    // Prevent double execution
     if (isProcessing.current || isLoading) return;
+
     isProcessing.current = true;
     setIsLoading(true);
 
     try {
-      // DEBUG: Check what the token actually looks like
-      console.log("Token received from params:", token);
+      console.log("Processing final authentication...");
 
       if (token && user) {
         const userData = typeof user === "string" ? JSON.parse(user) : user;
 
+        // Save to Zustand store (which usually triggers the Layout redirect)
         await setAuth(token, userData);
 
-        console.log("Auth Store updated. Moving to Dashboard...");
-
+        // Small delay to ensure state is persisted before we replace the route
         setTimeout(() => {
           router.replace("/(main)");
-        }, 200);
+        }, 500);
       } else {
-        console.error("No token or user data found in params.");
+        console.error("Missing credentials in params.");
         router.replace("/login");
       }
     } catch (error) {
       console.error("Transition Error:", error);
       router.replace("/login");
     } finally {
-      setIsLoading(false);
+      // We don't necessarily need to set isLoading(false) here if we are navigating away,
+      // but it's good practice for safety.
       isProcessing.current = false;
     }
   };
@@ -78,6 +80,7 @@ export default function CongratulationsPage() {
         <HeaderAuth title="Join Us" />
         <View className="flex-1 -mt-10">
           <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
+
           <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
             <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
               {pageLoading ? (
@@ -112,6 +115,7 @@ export default function CongratulationsPage() {
                       resizeMode="contain"
                     />
                   </View>
+
                   <TitleAuth
                     title="Congratulations!!!"
                     containerClass="mb-5 mt-4"
@@ -121,25 +125,31 @@ export default function CongratulationsPage() {
                           Your account has been successfully created.
                         </Text>
                         <Text className="text-center text-slate-900 text-sm mt-1">
-                          kindly{" "}
+                          Kindly{" "}
                           <Text className="font-bold">
                             proceed to your profile to complete{" "}
                           </Text>
-                          Verification <Text className="font-light">and</Text>{" "}
-                          gain full access to our services
+                          Verification and gain full access to our services.
                         </Text>
                       </View>
                     }
                   />
+
                   <TouchableOpacity
                     onPress={handleContinue}
                     disabled={isLoading}
-                    className={`my-5 py-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                    activeOpacity={0.8}
+                    className={`py-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
                       isLoading ? "bg-slate-400" : "bg-primary"
                     }`}
                   >
                     {isLoading ? (
-                      <ActivityIndicator color="white" />
+                      <View className="flex-row items-center">
+                        <ActivityIndicator color="white" className="mr-3" />
+                        <Text className="text-white font-bold text-lg">
+                          Entering Dashboard...
+                        </Text>
+                      </View>
                     ) : (
                       <Text className="text-white font-bold text-lg text-center">
                         Go to Dashboard

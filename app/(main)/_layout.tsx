@@ -257,7 +257,7 @@ export default function MainLayout() {
                         />
                       </View>
                     ) : (
-                      <Ionicons name="person-circle" size={31} color="white" />
+                      <Ionicons name="person-circle" size={33} color="white" />
                     )}
                   </View>
                   <Text className="text-white text-[10px] mt-1">Profile</Text>

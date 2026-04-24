@@ -8,7 +8,7 @@ interface HeaderAuthProps {
 
 export default function HeaderAuth({ title, subtitle }: HeaderAuthProps) {
   return (
-    <View className="bg-primary pt-14 pb-28 items-center justify-center">
+    <View className="bg-primary pt-12 pb-24 items-center justify-center">
       <Text className="font-bold text-4xl text-white tracking-tight">
         {title}
       </Text>

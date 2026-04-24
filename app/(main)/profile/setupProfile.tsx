@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { profileService } from "@/services/profileService";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -7,7 +8,6 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   ScrollView,
@@ -23,12 +23,18 @@ export default function EditProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  // Custom Alert State
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
   const [regions, setRegions] = useState<any[]>([]);
   const [provinces, setProvinces] = useState<any[]>([]);
   const [cities, setCities] = useState<any[]>([]);
   const [barangays, setBarangays] = useState<any[]>([]);
 
-  // --- VALIDATION LOGIC ---
   const [form, setForm] = useState<any>({
     name: "",
     phone: "",
@@ -47,13 +53,12 @@ export default function EditProfileScreen() {
     back_valid_id_picture: null,
   });
 
+  // --- VALIDATION LOGIC ---
   const isFormComplete = () => {
     const requiredFields = [
-      "name",
-      "phone",
-      "email",
       "gender",
       "birthdate",
+      "email",
       "region",
       "province",
       "city",
@@ -66,76 +71,76 @@ export default function EditProfileScreen() {
 
     const fieldsFilled = requiredFields.every((field) => !!form[field]);
     const imagesUploaded =
-      !!form.front_valid_id_picture && !!form.back_valid_id_picture;
+      !!form.front_valid_id_picture?.uri && !!form.back_valid_id_picture?.uri;
 
     return fieldsFilled && imagesUploaded;
   };
 
   useEffect(() => {
-    fetchProfile();
-    fetchRegions();
+    const init = async () => {
+      await fetchRegions();
+      await fetchProfile();
+    };
+    init();
   }, []);
 
   const fetchProfile = async () => {
     try {
       const res = await profileService.getProfile();
-      setForm({
-        ...res,
-        front_valid_id_picture: res.front_valid_id_picture
-          ? { uri: res.front_valid_id_picture }
-          : null,
-        back_valid_id_picture: res.back_valid_id_picture
-          ? { uri: res.back_valid_id_picture }
-          : null,
-      });
+      setForm({ ...res });
+
+      if (res.region) fetchProvinces(res.region);
+      if (res.province) fetchCities(res.province);
+      if (res.city) fetchBarangays(res.city);
     } catch (err) {
-      console.error(err);
+      console.error("Profile Fetch Error:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  // --- ADDRESS API FETCHERS ---
   const fetchRegions = async () => {
-    const res = await fetch("https://psgc.gitlab.io/api/regions/");
-    setRegions(await res.json());
+    try {
+      const res = await fetch("https://psgc.gitlab.io/api/regions/");
+      setRegions(await res.json());
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const fetchProvinces = async (regionCode: string) => {
+  const fetchProvinces = async (code: string) => {
     const res = await fetch(
-      `https://psgc.gitlab.io/api/regions/${regionCode}/provinces/`,
+      `https://psgc.gitlab.io/api/regions/${code}/provinces/`,
     );
     setProvinces(await res.json());
   };
 
-  const fetchCities = async (provinceCode: string) => {
+  const fetchCities = async (code: string) => {
     const res = await fetch(
-      `https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities/`,
+      `https://psgc.gitlab.io/api/provinces/${code}/cities-municipalities/`,
     );
     setCities(await res.json());
   };
 
-  const fetchBarangays = async (cityCode: string) => {
+  const fetchBarangays = async (code: string) => {
     const res = await fetch(
-      `https://psgc.gitlab.io/api/cities-municipalities/${cityCode}/barangays/`,
+      `https://psgc.gitlab.io/api/cities-municipalities/${code}/barangays/`,
     );
     setBarangays(await res.json());
   };
 
   const pickImage = async (field: string) => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: "image/*",
-      copyToCacheDirectory: true,
-    });
-
+    const result = await DocumentPicker.getDocumentAsync({ type: "image/*" });
     if (result.canceled) return;
-
     const file = result.assets?.[0];
-    if (!file) return;
 
-    // Validation for 5120 KB (5MB)
-    const maxSize = 5120 * 1024;
-    if (file.size && file.size > maxSize) {
-      Alert.alert("File Too Large", "Please select an image smaller than 5MB.");
+    if (file && file.size && file.size > 5120 * 1024) {
+      setAlert({
+        visible: true,
+        title: "File Too Large",
+        message: "Please select an image smaller than 5MB.",
+      });
       return;
     }
 
@@ -150,61 +155,27 @@ export default function EditProfileScreen() {
   };
 
   const handleUpdate = async () => {
-    if (!isFormComplete()) {
-      Alert.alert(
-        "Incomplete",
-        "Please fill in all fields and upload ID photos.",
-      );
-      return;
-    }
+    if (!isFormComplete()) return;
 
     setSaving(true);
     try {
-      // Just pass the form object. The service will handle the FormData conversion.
       await profileService.updateProfile(form);
-
       router.replace("/profile/congratulations");
     } catch (err: any) {
-      // Improved error logging to see exactly what failed
-      if (err.response && err.response.status === 422) {
-        console.log(
-          "Validation Errors:",
-          JSON.stringify(err.response.data.errors, null, 2),
-        );
-        Alert.alert("Error", "Validation failed. Please check your data.");
-      } else {
-        console.error("Update Error:", err);
-        Alert.alert("Error", "Failed to update profile.");
-      }
+      const errors = err.response?.data?.errors;
+      const errorMessage = errors
+        ? (Object.values(errors).flat()[0] as string)
+        : "Failed to update profile. Please try again.";
+
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: errorMessage,
+      });
     } finally {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#034194" />
-      </View>
-    );
-  }
-
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#034194" />
-      </View>
-    );
-  }
-
-  // Styles
-  const card = "bg-white p-5 rounded-3xl mb-4 shadow-sm border border-gray-100";
-  const label =
-    "text-gray-500 mb-2 font-semibold text-xs uppercase tracking-wider";
-  const inputStyle =
-    "border border-gray-200 bg-gray-50 p-4 rounded-2xl mb-4 text-gray-800 font-medium";
-  const pickerContainer =
-    "border border-gray-200 rounded-2xl bg-gray-50 mb-4 overflow-hidden";
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === "ios");
@@ -215,11 +186,9 @@ export default function EditProfileScreen() {
     }
 
     if (selectedDate) {
-      // Format to YYYY-MM-DD using local time
       const year = selectedDate.getFullYear();
       const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
       const day = String(selectedDate.getDate()).padStart(2, "0");
-
       const formattedDate = `${year}-${month}-${day}`;
 
       setForm((prev: any) => ({
@@ -228,6 +197,23 @@ export default function EditProfileScreen() {
       }));
     }
   };
+
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="large" color="#034194" />
+      </View>
+    );
+  }
+
+  // Common Styles
+  const card = "bg-white p-5 rounded-3xl mb-4 shadow-sm border border-gray-100";
+  const label =
+    "text-gray-500 mb-2 font-semibold text-xs uppercase tracking-wider";
+  const inputStyle =
+    "border border-gray-200 bg-gray-50 p-4 rounded-2xl mb-4 text-gray-800 font-medium";
+  const pickerContainer =
+    "border border-gray-200 rounded-2xl bg-gray-50 mb-4 overflow-hidden";
 
   return (
     <View className="flex-1 bg-white">
@@ -244,31 +230,28 @@ export default function EditProfileScreen() {
             </Text>
           </View>
 
-          <Text className={label}>Full Name</Text>
+          <Text className={label}>Full Name (Locked)</Text>
           <TextInput
             value={form.name}
-            placeholder="Juan Dela Cruz"
-            onChangeText={(t) => setForm({ ...form, name: t })}
-            className={inputStyle}
+            editable={false}
+            className={`${inputStyle} bg-gray-300 text-gray-500 opacity-70`}
           />
 
-          <Text className={label}>Phone Number</Text>
+          <Text className={label}>Phone Number (Locked)</Text>
           <TextInput
             value={form.phone}
-            keyboardType="phone-pad"
-            placeholder="09123456789"
-            onChangeText={(t) => setForm({ ...form, phone: t })}
-            className={inputStyle}
+            editable={false}
+            className={`${inputStyle} bg-gray-300 text-gray-500 opacity-70`}
           />
 
           <Text className={label}>Email Address</Text>
           <TextInput
             value={form.email}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholder="example@gmail.com"
             onChangeText={(t) => setForm({ ...form, email: t })}
             className={inputStyle}
+            placeholder="example@gmail.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
           />
 
           <Text className={label}>Gender</Text>
@@ -297,7 +280,6 @@ export default function EditProfileScreen() {
 
           {showDatePicker && (
             <DateTimePicker
-              // Convert the string from the database into a Date object
               value={
                 form.birthdate ? new Date(form.birthdate) : new Date(2000, 0, 1)
               }
@@ -322,15 +304,15 @@ export default function EditProfileScreen() {
           <View className={pickerContainer}>
             <Picker
               selectedValue={form.region}
-              onValueChange={(value) => {
+              onValueChange={(v) => {
                 setForm({
                   ...form,
-                  region: value,
+                  region: v,
                   province: "",
                   city: "",
                   barangay: "",
                 });
-                fetchProvinces(value);
+                if (v) fetchProvinces(v);
               }}
             >
               <Picker.Item label="Select Region" value="" color="#9CA3AF" />
@@ -344,9 +326,9 @@ export default function EditProfileScreen() {
           <View className={pickerContainer}>
             <Picker
               selectedValue={form.province}
-              onValueChange={(value) => {
-                setForm({ ...form, province: value, city: "", barangay: "" });
-                fetchCities(value);
+              onValueChange={(v) => {
+                setForm({ ...form, province: v, city: "", barangay: "" });
+                if (v) fetchCities(v);
               }}
             >
               <Picker.Item label="Select Province" value="" color="#9CA3AF" />
@@ -360,9 +342,9 @@ export default function EditProfileScreen() {
           <View className={pickerContainer}>
             <Picker
               selectedValue={form.city}
-              onValueChange={(value) => {
-                setForm({ ...form, city: value, barangay: "" });
-                fetchBarangays(value);
+              onValueChange={(v) => {
+                setForm({ ...form, city: v, barangay: "" });
+                if (v) fetchBarangays(v);
               }}
             >
               <Picker.Item label="Select City" value="" color="#9CA3AF" />
@@ -376,7 +358,7 @@ export default function EditProfileScreen() {
           <View className={pickerContainer}>
             <Picker
               selectedValue={form.barangay}
-              onValueChange={(value) => setForm({ ...form, barangay: value })}
+              onValueChange={(v) => setForm({ ...form, barangay: v })}
             >
               <Picker.Item label="Select Barangay" value="" color="#9CA3AF" />
               {barangays.map((b) => (
@@ -401,7 +383,7 @@ export default function EditProfileScreen() {
           />
         </View>
 
-        {/* VALID ID */}
+        {/* VERIFICATION */}
         <View className={card}>
           <View className="flex-row items-center mb-4">
             <Ionicons name="id-card-outline" size={24} color="#034194" />
@@ -414,9 +396,7 @@ export default function EditProfileScreen() {
           <View className={pickerContainer}>
             <Picker
               selectedValue={form.valid_id_type}
-              onValueChange={(value) =>
-                setForm({ ...form, valid_id_type: value })
-              }
+              onValueChange={(v) => setForm({ ...form, valid_id_type: v })}
             >
               <Picker.Item label="Select ID Type" value="" color="#9CA3AF" />
               <Picker.Item label="National ID" value="National ID" />
@@ -432,67 +412,62 @@ export default function EditProfileScreen() {
             className={inputStyle}
           />
 
-          <View className="flex-row justify-between">
-            <TouchableOpacity
-              onPress={() => pickImage("front_valid_id_picture")}
-              className="w-[48%] border-2 border-dashed border-gray-200 rounded-3xl p-2 items-center justify-center bg-gray-50 h-32"
-            >
-              {form.front_valid_id_picture?.uri ? (
-                <Image
-                  source={{ uri: form.front_valid_id_picture.uri }}
-                  className="w-full h-full rounded-2xl"
-                />
-              ) : (
-                <>
-                  <Ionicons name="camera-outline" size={24} color="#9CA3AF" />
-                  <Text className="text-[10px] text-gray-400 mt-1 font-bold">
-                    FRONT ID
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => pickImage("back_valid_id_picture")}
-              className="w-[48%] border-2 border-dashed border-gray-200 rounded-3xl p-2 items-center justify-center bg-gray-50 h-32"
-            >
-              {form.back_valid_id_picture?.uri ? (
-                <Image
-                  source={{ uri: form.back_valid_id_picture.uri }}
-                  className="w-full h-full rounded-2xl"
-                />
-              ) : (
-                <>
-                  <Ionicons name="camera-outline" size={24} color="#9CA3AF" />
-                  <Text className="text-[10px] text-gray-400 mt-1 font-bold">
-                    BACK ID
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
+          <View className="flex-row justify-between mt-2">
+            {[
+              { key: "front_valid_id_picture", label: "FRONT ID" },
+              { key: "back_valid_id_picture", label: "BACK ID" },
+            ].map((side) => (
+              <TouchableOpacity
+                key={side.key}
+                onPress={() => pickImage(side.key)}
+                className="w-[48%] border-2 border-dashed border-gray-200 rounded-3xl p-2 items-center justify-center bg-gray-50 h-32"
+              >
+                {form[side.key]?.uri ? (
+                  <Image
+                    source={{ uri: form[side.key].uri }}
+                    className="w-full h-full rounded-2xl"
+                  />
+                ) : (
+                  <>
+                    <Ionicons name="camera-outline" size={24} color="#9CA3AF" />
+                    <Text className="text-[10px] text-gray-400 mt-1 font-bold">
+                      {side.label}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </ScrollView>
 
-      <View className="px-6 pb-10 pt-5 bg-white max-w-[500px] w-full self-center">
+      {/* FOOTER SUBMIT BUTTON */}
+      <View className="w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
           onPress={handleUpdate}
           disabled={saving || !isFormComplete()}
-          style={{
-            opacity: saving || !isFormComplete() ? 0.6 : 1,
-            backgroundColor: "#034194", // Ensure this matches your primary blue
-          }}
-          className="py-5 rounded-3xl shadow-lg"
+          activeOpacity={0.8}
+          className={`h-16 rounded-2xl justify-center items-center ${
+            saving || !isFormComplete() ? "bg-slate-300" : "bg-[#034194]"
+          }`}
         >
           {saving ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text className="text-white text-center font-bold text-lg">
-              Submit for Approval
+            <Text className="text-white font-bold text-lg">
+              {isFormComplete() ? "Submit for Approval" : "Complete All Fields"}
             </Text>
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Custom Alert Implementation */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => setAlert({ ...alert, visible: false })}
+      />
     </View>
   );
 }

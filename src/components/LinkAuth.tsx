@@ -36,7 +36,7 @@ export default function AuthNavigationButton({
   };
 
   return (
-    <View className="flex-row justify-center mt-5">
+    <View className="flex-row justify-center mt-2">
       <TouchableOpacity
         onPress={handleButtonNavigation}
         disabled={isNavigating}

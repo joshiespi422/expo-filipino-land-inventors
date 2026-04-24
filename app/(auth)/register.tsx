@@ -1,23 +1,24 @@
+import { AuthInput } from "@/components/AuthInput";
+import { CustomAlert } from "@/components/CustomAlert";
 import HeaderAuth from "@/components/HeaderAuth";
 import LinkAuth from "@/components/LinkAuth";
+import { LoginSkeleton } from "@/components/LoginSkeleton";
 import LogoAuth from "@/components/LogoAuth";
 import TitleAuth from "@/components/TitleAuth";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   accountRegisterService,
   RegisterPayload,
 } from "@/services/accountRegister";
 import { useMutation } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Keyboard,
   Platform,
-  Pressable,
   ScrollView,
+  StatusBar,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -25,234 +26,222 @@ import "../../global.css";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const phoneInputRef = useRef<TextInput>(null);
 
-  // Form States
-  const [fullName, setFullName] = useState("");
-  const [number, setNumber] = useState("");
-  const [navigating, setNavigating] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true);
+  const [form, setForm] = useState({
+    fullName: "",
+    number: "",
+  });
+
+  const [status, setStatus] = useState({
+    navigating: false,
+    pageLoading: true,
+  });
+
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
 
   useFocusEffect(
     useCallback(() => {
-      setNavigating(false);
+      setStatus((prev) => ({ ...prev, navigating: false }));
+      // Ensure status bar is correct when focusing this page
+      if (Platform.OS === "android") {
+        StatusBar.setTranslucent(true);
+        StatusBar.setBackgroundColor("transparent");
+      }
     }, []),
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => setPageLoading(false), 400);
+    const timer = setTimeout(
+      () => setStatus((prev) => ({ ...prev, pageLoading: false })),
+      400,
+    );
     return () => clearTimeout(timer);
   }, []);
 
+  const showAlert = (title: string, message: string) => {
+    setAlert({ visible: true, title, message });
+  };
+
+  const handleNumberChange = (text: string) => {
+    const cleaned = text.replace(/[^0-9]/g, "");
+    if (cleaned === "") {
+      setForm({ ...form, number: "" });
+      return;
+    }
+    let formatted = cleaned;
+    if (formatted.length >= 1 && formatted[0] !== "0") {
+      formatted = "0" + formatted;
+    }
+    if (formatted.length >= 2 && formatted[1] !== "9") {
+      formatted = "09" + formatted.substring(1);
+    }
+    setForm({ ...form, number: formatted.slice(0, 11) });
+  };
+
   const mutation = useMutation({
-    mutationFn: (data: RegisterPayload) => {
-      return accountRegisterService.register(data);
-    },
+    mutationFn: (data: RegisterPayload) =>
+      accountRegisterService.register(data),
     onSuccess: (data) => {
+      Keyboard.dismiss();
+
       if (data.status === "otp_sent" || data.status === "pending") {
-        if (data.status === "pending") {
-          Alert.alert("Note", data.message);
-        }
-
-        // Set navigating to true to show the loading state on the button
-        setNavigating(true);
-
-        router.push({
-          pathname: "/otpVerification",
-          params: { phone: `639${number}` },
-        });
+        setTimeout(() => {
+          showAlert(
+            data.status === "pending" ? "Note" : "Success",
+            data.message || "OTP has been sent to your mobile number.",
+          );
+        }, 150);
       }
     },
     onError: (error: any) => {
-      // Always reset navigating state if an error occurs
-      setNavigating(false);
-
-      if (error.status === 429) {
-        return Alert.alert(
-          "Too Many Attempts",
-          "Please wait a moment before trying again.",
-        );
+      Keyboard.dismiss();
+      setStatus((prev) => ({ ...prev, navigating: false }));
+      let msg = "Registration failed. Please try again.";
+      if (error?.errors) {
+        const errorValues = Object.values(error.errors);
+        msg = Array.isArray(errorValues[0])
+          ? errorValues[0][0]
+          : String(errorValues[0]);
+      } else if (error?.message) {
+        msg = error.message;
       }
 
-      if (error.errors) {
-        const firstErrorKey = Object.keys(error.errors)[0];
-        const errorMessage = error.errors[firstErrorKey][0];
-        return Alert.alert("Registration Error", errorMessage);
-      }
-
-      const errorMessage =
-        error.message || "Registration failed. Please try again.";
-      Alert.alert("Error", errorMessage);
+      setTimeout(() => {
+        showAlert("Registration Error", msg);
+      }, 150);
     },
   });
 
   const handleRegister = () => {
-    if (mutation.isPending || navigating) return;
-
-    if (!fullName.trim() || !number.trim()) {
-      return Alert.alert("Required", "Please fill in all fields");
+    if (mutation.isPending || status.navigating) return;
+    if (!form.fullName.trim() || !form.number.trim()) {
+      return showAlert("Required", "Please fill in all fields");
     }
-
-    if (number.length !== 9) {
-      return Alert.alert(
+    if (form.number.length !== 11) {
+      return showAlert(
         "Invalid Number",
-        "Please enter the remaining 9 digits after '09'.",
+        "Mobile number must be exactly 11 digits (starting with 09).",
       );
     }
-
     mutation.mutate({
-      name: fullName.trim(),
-      phone: `639${number.trim()}`,
+      name: form.fullName.trim(),
+      phone: `63${form.number.substring(1)}`,
     });
   };
 
+  const isBusy = mutation.isPending || status.navigating;
+
   return (
-    <ScrollView
-      contentContainerStyle={{ flexGrow: 1 }}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-      automaticallyAdjustKeyboardInsets={Platform.OS === "android"}
-    >
-      <View className="flex-1 bg-slate-50">
-        <HeaderAuth title="Join Us" />
+    <>
+      {/* This ensures the system UI doesn't "jump" or change colors 
+         unexpectedly when the modal triggers.
+      */}
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent={true}
+      />
 
-        <View className="flex-1 -mt-10">
-          <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets={Platform.OS === "android"}
+      >
+        <View className="flex-1 bg-slate-50">
+          <HeaderAuth title="Join Us" />
 
-          <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
-            <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
-              {/* --- LOGO SECTION --- */}
-              {pageLoading ? (
-                <View className="items-center mb-4">
-                  <View className="mt-[-76px] bg-white rounded-full shadow-sm">
-                    <Skeleton className="w-32 h-32 rounded-full border-4 border-white" />
-                  </View>
-                </View>
-              ) : (
-                <LogoAuth />
-              )}
+          <View className="flex-1 -mt-10">
+            <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
-              {pageLoading ? (
-                /* --- SKELETON UI --- */
-                <View className="gap-y-6">
-                  <View className="items-center gap-y-3">
-                    <Skeleton className="h-8 w-56 rounded-lg" />
-                    <View className="items-center gap-y-1.5 w-full">
-                      <Skeleton className="h-3 w-[70%] rounded-md" />
-                      <Skeleton className="h-3 w-[50%] rounded-md" />
-                    </View>
-                  </View>
-                  <View className="gap-y-5 mt-2">
+            <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
+              <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
+                {status.pageLoading ? (
+                  <LoginSkeleton />
+                ) : (
+                  <>
+                    <LogoAuth />
+                    <TitleAuth
+                      title="Register Account"
+                      containerClass="mb-8 mt-2"
+                      description="Create an Account to get started"
+                    />
+
                     <View>
-                      <Skeleton className="h-3 w-32 mb-2 ml-2 rounded-full" />
-                      <Skeleton className="h-[58px] w-full rounded-2xl" />
-                    </View>
-                    <View>
-                      <Skeleton className="h-3 w-40 mb-2 ml-2 rounded-full" />
-                      <Skeleton className="h-[58px] w-full rounded-2xl" />
-                    </View>
-                  </View>
-                  <Skeleton className="h-[64px] w-full rounded-2xl mt-4" />
-                  <Skeleton className="h-4 w-40 self-center rounded-md" />
-                </View>
-              ) : (
-                /* --- ACTUAL CONTENT --- */
-                <>
-                  <TitleAuth
-                    title="Register Account"
-                    containerClass="mb-8 mt-2"
-                    description={
-                      <View>
-                        <Text className="text-center text-slate-900 text-sm">
-                          Create an Account to get started
-                        </Text>
-                        <Text className="text-center text-slate-900 text-sm">
-                          and access our services
-                        </Text>
-                      </View>
-                    }
-                  />
-
-                  <View className="gap-y-5">
-                    <View>
-                      <Text className="text-primary mb-2 ml-2 font-medium text-xs uppercase">
-                        Enter Full Name
-                      </Text>
-                      <TextInput
-                        className="bg-white p-4 rounded-2xl text-slate-800 border border-slate-200"
-                        placeholder="Full Name"
-                        placeholderTextColor="#94a3b8"
-                        value={fullName}
-                        onChangeText={setFullName}
+                      <AuthInput
+                        label="Full Name"
+                        placeholder="Enter your full name"
+                        value={form.fullName}
+                        onChangeText={(val) =>
+                          setForm({ ...form, fullName: val })
+                        }
                         autoCapitalize="words"
-                        autoCorrect={false}
-                        editable={!mutation.isPending && !navigating}
+                        editable={!isBusy}
+                      />
+
+                      <AuthInput
+                        label="Mobile Number"
+                        placeholder="09123456789"
+                        value={form.number}
+                        onChangeText={handleNumberChange}
+                        keyboardType="phone-pad"
+                        maxLength={11}
+                        editable={!isBusy}
                       />
                     </View>
 
-                    <View>
-                      <Text className="text-primary mb-2 ml-2 font-medium text-xs uppercase">
-                        Enter Mobile Number
-                      </Text>
-                      <Pressable
-                        onPress={() =>
-                          !mutation.isPending &&
-                          !navigating &&
-                          phoneInputRef.current?.focus()
-                        }
-                        className="flex-row items-center bg-white rounded-2xl border border-slate-200 overflow-hidden"
-                      >
-                        <View className="pl-4 pr-1 justify-center">
-                          <Text className="text-slate-800 text-base font-medium">
-                            09
-                          </Text>
-                        </View>
-                        <TextInput
-                          ref={phoneInputRef}
-                          className="flex-1 p-4 pl-0 text-slate-800 text-base"
-                          placeholder="XXXXXXX"
-                          placeholderTextColor="#94a3b8"
-                          value={number}
-                          onChangeText={(text) =>
-                            setNumber(text.replace(/[^0-9]/g, ""))
-                          }
-                          keyboardType="phone-pad"
-                          maxLength={9}
-                          editable={!mutation.isPending && !navigating}
-                        />
-                      </Pressable>
-                    </View>
-                  </View>
+                    <TouchableOpacity
+                      onPress={handleRegister}
+                      disabled={isBusy}
+                      activeOpacity={0.8}
+                      className={`p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                        isBusy ? "bg-slate-400" : "bg-primary"
+                      }`}
+                    >
+                      {mutation.isPending ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text className="text-white font-bold text-lg">
+                          {status.navigating
+                            ? "Redirecting..."
+                            : "Register Now"}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    onPress={handleRegister}
-                    disabled={mutation.isPending || navigating}
-                    activeOpacity={0.8}
-                    className={`mt-7 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
-                      mutation.isPending || navigating
-                        ? "bg-slate-400"
-                        : "bg-primary"
-                    }`}
-                  >
-                    {mutation.isPending ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <Text className="text-white font-bold text-lg">
-                        {navigating ? "Redirecting..." : "Register Now"}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-
-                  <LinkAuth
-                    onNavigating={setNavigating}
-                    isNavigating={navigating}
-                  />
-                </>
-              )}
+                    <LinkAuth
+                      onNavigating={(val) =>
+                        setStatus((p) => ({ ...p, navigating: val }))
+                      }
+                      isNavigating={status.navigating}
+                    />
+                  </>
+                )}
+              </View>
             </View>
           </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => {
+          setAlert({ ...alert, visible: false });
+          if (mutation.isSuccess) {
+            setStatus((prev) => ({ ...prev, navigating: true }));
+            router.push({
+              pathname: "/otpVerification",
+              params: { phone: `63${form.number.substring(1)}` },
+            });
+          }
+        }}
+      />
+    </>
   );
 }
