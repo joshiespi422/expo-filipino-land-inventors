@@ -208,12 +208,11 @@ export default function EditProfileScreen() {
 
   // Common Styles
   const card = "bg-white p-5 rounded-3xl mb-4 shadow-sm border border-gray-100";
-  const label =
-    "text-gray-500 mb-2 font-semibold text-xs uppercase tracking-wider";
+  const label = "text-primary mb-1 ps-2 text-sm";
   const inputStyle =
-    "border border-gray-200 bg-gray-50 p-4 rounded-2xl mb-4 text-gray-800 font-medium";
+    "border border-gray-200 bg-white p-4 rounded-2xl mb-4 text-gray-800 font-medium";
   const pickerContainer =
-    "border border-gray-200 rounded-2xl bg-gray-50 mb-4 overflow-hidden";
+    "border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden";
 
   return (
     <View className="flex-1 bg-white">
@@ -234,14 +233,14 @@ export default function EditProfileScreen() {
           <TextInput
             value={form.name}
             editable={false}
-            className={`${inputStyle} bg-gray-300 text-gray-500 opacity-70`}
+            className={`${inputStyle} bg-gray-100 border-gray-200 color-gray-500`}
           />
 
           <Text className={label}>Phone Number (Locked)</Text>
           <TextInput
             value={form.phone}
             editable={false}
-            className={`${inputStyle} bg-gray-300 text-gray-500 opacity-70`}
+            className={`${inputStyle} bg-gray-100 border-gray-200 color-gray-500`}
           />
 
           <Text className={label}>Email Address</Text>
@@ -249,7 +248,7 @@ export default function EditProfileScreen() {
             value={form.email}
             onChangeText={(t) => setForm({ ...form, email: t })}
             className={inputStyle}
-            placeholder="example@gmail.com"
+            placeholder="Email Address"
             keyboardType="email-address"
             autoCapitalize="none"
           />
@@ -370,6 +369,7 @@ export default function EditProfileScreen() {
           <Text className={label}>Street / House No.</Text>
           <TextInput
             value={form.street}
+            placeholder="Street / House No."
             onChangeText={(t) => setForm({ ...form, street: t })}
             className={inputStyle}
           />
@@ -377,6 +377,7 @@ export default function EditProfileScreen() {
           <Text className={label}>Postal Code</Text>
           <TextInput
             value={form.postal_code}
+            placeholder="Postal Code"
             keyboardType="numeric"
             onChangeText={(t) => setForm({ ...form, postal_code: t })}
             className={inputStyle}
@@ -408,6 +409,7 @@ export default function EditProfileScreen() {
           <Text className={label}>ID Number</Text>
           <TextInput
             value={form.valid_id_number}
+            placeholder="ID Number"
             onChangeText={(t) => setForm({ ...form, valid_id_number: t })}
             className={inputStyle}
           />

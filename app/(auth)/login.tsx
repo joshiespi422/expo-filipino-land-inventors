@@ -29,7 +29,6 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Alert State
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
@@ -70,8 +69,6 @@ export default function LoginPage() {
     setLoadingState((prev) => ({ ...prev, action: true }));
 
     try {
-      // Note: If your API expects the full 11 digits,
-      // you might need: `const fullNumber = "09" + form.number;`
       const data = await authService.login(form.number, form.password);
       await setAuth(data.token, data.user);
 

@@ -3,14 +3,11 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-// Ensure this path is correct based on your assets folder
-import Congratulations from "../../../assets/images/vector/ProfileCongratulations.png";
 
 export default function CongratulationPage() {
   const router = useRouter();
@@ -46,17 +43,6 @@ export default function CongratulationPage() {
       >
         <View className="items-center justify-center py-1b px-6">
           <View className="w-full max-w-[500px] items-center">
-            {pageLoading ? (
-              <Skeleton className="w-[265px] h-[265px] mb-12 rounded-full" />
-            ) : (
-              <Image
-                style={{ width: 265, height: 265 }}
-                className="mb-8"
-                source={Congratulations}
-                resizeMode="contain"
-              />
-            )}
-
             <View className="pb-6 w-full items-center">
               {pageLoading ? (
                 <View className="gap-y-3 items-center">
@@ -65,13 +51,11 @@ export default function CongratulationPage() {
                 </View>
               ) : (
                 <>
-                  <Text className="text-center font-bold text-[#034194] text-3xl">
-                    Congratulations!
-                  </Text>
-                  <Text className="text-center text-slate-500 text-lg/7 pt-3 px-2">
-                    Your account details have been completed. Please wait 2-3
-                    days for approval. Updates will be sent to your email.
-                  </Text>
+                  <View className="bg-primary w-full rounded-lg py-3">
+                    <Text className="text-center font-bold text-white text-xl">
+                      Capital Contribution
+                    </Text>
+                  </View>
                 </>
               )}
             </View>

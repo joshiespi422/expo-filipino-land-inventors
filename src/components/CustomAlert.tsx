@@ -53,18 +53,18 @@ export const CustomAlert = ({
         style={{
           width: "100%",
           // Height 120% ensures the overlay covers the nav bar area even when it shifts
-          height: Platform.OS === "android" ? "120%" : "100%",
+          height: Platform.OS === "android" ? "100%" : "100%",
           position: "absolute",
           top: 0,
           left: 0,
         }}
       >
-        <View className="bg-white w-full max-w-[400px] rounded-[35px] p-8 shadow-2xl elevation-10">
+        <View className="bg-white w-full max-w-[400px] rounded-[35px] p-5 shadow-2xl elevation-10">
           <Text className="text-primary text-2xl font-bold text-center mb-3">
             {title}
           </Text>
 
-          <Text className="text-slate-500 text-base text-center mb-8 leading-6">
+          <Text className="text-slate-500 text-base text-center mb-6 leading-6">
             {message}
           </Text>
 

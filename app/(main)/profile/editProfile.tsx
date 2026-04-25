@@ -1,13 +1,13 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { profileService } from "@/services/profileService";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import * as DocumentPicker from "expo-document-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   ScrollView,
@@ -18,7 +18,6 @@ import {
 } from "react-native";
 
 export default function EditProfileScreen() {
-  const router = useRouter();
   const params = useLocalSearchParams();
 
   const hasNoParams = Object.keys(params).length === 0;
@@ -30,6 +29,12 @@ export default function EditProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
 
   const [regions, setRegions] = useState<any[]>([]);
   const [provinces, setProvinces] = useState<any[]>([]);
@@ -54,7 +59,6 @@ export default function EditProfileScreen() {
     back_valid_id_picture: null,
   });
 
-  // Helper to get the Name from the Code for display mode
   const getNameFromCode = (list: any[], code: string) => {
     const item = list.find((i) => i.code === code);
     return item ? item.name : null;
@@ -89,11 +93,9 @@ export default function EditProfileScreen() {
 
   const fetchInitialData = async () => {
     try {
-      // 1. Load regions first so we have the list
       await fetchRegions();
 
       const res = await profileService.getProfile();
-      // Handle JSON API structure if attributes exists
       const userData = res.data?.attributes || res;
 
       setForm({
@@ -106,12 +108,16 @@ export default function EditProfileScreen() {
           : null,
       });
 
-      // 2. Cascade load the address lists based on stored codes
       if (userData.region) await fetchProvinces(userData.region);
       if (userData.province) await fetchCities(userData.province);
       if (userData.city) await fetchBarangays(userData.city);
     } catch (err) {
       console.error(err);
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "Failed to load profile.",
+      });
     } finally {
       setLoading(false);
     }
@@ -148,6 +154,16 @@ export default function EditProfileScreen() {
     const result = await DocumentPicker.getDocumentAsync({ type: "image/*" });
     if (result.canceled) return;
     const file = result.assets?.[0];
+
+    if (file?.size && file.size > 5120 * 1024) {
+      setAlert({
+        visible: true,
+        title: "File Too Large",
+        message: "Please select an image smaller than 5MB.",
+      });
+      return;
+    }
+
     setForm((prev: any) => ({
       ...prev,
       [field]: {
@@ -160,16 +176,28 @@ export default function EditProfileScreen() {
 
   const handleUpdate = async () => {
     if (!isFormComplete()) {
-      Alert.alert("Incomplete", "Please fill in all fields.");
+      setAlert({
+        visible: true,
+        title: "Incomplete",
+        message: "Please fill in all fields.",
+      });
       return;
     }
     setSaving(true);
     try {
       await profileService.updateProfile(form);
       setIsEditing(false);
-      Alert.alert("Success", "Profile updated.");
+      setAlert({
+        visible: true,
+        title: "Success",
+        message: "Profile updated.",
+      });
     } catch (err) {
-      Alert.alert("Error", "Failed to update profile.");
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "Failed to update profile.",
+      });
     } finally {
       setSaving(false);
     }
@@ -198,9 +226,9 @@ export default function EditProfileScreen() {
     "text-gray-500 mb-1 font-semibold text-[10px] uppercase tracking-wider";
   const valueStyle = "text-gray-800 font-bold text-base mb-4";
   const inputStyle =
-    "border border-gray-200 bg-gray-50 p-4 rounded-2xl mb-4 text-gray-800 font-medium";
+    "border border-gray-200 bg-white p-4 rounded-2xl mb-4 text-gray-800 font-medium";
   const pickerContainer =
-    "border border-gray-200 rounded-2xl bg-gray-50 mb-4 overflow-hidden";
+    "border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden";
 
   return (
     <View className="flex-1 bg-white">
@@ -224,6 +252,7 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* --- BASIC INFO --- */}
         {showInfo && (
           <View className={card}>
             <Text className="text-lg font-bold mb-4 text-gray-800">
@@ -283,6 +312,7 @@ export default function EditProfileScreen() {
           </View>
         )}
 
+        {/* --- ADDRESS --- */}
         {showLocation && (
           <View className={card}>
             <Text className="text-lg font-bold mb-4 text-gray-800">
@@ -404,11 +434,13 @@ export default function EditProfileScreen() {
           </View>
         )}
 
+        {/* --- ID --- */}
         {showID && (
           <View className={card}>
             <Text className="text-lg font-bold mb-4 text-gray-800">
               Verification
             </Text>
+
             <Text className={label}>ID Type & Number</Text>
             {isEditing ? (
               <>
@@ -424,6 +456,7 @@ export default function EditProfileScreen() {
                     <Picker.Item label="Passport" value="Passport" />
                   </Picker>
                 </View>
+
                 <TextInput
                   value={form.valid_id_number}
                   onChangeText={(t) => setForm({ ...form, valid_id_number: t })}
@@ -450,6 +483,7 @@ export default function EditProfileScreen() {
                   <Ionicons name="camera" size={24} color="#ccc" />
                 )}
               </TouchableOpacity>
+
               <TouchableOpacity
                 onPress={() => pickImage("back_valid_id_picture")}
                 className="w-[48%] bg-gray-50 h-32 rounded-3xl items-center justify-center overflow-hidden border border-gray-100"
@@ -469,19 +503,17 @@ export default function EditProfileScreen() {
       </ScrollView>
 
       {isEditing && (
-        <View className="p-6 bg-white border-t border-gray-100">
+        <View className="w-full p-5 bg-white border-t border-slate-200">
           <TouchableOpacity
             onPress={handleUpdate}
             disabled={saving || !isFormComplete()}
-            className="py-5 rounded-3xl bg-[#034194]"
+            className="h-16 rounded-2xl justify-center items-center bg-primary"
             style={{ opacity: saving || !isFormComplete() ? 0.6 : 1 }}
           >
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text className="text-white text-center font-bold text-lg">
-                Save Changes
-              </Text>
+              <Text className="text-white font-bold text-lg">Save Changes</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -494,6 +526,13 @@ export default function EditProfileScreen() {
           onChange={handleDateChange}
         />
       )}
+
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => setAlert({ ...alert, visible: false })}
+      />
     </View>
   );
 }

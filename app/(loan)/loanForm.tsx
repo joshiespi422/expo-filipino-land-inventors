@@ -191,6 +191,12 @@ export default function LoanFormPage() {
                   className="text-primary text-3xl font-bold flex-1"
                 />
               </View>
+              <Text className="p-1 text-slate-400">
+                Available ₱
+                {maxLimit.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+              </Text>
 
               {/* REPAYMENT PERIOD */}
               <View className="w-full pt-6">

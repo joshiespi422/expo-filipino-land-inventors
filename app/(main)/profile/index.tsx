@@ -3,7 +3,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react"; // Added useCallback
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,7 +20,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { clearAuth, user, setUser } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); // Added refreshing state
+  const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -34,7 +34,9 @@ export default function ProfileScreen() {
   const isActive = statusName === "active";
   const isPendingMember = statusName === "pending_for_member";
 
-  // Unified fetch function
+  // Logic: Show payment if they are active but still basic (or you can add a specific flag from your API)
+  const needsCapitalContribution = isBasic && isActive;
+
   const fetchProfile = async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
@@ -44,7 +46,7 @@ export default function ProfileScreen() {
       console.error("Profile Fetch Error:", error);
     } finally {
       setLoading(false);
-      setRefreshing(false); // Stop refresh indicator
+      setRefreshing(false);
     }
   };
 
@@ -52,7 +54,6 @@ export default function ProfileScreen() {
     fetchProfile();
   }, []);
 
-  // onRefresh Handler
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchProfile(true);
@@ -178,7 +179,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* --- WARNING SECTION: BASIC & ACTIVE --- */}
+      {/* --- WARNING SECTION: BASIC & ACTIVE (Needs setup) --- */}
       {isBasic && isActive && (
         <View className="mt-6 px-4">
           <View className="bg-orange-50 border border-orange-200 p-5 rounded-[30px]">
@@ -214,77 +215,93 @@ export default function ProfileScreen() {
       {/* --- PENDING NOTIFICATION --- */}
       {isBasic && isPendingMember && (
         <View className="mt-6 px-4">
-          <View className="bg-blue-50 border border-blue-200 p-5 rounded-[30px] flex-row items-center">
-            <View className="bg-[#034194] p-2 rounded-full">
-              <Ionicons name="time" size={20} color="white" />
+          <View className="bg-blue-50 border border-blue-200 p-5 rounded-[30px]">
+            <View className="flex-row items-center">
+              <View className="bg-primary p-2 rounded-full">
+                <Ionicons name="time" size={20} color="white" />
+              </View>
+              <View className="flex-1 ml-4">
+                <Text className="text-primary font-bold text-lg">
+                  Review in Progress
+                </Text>
+              </View>
+            </View>
+
+            <Text className="text-primary text-sm mt-2 leading-5">
+              Your account details have been completed. Please wait 2-3 days for
+              approval. Updates will be sent to your email.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* --- CAPITAL CONTRIBUTION SECTION --- */}
+      <View className="mt-6 px-4">
+        <View className="bg-green-50 border border-green-200 p-5 rounded-[30px]">
+          <View className="flex-row items-center">
+            <View className="bg-green-600 p-2 rounded-full">
+              <MaterialIcons
+                name="account-balance-wallet"
+                size={20}
+                color="white"
+              />
             </View>
             <View className="flex-1 ml-4">
-              <Text className="text-[#034194] font-bold text-lg">
-                Review in Progress
-              </Text>
-              <Text className="text-blue-800 text-sm leading-5">
-                Your account details have been completed. Please wait 2-3 days
-                for approval. Updates will be sent to your email.
+              <Text className="text-green-800 font-bold text-lg">
+                Capital Contribution
               </Text>
             </View>
           </View>
-        </View>
-      )}
 
-      {/* --- MENU ITEMS --- */}
-      {(!isBasic || isPendingMember) && (
-        <View className="mt-6 px-4">
-          <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
-            Account Settings
+          <Text className="text-green-700 text-sm mt-2 leading-5">
+            To access other features, you need to contribute to the initial
+            share capital. You can choose{" "}
+            <Text className="font-bold">installment</Text> or{" "}
+            <Text className="font-bold">full payment</Text> now.
           </Text>
 
-          <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
-            <ProfileMenuItem
-              icon="person-outline"
-              title="Information"
-              onPress={() => router.push("/profile/editProfile?info")}
-            />
-            <ProfileMenuItem
-              icon="location-outline"
-              title="Address"
-              onPress={() => router.push("/profile/editProfile?location")}
-            />
-            <ProfileMenuItem
-              icon="id-card-outline"
-              title="Valid ID"
-              onPress={() => router.push("/profile/editProfile?vakidID")}
-            />
-            <ProfileMenuItem
-              icon="lock-closed-outline"
-              title="Security & Password"
-              onPress={() => router.push("/profile/changePassword")}
-            />
-          </View>
-
-          <View>
-            <TouchableOpacity
-              onPress={handleLogout}
-              disabled={loggingOut}
-              className="mt-4 mb-10 flex-row items-center p-4 bg-[#D7012710] rounded-2xl border border-[#D7012730]"
-            >
-              {loggingOut ? (
-                <ActivityIndicator color="#D70127" className="mx-auto" />
-              ) : (
-                <>
-                  <MaterialIcons name="logout" size={22} color="#D70127" />
-                  <Text className="text-[#D70127] font-bold ml-3 text-base">
-                    Logout Account
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            onPress={() => router.push("/profile/capitalContribution")}
+            className="bg-green-600 mt-4 py-3 rounded-2xl items-center flex-row justify-center"
+          >
+            <Text className="text-white font-bold text-base mr-2">
+              Pay Contribution
+            </Text>
+            <Ionicons name="card-outline" size={18} color="white" />
+          </TouchableOpacity>
         </View>
-      )}
+      </View>
 
-      {/* --- LOGOUT FOR BASIC/ACTIVE --- */}
-      {isBasic && isActive && (
-        <View className="px-4">
+      {/* --- MENU ITEMS --- */}
+      <View className="mt-6 px-4">
+        <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
+          Account Settings
+        </Text>
+
+        <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+          <ProfileMenuItem
+            icon="person-outline"
+            title="Information"
+            onPress={() => router.push("/profile/editProfile?info")}
+          />
+          <ProfileMenuItem
+            icon="location-outline"
+            title="Address"
+            onPress={() => router.push("/profile/editProfile?location")}
+          />
+          <ProfileMenuItem
+            icon="id-card-outline"
+            title="Valid ID"
+            onPress={() => router.push("/profile/editProfile?vakidID")}
+          />
+          <ProfileMenuItem
+            icon="lock-closed-outline"
+            title="Security & Password"
+            onPress={() => router.push("/profile/changePassword")}
+          />
+        </View>
+
+        <View>
           <TouchableOpacity
             onPress={handleLogout}
             disabled={loggingOut}
@@ -302,7 +319,7 @@ export default function ProfileScreen() {
             )}
           </TouchableOpacity>
         </View>
-      )}
+      </View>
 
       {/* --- MODALS --- */}
       <Modal
@@ -320,7 +337,7 @@ export default function ProfileScreen() {
             <Text className="text-xl font-bold text-[#333] mb-2 text-center">
               Profile Photo
             </Text>
-            <View className="w-full gap-y-3 mt-4">
+            <div className="w-full gap-y-3 mt-4">
               <TouchableOpacity
                 onPress={() => {
                   setShowOptions(false);
@@ -350,7 +367,7 @@ export default function ProfileScreen() {
               >
                 <Text className="text-gray-400 font-bold">Close</Text>
               </TouchableOpacity>
-            </View>
+            </div>
           </View>
         </View>
       </Modal>
