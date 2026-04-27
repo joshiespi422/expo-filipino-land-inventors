@@ -34,9 +34,6 @@ export default function ProfileScreen() {
   const isActive = statusName === "active";
   const isPendingMember = statusName === "pending_for_member";
 
-  // Logic: Show payment if they are active but still basic (or you can add a specific flag from your API)
-  const needsCapitalContribution = isBasic && isActive;
-
   const fetchProfile = async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
@@ -261,7 +258,7 @@ export default function ProfileScreen() {
           </Text>
 
           <TouchableOpacity
-            onPress={() => router.push("/profile/capitalContribution")}
+            onPress={() => router.push("/profile/membership")}
             className="bg-green-600 mt-4 py-3 rounded-2xl items-center flex-row justify-center"
           >
             <Text className="text-white font-bold text-base mr-2">
