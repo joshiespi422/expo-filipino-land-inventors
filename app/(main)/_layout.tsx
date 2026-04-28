@@ -2,7 +2,6 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons } from "@expo/vector-icons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import * as NavigationBar from "expo-navigation-bar";
 import { Redirect, Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
@@ -15,8 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+// Modern replacement for hiding bars
+import * as NavigationBar from "expo-navigation-bar";
 
-// Asset Imports
 import History from "../../assets/images/icon/History.png";
 import Home from "../../assets/images/icon/Home.png";
 import Status from "../../assets/images/icon/Status.png";
@@ -28,37 +28,32 @@ import "../../global.css";
 const queryClient = new QueryClient();
 
 export default function MainLayout() {
-  const { token, isLoading, initialize, user } = useAuthStore();
+  const { token, isLoading, user } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
 
-  // --- Logic for Main Index ---
-  // Check for Home
-  const isMainIndex = pathname === "/";
+  const isMainIndex =
+    pathname === "/" || pathname === "/(main)" || pathname === "/(main)/";
 
-  // Check for Profile: This catches "/profile" and "/profile/"
-  const isProfileIndex = pathname === "/profile" || pathname === "/profile/";
+  const isProfileIndex =
+    pathname === "/profile" || pathname === "/(main)/profile";
+  const isProfileEdit = pathname === "/profile/editProfile";
+  const isProfileSetup = pathname === "/profile/setupProfile";
 
   const showFooter = isMainIndex || isProfileIndex;
 
-  // STICKY HIDE FUNCTION
-  const forceHideNavBar = async () => {
-    if (Platform.OS === "android") {
-      try {
-        await NavigationBar.setBehaviorAsync("sticky-immersive");
-        await NavigationBar.setVisibilityAsync("hidden");
-      } catch (e) {
-        console.log("NavigationBar error:", e);
-      }
-    }
-  };
-
   useEffect(() => {
-    initialize();
-    forceHideNavBar();
-
-    const interval = setInterval(forceHideNavBar, 2000);
-    return () => clearInterval(interval);
+    const hideNavBar = async () => {
+      if (Platform.OS === "android") {
+        try {
+          await NavigationBar.setBehaviorAsync("sticky-immersive" as any);
+          await NavigationBar.setVisibilityAsync("hidden");
+        } catch (e) {
+          console.log("NavigationBar error:", e);
+        }
+      }
+    };
+    hideNavBar();
   }, []);
 
   if (isLoading) {
@@ -69,13 +64,14 @@ export default function MainLayout() {
     );
   }
 
+  // Use the correct path to your auth group
   if (!token) {
-    return <Redirect href="/login" />;
+    return <Redirect href="/(auth)/login" />;
   }
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar hidden={true} translucent={true} />
+      <StatusBar hidden={true} />
 
       <View className="flex-1 bg-white">
         <KeyboardAvoidingView
@@ -84,7 +80,6 @@ export default function MainLayout() {
         >
           {/* --- GLOBAL HEADER --- */}
           {isMainIndex ? (
-            /* Main index only shows this */
             <View className="bg-primary mb-12 z-10 w-full h-28 items-center justify-between pt-8">
               <View
                 className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full shadow-brand"
@@ -122,7 +117,6 @@ export default function MainLayout() {
               </View>
             </View>
           ) : (
-            /* Sub-pages like Profile show this */
             <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
               <View className="flex-row justify-between items-center w-full px-6">
                 <TouchableOpacity onPress={() => router.back()}>
@@ -130,7 +124,13 @@ export default function MainLayout() {
                 </TouchableOpacity>
 
                 <Text className="text-white text-2xl font-bold">
-                  {pathname.includes("profile") ? "Profile" : ""}
+                  {isProfileIndex
+                    ? "Profile"
+                    : isProfileEdit
+                      ? "Edit Profile"
+                      : isProfileSetup
+                        ? "Setup Profile"
+                        : ""}
                 </Text>
 
                 <View style={{ width: 28 }} />
@@ -144,7 +144,7 @@ export default function MainLayout() {
               screenOptions={{
                 headerShown: false,
                 animation: "fade",
-                contentStyle: { backgroundColor: "transparent" },
+                contentStyle: { backgroundColor: "white" },
               }}
             >
               <Stack.Screen name="index" />
@@ -160,18 +160,13 @@ export default function MainLayout() {
                 borderTopColor: "#D70127",
                 width: "100%",
                 height: 80,
-                overflow: "visible",
                 zIndex: 99,
               }}
               className="justify-center bg-primary items-center"
             >
-              <View
-                className="flex-row w-full max-w-[600px] px-4 items-center"
-                style={{ overflow: "visible" }}
-              >
+              <View className="flex-row w-full max-w-[600px] px-4 items-center">
                 <TouchableOpacity
                   className="items-center flex-1"
-                  activeOpacity={0.7}
                   onPress={() => router.push("/")}
                 >
                   <Image
@@ -182,10 +177,7 @@ export default function MainLayout() {
                   <Text className="text-white text-[10px] mt-1">Home</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  className="items-center pe-2 flex-1"
-                  activeOpacity={0.7}
-                >
+                <TouchableOpacity className="items-center pe-2 flex-1">
                   <Image
                     style={{ width: 31, height: 31 }}
                     source={Status}
@@ -196,11 +188,7 @@ export default function MainLayout() {
 
                 <View
                   className="flex-1 items-center justify-center"
-                  style={{
-                    overflow: "visible",
-                    position: "relative",
-                    height: 50,
-                  }}
+                  style={{ height: 50 }}
                 >
                   <TouchableOpacity
                     activeOpacity={0.9}
@@ -216,10 +204,6 @@ export default function MainLayout() {
                       alignItems: "center",
                       justifyContent: "center",
                       elevation: 10,
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 5 },
-                      shadowOpacity: 0.3,
-                      shadowRadius: 5,
                     }}
                   >
                     <Image
@@ -230,10 +214,7 @@ export default function MainLayout() {
                   </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
-                  className="items-center ps-2 flex-1"
-                  activeOpacity={0.7}
-                >
+                <TouchableOpacity className="items-center ps-2 flex-1">
                   <Image
                     style={{ width: 31, height: 31 }}
                     source={History}
@@ -244,18 +225,14 @@ export default function MainLayout() {
 
                 <TouchableOpacity
                   className="items-center flex-1"
-                  activeOpacity={0.7}
                   onPress={() => router.push("/profile")}
                 >
                   <View className="w-[31px] h-[31px] items-center justify-center">
                     {user?.avatar ? (
-                      <View className="w-full h-full rounded-full overflow-hidden border border-white/30">
-                        <Image
-                          source={{ uri: user.avatar }}
-                          style={{ width: "100%", height: "100%" }}
-                          resizeMode="cover"
-                        />
-                      </View>
+                      <Image
+                        source={{ uri: user.avatar }}
+                        className="w-full h-full rounded-full border border-white/30"
+                      />
                     ) : (
                       <Ionicons name="person-circle" size={33} color="white" />
                     )}

@@ -31,6 +31,7 @@ export default function ProfileScreen() {
   const statusName = user?.status?.name?.toLowerCase() || "";
 
   const isBasic = userTypeName === "BASIC";
+  const isMember = userTypeName === "MEMBER";
   const isActive = statusName === "active";
   const isPendingMember = statusName === "pending_for_member";
 
@@ -270,39 +271,43 @@ export default function ProfileScreen() {
       </View>
 
       {/* --- MENU ITEMS --- */}
+
       <View className="mt-6 px-4">
-        <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
-          Account Settings
-        </Text>
+        {((isBasic && isPendingMember) || (isMember && isActive)) && (
+          <View>
+            <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
+              Account Settings
+            </Text>
 
-        <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
-          <ProfileMenuItem
-            icon="person-outline"
-            title="Information"
-            onPress={() => router.push("/profile/editProfile?info")}
-          />
-          <ProfileMenuItem
-            icon="location-outline"
-            title="Address"
-            onPress={() => router.push("/profile/editProfile?location")}
-          />
-          <ProfileMenuItem
-            icon="id-card-outline"
-            title="Valid ID"
-            onPress={() => router.push("/profile/editProfile?vakidID")}
-          />
-          <ProfileMenuItem
-            icon="lock-closed-outline"
-            title="Security & Password"
-            onPress={() => router.push("/profile/changePassword")}
-          />
-        </View>
-
+            <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+              <ProfileMenuItem
+                icon="person-outline"
+                title="Information"
+                onPress={() => router.push("/profile/editProfile?info")}
+              />
+              <ProfileMenuItem
+                icon="location-outline"
+                title="Address"
+                onPress={() => router.push("/profile/editProfile?location")}
+              />
+              <ProfileMenuItem
+                icon="id-card-outline"
+                title="Valid ID"
+                onPress={() => router.push("/profile/editProfile?vakidID")}
+              />
+              <ProfileMenuItem
+                icon="lock-closed-outline"
+                title="Security & Password"
+                onPress={() => router.push("/profile/changePassword")}
+              />
+            </View>
+          </View>
+        )}
         <View>
           <TouchableOpacity
             onPress={handleLogout}
             disabled={loggingOut}
-            className="mt-4 mb-10 flex-row items-center p-4 bg-[#D7012710] rounded-2xl border border-[#D7012730]"
+            className="mt-4 mb-12 flex-row items-center p-4 bg-[#D7012710] rounded-2xl border border-[#D7012730]"
           >
             {loggingOut ? (
               <ActivityIndicator color="#D70127" className="mx-auto" />

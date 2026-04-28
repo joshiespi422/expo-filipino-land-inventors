@@ -1,4 +1,3 @@
-import api from "@/services/api";
 import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
 
@@ -13,19 +12,11 @@ interface AuthState {
   initialize: () => Promise<void>;
 }
 
-// Helper to extract attributes from JSON:API structure
 const flattenUser = (obj: any) => {
   if (!obj) return null;
-
-  if (obj.data?.attributes) {
-    return { id: obj.data.id, ...obj.data.attributes };
-  }
-  if (obj.attributes) {
-    return { id: obj.id, ...obj.attributes };
-  }
-  if (obj.data) {
-    return obj.data;
-  }
+  if (obj.data?.attributes) return { id: obj.data.id, ...obj.data.attributes };
+  if (obj.attributes) return { id: obj.id, ...obj.attributes };
+  if (obj.data) return obj.data;
   return obj;
 };
 
@@ -45,8 +36,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           user: JSON.parse(userStr),
         });
 
-        const { refreshUser } = get();
-        await refreshUser();
+        setTimeout(() => {
+          get().refreshUser();
+        }, 0);
       }
     } catch (e) {
       console.error("Failed to initialize auth store:", e);
@@ -62,37 +54,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { token } = get();
       if (!token) return;
 
-      const response = await api.get("/profile");
+      // BREAKS THE CYCLE: Dynamic import only when the function runs
+      const api = (await import("@/services/api")).default;
 
-      // Flatten the JSON:API response
+      const response = await api.get("/profile");
       const freshUser = flattenUser(response.data);
 
       await SecureStore.setItemAsync("user_data", JSON.stringify(freshUser));
       set({ user: freshUser });
-
-      // console.log("Auth Store: User synced. Type ID:", freshUser?.user_type_id);
     } catch (e) {
       console.error("Auth Store: Failed to sync user data:", e);
+      // If profile fails with 401, the interceptor in api.ts will handle clearAuth
     }
   },
 
   setAuth: async (token: string, user: any) => {
     try {
       const userRaw = typeof user === "string" ? JSON.parse(user) : user;
-
-      // Flatten the user object before saving
       const userObject = flattenUser(userRaw);
 
       await SecureStore.setItemAsync("auth_token", token);
       await SecureStore.setItemAsync("user_data", JSON.stringify(userObject));
 
-      set({
-        token,
-        user: userObject,
-        isLoading: false,
-      });
-
-      // console.log("Auth Store: Login successful. Name:", userObject?.name);
+      set({ token, user: userObject, isLoading: false });
     } catch (e) {
       console.error("Error saving auth session:", e);
       throw e;

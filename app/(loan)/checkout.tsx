@@ -1,6 +1,6 @@
 import { getPaymentMethods, payLoan } from "@/services/loanService";
 import { PaymentMethod } from "@/types/loan.types";
-import { useFocusEffect } from "@react-navigation/native"; // Added for back-button reset
+import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -27,7 +27,7 @@ export default function LoanCheckoutPage() {
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
   // ==========================================
-  // 🛡️ NAVIGATION LOCKS (STRICT PREVENT CLICK)
+  // NAVIGATION LOCKS (STRICT PREVENT CLICK)
   // ==========================================
   const [navigating, setNavigating] = useState(false);
   const isProcessing = useRef(false);

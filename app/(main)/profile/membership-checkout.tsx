@@ -1,5 +1,4 @@
-import { getPaymentMethods } from "@/services/loanService";
-import { payMembership } from "@/services/membershipService";
+import { getPaymentMethods, payMembership } from "@/services/membershipService";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -13,142 +12,216 @@ import {
 } from "react-native";
 import { WebView } from "react-native-webview";
 
-export default function MembershipCheckout() {
+export default function MembershipCheckoutPage() {
   const { scheduleId, amount } = useLocalSearchParams();
   const router = useRouter();
 
-  // DATA STATES
   const [methods, setMethods] = useState<any[]>([]);
-  const [selected, setSelected] = useState<any>(null);
+  const [selectedMethod, setSelectedMethod] = useState<any>(null);
+
   const [loading, setLoading] = useState(false);
-  const [fetchingMethods, setFetchingMethods] = useState(true);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
-  // NAVIGATION LOCKS
   const [navigating, setNavigating] = useState(false);
   const isProcessing = useRef(false);
 
+  /**
+   * Normalize params
+   */
+  const safeScheduleId = Array.isArray(scheduleId) ? scheduleId[0] : scheduleId;
+  const safeAmount = Array.isArray(amount) ? amount[0] : amount;
+
+  /**
+   * RESET STATE WHEN SCREEN IS FOCUSED
+   */
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
       setNavigating(false);
+      setCheckoutUrl(null);
       isProcessing.current = false;
     }, []),
   );
 
+  /**
+   * FORMAT
+   */
+  const formatAmount = (value: any) => {
+    const num = Number(value || 0);
+    if (isNaN(num)) return "0.00";
+    return num.toLocaleString("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const parseAmount = (value: any) => {
+    const cleaned = String(value || "")
+      .replace(/,/g, "")
+      .replace(/[^\d.]/g, "");
+
+    const num = Number(cleaned);
+    return isNaN(num) ? 0 : Number(num.toFixed(2));
+  };
+
+  /**
+   * LOAD PAYMENT METHODS
+   */
+  const loadMethods = async () => {
+    try {
+      const res = await getPaymentMethods();
+
+      const list = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+      const formatted = list.map((item: any) => ({
+        id: item?.id,
+        name: item?.attributes?.name,
+        gateway_type: (item?.attributes?.gateway_type || "").toLowerCase(),
+      }));
+
+      const filtered = formatted.filter((m: any) =>
+        ["qrph", "paymaya", "billease", "grab_pay"].includes(m.gateway_type),
+      );
+
+      setMethods(filtered);
+      setSelectedMethod(filtered[0] || null);
+    } catch (err) {
+      console.log("❌ Failed to load methods", err);
+    }
+  };
+
   useEffect(() => {
-    const fetchMethods = async () => {
-      try {
-        setFetchingMethods(true);
-        const res = await getPaymentMethods();
-
-        const list = Array.isArray(res) ? res : res?.data || [];
-
-        // Map and filter for PayMongo compatible methods
-        const formatted = list.map((item: any) => ({
-          id: item?.id,
-          name: item?.attributes?.name || item?.name,
-          gateway_type: (
-            item?.attributes?.gateway_type ||
-            item?.gateway_type ||
-            ""
-          ).toLowerCase(),
-        }));
-
-        const filtered = formatted.filter((m: any) =>
-          ["qrph", "paymaya", "billease", "grab_pay", "gcash"].includes(
-            m.gateway_type,
-          ),
-        );
-
-        setMethods(filtered);
-        if (filtered.length > 0) setSelected(filtered[0]);
-      } catch (e) {
-        console.error("Failed to fetch methods:", e);
-      } finally {
-        setFetchingMethods(false);
-      }
-    };
-    fetchMethods();
+    loadMethods();
   }, []);
 
-  const handleProcessPayment = async () => {
-    if (isProcessing.current || navigating || loading || !selected) return;
+  /**
+   * HANDLE PAYMENT
+   */
+  const handleProceed = async () => {
+    if (isProcessing.current || navigating || loading) return;
+
+    if (!selectedMethod) {
+      Alert.alert("Error", "Select payment method");
+      return;
+    }
+
+    const parsedAmount = parseAmount(safeAmount);
+    if (parsedAmount <= 0) {
+      Alert.alert("Error", "Invalid amount");
+      return;
+    }
+
+    if (!safeScheduleId) {
+      Alert.alert("Error", "Missing schedule ID");
+      return;
+    }
 
     isProcessing.current = true;
     setLoading(true);
     setNavigating(true);
 
     try {
-      const res = await payMembership(scheduleId as string, {
-        payment_method_id: selected.id,
-      });
+      const payload = {
+        payment_method_id: selectedMethod.id,
+        amount: parsedAmount,
+        gateway: "paymongo",
+      };
 
-      // Handle response structure similar to Loan Checkout
-      const result = res?.data?.data || res?.data || res;
+      console.log("🚀 PAYLOAD SENT:", payload);
+      console.log("📌 scheduleId:", safeScheduleId);
+
+      const result = await payMembership(String(safeScheduleId), payload);
+
+      console.log(
+        "🔥 FULL RESPONSE (MEMBERSHIP):",
+        JSON.stringify(result, null, 2),
+      );
+
+      /**
+       * ✅ FIX: correct response structure
+       */
       const nextAction = result?.next_action;
+
       const url = nextAction?.redirect_url;
       const qr = nextAction?.qr_code_url;
-      const intentId = result?.payment?.gateway_payment_intent_id;
 
-      // 📱 QR Flow
-      if (qr && intentId) {
-        router.push({
-          pathname: "/qrph",
-          params: {
-            qrUrl: qr,
-            paymentIntentId: intentId,
-          },
-        });
-        return;
-      }
+      /**
+       * optional safety (your backend has no paymentIntentId here)
+       */
+      const paymentIntentId =
+        result?.data?.id || result?.payment_intent_id || null;
 
-      // 🌐 Redirect Web Flow
       if (url) {
+        console.log("🌐 WEB FLOW TRIGGERED");
         setCheckoutUrl(url);
         return;
       }
 
-      Alert.alert("Success", "Payment initiated successfully.");
-      router.replace("/profile/membership-breakdown");
-    } catch (e: any) {
-      isProcessing.current = false;
+      if (qr) {
+        console.log("📱 QR FLOW TRIGGERED");
+
+        router.push({
+          pathname: "/profile/membership-qrph",
+          params: {
+            qrUrl: qr,
+            paymentIntentId: paymentIntentId ?? safeScheduleId,
+          },
+        });
+
+        return;
+      }
+
+      throw new Error(result?.message || "No payment action returned");
+    } catch (err: any) {
+      console.log("🔥 ERROR OBJECT:", err);
+
       setLoading(false);
       setNavigating(false);
+      isProcessing.current = false;
 
-      const msg = e.response?.data?.message || "Payment failed.";
-      Alert.alert("Payment Error", msg);
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to create payment session";
+
+      Alert.alert("Payment Failed", message);
     }
   };
 
+  /**
+   * WEBVIEW FLOW
+   */
   if (checkoutUrl) {
     return (
-      <View className="flex-1">
-        <WebView
-          source={{ uri: checkoutUrl }}
-          startInLoadingState
-          onNavigationStateChange={(nav) => {
-            if (nav.url.includes("success") || nav.url.includes("callback")) {
-              router.replace("/profile/membership-breakdown");
-            }
-          }}
-        />
-      </View>
+      <WebView
+        source={{ uri: checkoutUrl }}
+        style={{ flex: 1 }}
+        startInLoadingState
+        onNavigationStateChange={(nav) => {
+          console.log("🌐 WEBVIEW URL:", nav.url);
+
+          if (nav.url.includes("payment/success")) {
+            router.replace("/profile/membership-breakdown");
+          }
+        }}
+      />
     );
   }
 
   return (
     <View className="flex-1 bg-gray-50">
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
-        <View className="bg-white rounded-3xl p-6 mb-6 mt-10 shadow-sm">
+        <View className="bg-white rounded-3xl p-6 mb-6">
           <Text className="text-slate-400 text-xs font-bold uppercase">
             Membership Payment
           </Text>
+
           <Text className="text-primary text-3xl font-black mt-1">
-            ₱
-            {Number(amount).toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-            })}
+            ₱{formatAmount(safeAmount)}
           </Text>
         </View>
 
@@ -156,57 +229,43 @@ export default function MembershipCheckout() {
           Select Payment Method
         </Text>
 
-        {fetchingMethods ? (
-          <ActivityIndicator size="large" color="#0000ff" className="mt-10" />
-        ) : (
-          methods.map((m) => {
-            const active = selected?.id === m.id;
-            return (
-              <TouchableOpacity
-                key={m.id}
-                onPress={() => !navigating && setSelected(m)}
-                disabled={navigating}
-                className={`p-5 mb-3 rounded-2xl border-2 flex-row items-center ${
-                  active
-                    ? "border-primary bg-blue-50"
-                    : "border-gray-100 bg-white"
-                }`}
-              >
-                <View
-                  className={`w-5 h-5 rounded-full border-2 mr-4 items-center justify-center ${active ? "border-primary" : "border-gray-300"}`}
-                >
-                  {active && (
-                    <View className="w-2.5 h-2.5 rounded-full bg-primary" />
-                  )}
-                </View>
-                <View>
-                  <Text
-                    className={`font-bold text-base ${active ? "text-primary" : "text-slate-700"}`}
-                  >
-                    {m.name}
-                  </Text>
-                  <Text className="text-[10px] text-gray-400 uppercase font-bold">
-                    {m.gateway_type}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
+        {methods.map((m) => {
+          const active = selectedMethod?.id === m.id;
+
+          return (
+            <TouchableOpacity
+              key={m.id}
+              disabled={navigating}
+              onPress={() => setSelectedMethod(m)}
+              className={`p-4 mb-3 rounded-xl border ${
+                active
+                  ? "border-primary bg-blue-50"
+                  : "border-gray-200 bg-white"
+              }`}
+            >
+              <Text className="font-semibold">{m.name}</Text>
+              <Text className="text-xs text-gray-500 uppercase">
+                {m.gateway_type}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
-      <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-100">
+      <View className="absolute bottom-0 w-full p-5 bg-white border-t">
         <TouchableOpacity
-          onPress={handleProcessPayment}
-          disabled={loading || navigating || !selected}
+          onPress={handleProceed}
+          disabled={loading || navigating}
           className={`h-16 rounded-2xl justify-center items-center ${
-            loading || navigating || !selected ? "bg-slate-300" : "bg-primary"
+            loading || navigating ? "bg-slate-300" : "bg-primary"
           }`}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text className="text-white font-black text-lg">Pay Now</Text>
+            <Text className="text-white font-bold text-lg">
+              Pay ₱{formatAmount(safeAmount)}
+            </Text>
           )}
         </TouchableOpacity>
       </View>
