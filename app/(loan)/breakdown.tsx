@@ -18,26 +18,30 @@ export default function LoanPaymentPage() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
 
-  // DATA STATES
   const [pageLoading, setPageLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<any[]>([]);
   const [loanData, setLoanData] = useState<any>(null);
 
-  // =========================
-  // 🛡️ STRICT CLICK LOCKS
-  // =========================
   const [navigating, setNavigating] = useState(false);
   const isProcessing = useRef(false);
 
-  // RESET LOCKS ON FOCUS (When coming back from Checkout)
   useFocusEffect(
     useCallback(() => {
       setNavigating(false);
       isProcessing.current = false;
     }, []),
   );
+
+  /**
+   * 🔒 LOAN STATUS
+   */
+  const loanStatus = (loanData?.attributes?.status || loanData?.status || "")
+    .toLowerCase()
+    .trim();
+
+  const isPayable = loanStatus === "active" || loanStatus === "approved";
 
   /**
    * 💰 FORMAT MONEY
@@ -88,16 +92,15 @@ export default function LoanPaymentPage() {
     });
   };
 
-  /**
-   * FETCH LOAN DATA
-   */
   const fetchLoan = async (showSkeleton = true) => {
     if (!id || typeof id !== "string") return;
     try {
       if (showSkeleton) setPageLoading(true);
+
       const response = await getLoan(id, {
         include: "user,status,loanSchedules,loanPayments",
       });
+
       setLoanData(response?.data);
       setSchedule(formatBackendSchedule(response));
     } catch (error) {
@@ -112,32 +115,30 @@ export default function LoanPaymentPage() {
     fetchLoan();
   }, [id]);
 
-  /**
-   * 🔄 REFRESH HANDLER
-   */
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchLoan(false); // don't show skeleton during pull-to-refresh
+    fetchLoan(false);
   }, [id]);
 
   const nextToPayIndex = schedule.findIndex((i) => i.status === "unpaid");
   const nextToPayId =
     nextToPayIndex !== -1 ? schedule[nextToPayIndex]?.id : null;
+
   const outstanding = schedule
     .filter((i) => i.status === "unpaid")
     .reduce((a, b) => a + (b.total_payment || 0), 0);
 
   /**
-   * 🚀 HANDLE PAYMENT (WITH LOCK)
+   * 🚀 HANDLE PAYMENT
    */
   const handlePayment = () => {
-    // PREVENT DOUBLE CLICK
+    if (!isPayable) return;
+
     if (isProcessing.current || navigating) return;
 
     const firstUnpaid = schedule.find((i) => i.status === "unpaid");
     if (!firstUnpaid || !loanData?.id) return;
 
-    // ACTIVATE LOCKS
     isProcessing.current = true;
     setNavigating(true);
 
@@ -165,7 +166,7 @@ export default function LoanPaymentPage() {
           />
         }
       >
-        {/* SUMMARY CARD */}
+        {/* SUMMARY */}
         <View className="bg-white rounded-3xl p-6 mb-6">
           {pageLoading ? (
             <Skeleton className="h-10 w-48" />
@@ -183,7 +184,7 @@ export default function LoanPaymentPage() {
 
         <Text className="font-black text-lg mb-4 px-2">Repayment Plan</Text>
 
-        {/* SCHEDULE LIST */}
+        {/* LIST */}
         {pageLoading
           ? [1, 2, 3].map((k) => (
               <Skeleton key={k} className="h-24 w-full rounded-2xl mb-4" />
@@ -195,10 +196,8 @@ export default function LoanPaymentPage() {
 
               return (
                 <View key={item.id} className="mb-4">
-                  <TouchableOpacity
-                    onPress={() => setExpandedId(isExpanded ? null : item.id)}
-                    activeOpacity={0.85}
-                    className={`rounded-2xl p-4 border overflow-hidden ${
+                  <View
+                    className={`rounded-2xl p-4 border ${
                       isPaid
                         ? "bg-slate-100 border-slate-200 opacity-70"
                         : isNext
@@ -208,25 +207,27 @@ export default function LoanPaymentPage() {
                   >
                     <View className="flex-row items-center justify-between">
                       <View className="flex-row items-center flex-1">
+                        {/* ✅ ONLY SHOW BADGE IF PAYABLE */}
                         {isPaid ? (
                           <View className="bg-green-100 px-2 py-1 rounded-full mr-3">
                             <Text className="text-green-600 text-[10px] font-bold">
                               PAID
                             </Text>
                           </View>
-                        ) : isNext ? (
+                        ) : isPayable && isNext ? (
                           <View className="bg-yellow-100 px-2 py-1 rounded-full mr-3">
                             <Text className="text-yellow-600 text-[10px] font-bold">
                               NEXT
                             </Text>
                           </View>
-                        ) : (
+                        ) : isPayable ? (
                           <View className="bg-slate-100 px-2 py-1 rounded-full mr-3">
                             <Text className="text-slate-500 text-[10px] font-bold">
                               PENDING
                             </Text>
                           </View>
-                        )}
+                        ) : null}
+
                         <View className="flex-1">
                           <Text className="font-bold text-slate-800">
                             Installment {item.month}
@@ -236,17 +237,37 @@ export default function LoanPaymentPage() {
                           </Text>
                         </View>
                       </View>
+
                       <Text className="font-black text-primary text-base">
                         ₱{formatMoney(item.total_payment)}
                       </Text>
                     </View>
+
+                    {/* PROGRESS */}
                     <View className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                       <View
-                        className={`h-full ${isPaid ? "bg-green-500 w-full" : isNext ? "bg-yellow-400 w-2/3" : "bg-slate-300 w-1/3"}`}
+                        className={`h-full ${
+                          isPaid
+                            ? "bg-green-500 w-full"
+                            : isNext
+                              ? "bg-yellow-400 w-2/3"
+                              : "bg-slate-300 w-1/3"
+                        }`}
                       />
                     </View>
-                  </TouchableOpacity>
 
+                    {/* 👇 SHOW/HIDE BUTTON */}
+                    <TouchableOpacity
+                      onPress={() => setExpandedId(isExpanded ? null : item.id)}
+                      className="mt-3"
+                    >
+                      <Text className="text-primary text-xs font-bold">
+                        {isExpanded ? "Hide Details" : "Show Details"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* DETAILS */}
                   {isExpanded && (
                     <View className="bg-white border border-slate-100 rounded-2xl mt-2 p-4 shadow-sm">
                       <View className="flex-row justify-between mb-2">
@@ -270,13 +291,13 @@ export default function LoanPaymentPage() {
             })}
       </ScrollView>
 
-      {/* FIXED FOOTER ACTION */}
+      {/* FOOTER */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
           onPress={handlePayment}
-          disabled={navigating || outstanding <= 0 || pageLoading}
+          disabled={navigating || outstanding <= 0 || pageLoading || !isPayable}
           className={`h-16 rounded-2xl justify-center items-center ${
-            navigating || outstanding <= 0 || pageLoading
+            navigating || outstanding <= 0 || pageLoading || !isPayable
               ? "bg-slate-300"
               : "bg-primary"
           }`}
@@ -285,9 +306,14 @@ export default function LoanPaymentPage() {
             <ActivityIndicator color="white" />
           ) : (
             <Text className="text-white font-bold text-lg">
-              {outstanding > 0
-                ? `Pay ₱${formatMoney(schedule.find((i) => i.status === "unpaid")?.total_payment || 0)}`
-                : "Fully Paid"}
+              {!isPayable
+                ? "View Only"
+                : outstanding > 0
+                  ? `Pay ₱${formatMoney(
+                      schedule.find((i) => i.status === "unpaid")
+                        ?.total_payment || 0,
+                    )}`
+                  : "Fully Paid"}
             </Text>
           )}
         </TouchableOpacity>

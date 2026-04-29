@@ -1,9 +1,11 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { getIntellectualProperties } from "@/services/intellectualService";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -15,90 +17,78 @@ import "../../global.css";
 export default function IndexPage() {
   const router = useRouter();
 
-  // 🛡️ STRICT LOCK STATES
   const isProcessing = useRef(false);
   const [navigating, setNavigating] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [filterLoading, setFilterLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
+  const [refreshing, setRefreshing] = useState(false);
 
-  // RESET LOCKS ON FOCUS
+  const [properties, setProperties] = useState<any[]>([]);
+
   useFocusEffect(
     useCallback(() => {
       setNavigating(false);
       isProcessing.current = false;
+      fetchProperties();
     }, []),
   );
 
-  const PROPERTY_HISTORY = [
-    {
-      id: 1,
-      title: "Logo Design A",
-      status: "Registered",
-      date: "March 12, 2026",
-    },
-    {
-      id: 2,
-      title: "Software Patent",
-      status: "Pending",
-      date: "Reviewing...",
-    },
-    {
-      id: 3,
-      title: "Brand Slogan",
-      status: "Rejected",
-      date: "Incomplete Docs",
-    },
-    { id: 4, title: "Old Invention", status: "Expired", date: "Jan 05, 2024" },
-    {
-      id: 5,
-      title: "Mobile App UI",
-      status: "Registered",
-      date: "April 01, 2026",
-    },
-  ];
+  const fetchProperties = async () => {
+    try {
+      setPageLoading(true);
 
-  const filteredHistory = PROPERTY_HISTORY.filter((item) => {
-    if (activeFilter === "All") return true;
-    return item.status === activeFilter;
-  });
+      console.log("📡 Fetching Intellectual Properties...");
 
-  // Effect: Initial Page Load
-  useEffect(() => {
-    const timer = setTimeout(() => {
+      const res = await getIntellectualProperties({
+        include: "status,schedules",
+      });
+
+      console.log("✅ DATA:", res);
+
+      setProperties(res.data || []);
+    } catch (error: any) {
+      console.log("❌ FETCH ERROR:", error?.response?.data || error);
+    } finally {
       setPageLoading(false);
-    }, 400);
-    return () => clearTimeout(timer);
+      setRefreshing(false); // ✅ important for refresh stop
+    }
+  };
+
+  /**
+   * 🔄 REFRESH (NO DESIGN CHANGE)
+   */
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchProperties();
   }, []);
 
-  // Effect: Filter Change Loading
+  const filteredHistory = properties.filter((item) => {
+    const status = item.attributes?.status || "Unknown";
+    if (activeFilter === "All") return true;
+    return status === activeFilter;
+  });
+
   useEffect(() => {
     if (pageLoading) return;
     setFilterLoading(true);
-    const timer = setTimeout(() => {
-      setFilterLoading(false);
-    }, 350);
+    const timer = setTimeout(() => setFilterLoading(false), 350);
     return () => clearTimeout(timer);
   }, [activeFilter]);
 
-  /**
-   * 🚀 HANDLE NAVIGATION ACTIONS
-   */
-  const handleViewDetails = () => {
+  const handleViewDetails = (id: any) => {
     if (isProcessing.current || navigating) return;
     isProcessing.current = true;
     setNavigating(true);
-    router.push("/breakdown");
+    router.push(`/details?id=${id}`);
   };
 
   const handleApplyForm = () => {
-    // ⛔ STRICT CLICK CHECK
     if (isProcessing.current || navigating) return;
 
     isProcessing.current = true;
     setNavigating(true);
 
-    // Minor delay to show loader before push
     setTimeout(() => {
       router.push("/propertyForm");
     }, 100);
@@ -110,10 +100,18 @@ export default function IndexPage() {
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="always"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#034194"]}
+            tintColor="#034194"
+          />
+        }
       >
         <View className="items-center pb-10 px-5">
           <View className="w-full max-w-[500px] mx-auto">
-            {/* HEADER SECTION */}
+            {/* HEADER */}
             <View className="pt-7">
               {pageLoading ? (
                 <Skeleton className="h-10 w-64 self-center mb-6" />
@@ -123,13 +121,13 @@ export default function IndexPage() {
                 </Text>
               )}
 
-              {/* FILTER TABS */}
+              {/* FILTER */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 className="flex-row mb-2"
               >
-                {["All", "Registered", "Pending", "Rejected", "Expired"].map(
+                {["All", "registered", "pending", "rejected", "expired"].map(
                   (filter) => (
                     <TouchableOpacity
                       key={filter}
@@ -142,7 +140,11 @@ export default function IndexPage() {
                       }`}
                     >
                       <Text
-                        className={`text-xs font-bold ${activeFilter === filter ? "text-white" : "text-slate-400"}`}
+                        className={`text-xs font-bold ${
+                          activeFilter === filter
+                            ? "text-white"
+                            : "text-slate-400"
+                        }`}
                       >
                         {filter}
                       </Text>
@@ -152,99 +154,95 @@ export default function IndexPage() {
               </ScrollView>
             </View>
 
-            {/* PROPERTY LIST SECTION */}
+            {/* LIST */}
             <View className="mt-2">
               {pageLoading || filterLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <View
-                    key={`skeleton-${i}`}
+                    key={i}
                     className="bg-white rounded-3xl p-5 mt-4 border border-slate-100"
                   >
-                    <View className="flex-row justify-between mb-4">
-                      <Skeleton className="h-3 w-20" />
-                      <Skeleton className="h-5 w-16 rounded-full" />
-                    </View>
-                    <View className="flex-row justify-between items-center">
-                      <Skeleton className="h-8 w-32" />
-                      <Skeleton className="h-8 w-12 rounded-xl" />
-                    </View>
+                    <Skeleton className="h-3 w-20 mb-4" />
+                    <Skeleton className="h-8 w-32" />
                   </View>
                 ))
               ) : filteredHistory.length > 0 ? (
-                filteredHistory.map((item) => (
-                  <View
-                    key={`card-${item.id}`}
-                    style={{
-                      elevation: 4,
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.05,
-                      shadowRadius: 8,
-                      marginTop: 15,
-                    }}
-                    className="bg-white rounded-3xl overflow-hidden border border-slate-50"
-                  >
-                    <View className="p-5">
-                      <View className="flex-row justify-between items-center mb-4">
-                        <Text className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">
-                          Ref ID: #IP-{item.id}099
-                        </Text>
-                        <View
-                          className={`px-3 py-1 rounded-full ${
-                            item.status === "Registered"
-                              ? "bg-green-100"
-                              : item.status === "Pending"
-                                ? "bg-amber-100"
-                                : "bg-red-50"
-                          }`}
-                        >
-                          <Text
-                            className={`font-bold text-[10px] uppercase ${
-                              item.status === "Registered"
-                                ? "text-green-700"
-                                : item.status === "Pending"
-                                  ? "text-amber-700"
-                                  : "text-red-600"
+                filteredHistory.map((item) => {
+                  const attr = item.attributes;
+
+                  return (
+                    <View
+                      key={item.id}
+                      style={{
+                        elevation: 4,
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 8,
+                        marginTop: 15,
+                      }}
+                      className="bg-white rounded-3xl overflow-hidden border border-slate-50"
+                    >
+                      <View className="p-5">
+                        <View className="flex-row justify-between items-center mb-4">
+                          <Text className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">
+                            Ref ID: #{item.id}
+                          </Text>
+
+                          <View
+                            className={`px-3 py-1 rounded-full ${
+                              attr.status === "registered"
+                                ? "bg-green-100"
+                                : attr.status === "pending"
+                                  ? "bg-amber-100"
+                                  : "bg-[#FFE6E9]"
                             }`}
                           >
-                            {item.status}
-                          </Text>
+                            <Text
+                              className={`font-bold text-[10px] uppercase ${
+                                attr.status === "registered"
+                                  ? "text-green-700"
+                                  : attr.status === "pending"
+                                    ? "text-amber-700"
+                                    : "text-[#D70127]"
+                              }`}
+                            >
+                              {attr.status}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View className="flex-row justify-between items-center">
+                          <View className="flex-1 pr-4">
+                            <Text className="text-slate-800 text-xl font-bold">
+                              {attr.title}
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity
+                            onPress={() => handleViewDetails(item.id)}
+                            disabled={navigating}
+                            className="bg-slate-50 px-4 py-2 rounded-xl border border-slate-100"
+                          >
+                            <Text className="text-primary font-bold text-[10px]">
+                              Details
+                            </Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
 
-                      <View className="flex-row items-center justify-between">
-                        <View className="flex-1 pr-4">
-                          <Text className="text-slate-800 text-xl font-bold">
-                            {item.title}
-                          </Text>
-                          <Text className="text-slate-500 text-xs mt-1">
-                            {item.status === "Registered"
-                              ? `Valid until: ${item.date}`
-                              : item.date}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={handleViewDetails}
-                          disabled={navigating}
-                          className="bg-slate-50 px-4 py-2 rounded-xl border border-slate-100"
-                        >
-                          <Text className="text-primary font-bold text-[10px]">
-                            Details
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
+                      <View
+                        className={`h-1 w-full ${
+                          attr.status === "registered"
+                            ? "bg-green-500"
+                            : attr.status === "pending"
+                              ? "bg-amber-500"
+                              : "bg-[#D70127]"
+                        }`}
+                      />
                     </View>
-                    <View
-                      className={`h-1 w-full ${
-                        item.status === "Registered"
-                          ? "bg-green-500"
-                          : item.status === "Pending"
-                            ? "bg-amber-500"
-                            : "bg-red-500"
-                      }`}
-                    />
-                  </View>
-                ))
+                  );
+                })
               ) : (
                 <View className="py-20 items-center">
                   <Text className="text-slate-400 italic">
@@ -257,25 +255,21 @@ export default function IndexPage() {
         </View>
       </ScrollView>
 
-      {/* FOOTER ACTION BUTTON */}
+      {/* FOOTER */}
       <View className="w-full p-5 bg-white border-t border-slate-200">
-        {pageLoading ? (
-          <Skeleton className="h-16 w-full rounded-2xl" />
-        ) : (
-          <TouchableOpacity
-            onPress={handleApplyForm}
-            disabled={navigating}
-            className={`h-16 rounded-2xl justify-center items-center ${
-              navigating ? "bg-slate-400" : "bg-primary"
-            }`}
-          >
-            {navigating ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text className="text-white font-bold text-lg">Apply New</Text>
-            )}
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={handleApplyForm}
+          disabled={navigating}
+          className={`h-16 rounded-2xl justify-center items-center ${
+            navigating ? "bg-slate-400" : "bg-primary"
+          }`}
+        >
+          {navigating ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text className="text-white font-bold text-lg">Apply New</Text>
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );

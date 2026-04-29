@@ -33,7 +33,7 @@ export default function ProfileScreen() {
   const isBasic = userTypeName === "BASIC";
   const isMember = userTypeName === "MEMBER";
   const isActive = statusName === "active";
-  const isPendingMember = statusName === "pending_for_member";
+  const isForApproval = statusName === "for_approval";
 
   const fetchProfile = async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -211,7 +211,7 @@ export default function ProfileScreen() {
       )}
 
       {/* --- PENDING NOTIFICATION --- */}
-      {isBasic && isPendingMember && (
+      {isBasic && isForApproval && (
         <View className="mt-6 px-4">
           <View className="bg-blue-50 border border-blue-200 p-5 rounded-[30px]">
             <View className="flex-row items-center">
@@ -234,46 +234,47 @@ export default function ProfileScreen() {
       )}
 
       {/* --- CAPITAL CONTRIBUTION SECTION --- */}
-      <View className="mt-6 px-4">
-        <View className="bg-green-50 border border-green-200 p-5 rounded-[30px]">
-          <View className="flex-row items-center">
-            <View className="bg-green-600 p-2 rounded-full">
-              <MaterialIcons
-                name="account-balance-wallet"
-                size={20}
-                color="white"
-              />
+      {isBasic && !isActive && (
+        <View className="mt-6 px-4">
+          <View className="bg-green-50 border border-green-200 p-5 rounded-[30px]">
+            <View className="flex-row items-center">
+              <View className="bg-green-600 p-2 rounded-full">
+                <MaterialIcons
+                  name="account-balance-wallet"
+                  size={20}
+                  color="white"
+                />
+              </View>
+              <View className="flex-1 ml-4">
+                <Text className="text-green-800 font-bold text-lg">
+                  Capital Contribution
+                </Text>
+              </View>
             </View>
-            <View className="flex-1 ml-4">
-              <Text className="text-green-800 font-bold text-lg">
-                Capital Contribution
-              </Text>
-            </View>
-          </View>
 
-          <Text className="text-green-700 text-sm mt-2 leading-5">
-            To access other features, you need to contribute to the initial
-            share capital. You can choose{" "}
-            <Text className="font-bold">installment</Text> or{" "}
-            <Text className="font-bold">full payment</Text> now.
-          </Text>
-
-          <TouchableOpacity
-            onPress={() => router.push("/profile/membership")}
-            className="bg-green-600 mt-4 py-3 rounded-2xl items-center flex-row justify-center"
-          >
-            <Text className="text-white font-bold text-base mr-2">
-              Pay Contribution
+            <Text className="text-green-700 text-sm mt-2 leading-5">
+              To access other features, you need to contribute to the initial
+              share capital. You can choose{" "}
+              <Text className="font-bold">installment</Text> or{" "}
+              <Text className="font-bold">full payment</Text> now.
             </Text>
-            <Ionicons name="card-outline" size={18} color="white" />
-          </TouchableOpacity>
-        </View>
-      </View>
 
+            <TouchableOpacity
+              onPress={() => router.push("/profile/membership")}
+              className="bg-green-600 mt-4 py-3 rounded-2xl items-center flex-row justify-center"
+            >
+              <Text className="text-white font-bold text-base mr-2">
+                Pay Contribution
+              </Text>
+              <Ionicons name="card-outline" size={18} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
       {/* --- MENU ITEMS --- */}
 
       <View className="mt-6 px-4">
-        {((isBasic && isPendingMember) || (isMember && isActive)) && (
+        {((isBasic && isForApproval) || (isMember && isActive)) && (
           <View>
             <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
               Account Settings

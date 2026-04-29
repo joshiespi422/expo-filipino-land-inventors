@@ -1,3 +1,4 @@
+import { createIntellectualProperty } from "@/services/intellectualService";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
@@ -37,12 +38,10 @@ interface Attachment {
 export default function PropertyForm() {
   const router = useRouter();
 
-  // 🛡️ NAVIGATION & LOADING LOCKS
   const isProcessing = useRef(false);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
 
-  // RESET LOCKS ON FOCUS
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
@@ -50,7 +49,6 @@ export default function PropertyForm() {
     }, []),
   );
 
-  // --- Form States ---
   const [generalInfo, setGeneralInfo] = useState({
     title: "",
     description: "",
@@ -64,7 +62,9 @@ export default function PropertyForm() {
     privacy: false,
   });
 
-  // --- Handlers ---
+  // ✅ ADDED: FORM TYPE STATE
+  const [formType, setFormType] = useState<"grant" | "payment">("grant");
+
   const addClaim = () => setClaims([...claims, ""]);
   const removeClaim = (index: number) => {
     const newClaims = claims.filter((_, i) => i !== index);
@@ -119,7 +119,7 @@ export default function PropertyForm() {
 
   const handleBack = () => setStep((prev) => prev - 1);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (isProcessing.current || loading) return;
 
     if (!agreed.original || !agreed.terms || !agreed.privacy) {
@@ -127,21 +127,63 @@ export default function PropertyForm() {
       return;
     }
 
-    isProcessing.current = true;
-    setLoading(true);
+    try {
+      isProcessing.current = true;
+      setLoading(true);
 
-    // Simulate API Call
-    setTimeout(() => {
-      setLoading(false);
-      Alert.alert("Success", "Application Submitted Successfully!", [
-        { text: "OK", onPress: () => router.replace("/") },
+      const formData = new FormData();
+
+      formData.append("creation_type", "invention");
+
+      // ✅ UPDATED: dynamic form_type
+      formData.append("form_type", formType);
+
+      formData.append("title", generalInfo.title);
+      formData.append("description", generalInfo.description);
+      formData.append("applicability", industrial.applicability);
+
+      claims
+        .filter((c) => c.trim() !== "")
+        .forEach((claim, index) => {
+          formData.append(`claims[${index}][description]`, claim);
+        });
+
+      attachments.forEach((file, index) => {
+        formData.append(`documents[${index}]`, {
+          uri: file.uri,
+          name: file.name,
+          type: file.type || "application/octet-stream",
+        } as any);
+      });
+
+      formData.append("is_original", "1");
+      formData.append("agreed_terms", "1");
+      formData.append("agreed_privacy", "1");
+
+      console.log("🚀 SUBMITTING IP FORM...");
+
+      const res = await createIntellectualProperty(formData);
+
+      console.log("✅ RESPONSE:", res);
+
+      Alert.alert("Success", res.message || "Application submitted!", [
+        { text: "OK", onPress: () => router.replace("/registered") },
       ]);
-    }, 2000);
+    } catch (error: any) {
+      console.log("❌ ERROR:", error?.response?.data || error);
+
+      Alert.alert(
+        "Error",
+        error?.response?.data?.message || "Submission failed.",
+      );
+    } finally {
+      setLoading(false);
+      isProcessing.current = false;
+    }
   };
 
   return (
     <View className="flex-1 bg-white">
-      {/* Header Titles */}
       <View className="px-6 pt-6 mb-4">
         <Text className="text-xl font-bold text-slate-900 text-center uppercase tracking-widest">
           {step === 1 && "General Information"}
@@ -152,7 +194,6 @@ export default function PropertyForm() {
       </View>
 
       <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
-        {/* Progress Bar */}
         <View className="flex-row justify-between mb-8 px-2">
           {[1, 2, 3, 4].map((i) => (
             <View
@@ -162,7 +203,6 @@ export default function PropertyForm() {
           ))}
         </View>
 
-        {/* STEP 1: GENERAL INFO */}
         {step === 1 && (
           <View className="gap-y-6">
             <View>
@@ -197,7 +237,6 @@ export default function PropertyForm() {
           </View>
         )}
 
-        {/* STEP 2: CLAIMS */}
         {step === 2 && (
           <View>
             <Text className="text-slate-500 mb-6 italic text-sm">
@@ -235,7 +274,6 @@ export default function PropertyForm() {
           </View>
         )}
 
-        {/* STEP 3: UPLOADS */}
         {step === 3 && (
           <View className="gap-y-4">
             <Text className="text-slate-500 mb-2">
@@ -284,9 +322,43 @@ export default function PropertyForm() {
           </View>
         )}
 
-        {/* STEP 4: FINAL */}
         {step === 4 && (
           <View className="gap-y-6">
+            {/* ✅ ADDED: FORM TYPE SELECTION */}
+            <View>
+              <Text className="text-slate-600 font-bold mb-3">
+                Application Type
+              </Text>
+
+              <View className="flex-row gap-x-3">
+                <TouchableOpacity
+                  onPress={() => setFormType("grant")}
+                  className={`flex-1 p-4 justify-center rounded-2xl border ${
+                    formType === "grant"
+                      ? "bg-primary border-primary"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <Text
+                    className={`text-center font-bold ${
+                      formType === "grant" ? "text-white" : "text-slate-600"
+                    }`}
+                  >
+                    Grant
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  disabled
+                  className="flex-1 p-4 rounded-2xl border bg-slate-100 border-slate-200 opacity-60"
+                >
+                  <Text className="text-center font-bold text-slate-400">
+                    Payment (Disabled)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <View>
               <Text className="text-slate-600 font-bold mb-2">
                 Industrial Applicability
@@ -301,6 +373,7 @@ export default function PropertyForm() {
                 onChangeText={(text) => setIndustrial({ applicability: text })}
               />
             </View>
+
             <View className="gap-y-5 pt-4">
               {(Object.keys(agreed) as (keyof AgreedState)[]).map((key) => {
                 const labels = {
@@ -330,10 +403,10 @@ export default function PropertyForm() {
             </View>
           </View>
         )}
+
         <View className="h-24" />
       </ScrollView>
 
-      {/* Footer Navigation */}
       <View className="p-5 bg-white border-t border-slate-200 flex-row gap-x-3">
         {step > 1 && (
           <TouchableOpacity

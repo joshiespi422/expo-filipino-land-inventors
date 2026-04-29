@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -20,6 +21,7 @@ export default function CongratulationPage() {
   const isProcessing = useRef(false);
   const [navigating, setNavigating] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // RESET LOCKS ON FOCUS
   useFocusEffect(
@@ -29,7 +31,9 @@ export default function CongratulationPage() {
     }, []),
   );
 
-  // Effect: Initial Page Load Simulation
+  /**
+   * 📦 INITIAL LOAD
+   */
   useEffect(() => {
     const timer = setTimeout(() => {
       setPageLoading(false);
@@ -37,8 +41,27 @@ export default function CongratulationPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  /**
+   * 🔄 FIXED REFRESH HANDLER
+   */
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+
+    // simulate reload (same behavior as initial load)
+    setTimeout(() => {
+      setPageLoading(true);
+
+      setTimeout(() => {
+        setPageLoading(false);
+        setRefreshing(false);
+      }, 400);
+    }, 300);
+  }, []);
+
+  /**
+   * 🚀 NAVIGATION
+   */
   const RegisteredProperty = () => {
-    // ⛔ STRICT CLICK CHECK
     if (isProcessing.current || navigating) return;
 
     isProcessing.current = true;
@@ -52,22 +75,30 @@ export default function CongratulationPage() {
       <ScrollView
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#034194"]}
+            tintColor="#034194"
+          />
+        }
       >
         <View className="items-center justify-center py-14 px-6">
           <View className="w-full max-w-[500px] items-center">
-            {/* 1. IMAGE SECTION */}
+            {/* IMAGE */}
             {pageLoading ? (
               <Skeleton className="w-[250px] h-[250px] rounded-full mb-12" />
             ) : (
               <Image
-                style={{ width: 280, height: 280 }}
+                style={{ width: 250, height: 250 }}
                 className="mb-12"
                 source={Intellectual}
                 resizeMode="contain"
               />
             )}
 
-            {/* 2. TEXT CONTENT */}
+            {/* TEXT */}
             <View className="pb-8 w-full items-center">
               {pageLoading ? (
                 <View className="gap-y-3 items-center">
@@ -83,7 +114,7 @@ export default function CongratulationPage() {
                   <Text className="text-center text-slate-500 text-base pt-3">
                     to protect and secure your ideas,
                   </Text>
-                  <Text className="text-center text-slate-500 text-base ">
+                  <Text className="text-center text-slate-500 text-base">
                     creations, and innovation.
                   </Text>
                 </>
@@ -93,7 +124,7 @@ export default function CongratulationPage() {
         </View>
       </ScrollView>
 
-      {/* 3. STRICT ACTION BUTTON (Footer) */}
+      {/* FOOTER */}
       <View className="w-full p-5 bg-white border-t border-slate-200">
         {pageLoading ? (
           <Skeleton className="h-[60px] w-full rounded-2xl" />
