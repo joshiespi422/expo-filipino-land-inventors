@@ -15,9 +15,6 @@ export const getMembership = async (params?: any) => {
   return res.data;
 };
 
-/**
- * ✅ FIXED: return raw response safely
- */
 export const payMembership = async (
   scheduleId: string,
   payload: {
@@ -26,24 +23,7 @@ export const payMembership = async (
     gateway: string;
   },
 ) => {
-  try {
-    const res = await api.post(
-      `/memberships/schedules/${scheduleId}/pay`,
-      payload,
-    );
-
-    return res.data;
-  } catch (error: any) {
-    console.log("❌ payMembership error:", error?.response?.data || error);
-
-    return {
-      success: false,
-      message:
-        error?.response?.data?.message ||
-        error?.message ||
-        "Payment request failed",
-    };
-  }
+  return await api.post(`/memberships/schedules/${scheduleId}/pay`, payload);
 };
 
 export const getPaymentMethods = async () => {
@@ -52,6 +32,6 @@ export const getPaymentMethods = async () => {
 };
 
 export const checkMembershipPaymentStatus = async (paymentIntentId: string) => {
-  const res = await api.get(`/payments/status/${paymentIntentId}`);
+  const res = await api.get(`/payment/status/${paymentIntentId}`);
   return res.data;
 };
