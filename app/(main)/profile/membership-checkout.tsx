@@ -1,4 +1,8 @@
-import { getPaymentMethods, payMembership } from "@/services/membershipService";
+import {
+  getPaymentMethods,
+  payMembership,
+  PaymentMethod,
+} from "@/services/membershipService";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -16,38 +20,34 @@ export default function MembershipCheckoutPage() {
   const { scheduleId, amount } = useLocalSearchParams();
   const router = useRouter();
 
-  const [methods, setMethods] = useState<any[]>([]);
-  const [selectedMethod, setSelectedMethod] = useState<any>(null);
-
   const [loading, setLoading] = useState(false);
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
+    null,
+  );
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
   const [navigating, setNavigating] = useState(false);
   const isProcessing = useRef(false);
 
-  /**
-   * Normalize params
-   */
   const safeScheduleId = Array.isArray(scheduleId) ? scheduleId[0] : scheduleId;
   const safeAmount = Array.isArray(amount) ? amount[0] : amount;
 
-  /**
-   * RESET STATE WHEN SCREEN IS FOCUSED
-   */
+  // RESET LOCKS ON FOCUS (If user comes back from QR or WebView)
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
       setNavigating(false);
-      setCheckoutUrl(null);
       isProcessing.current = false;
     }, []),
   );
 
-  /**
-   * FORMAT
-   */
+  // =========================
+  // FORMATTING & PARSING
+  // =========================
   const formatAmount = (value: any) => {
-    const num = Number(value || 0);
+    const num = Number(String(value).replace(/,/g, ""));
     if (isNaN(num)) return "0.00";
     return num.toLocaleString("en-PH", {
       minimumFractionDigits: 2,
@@ -56,41 +56,36 @@ export default function MembershipCheckoutPage() {
   };
 
   const parseAmount = (value: any) => {
-    const cleaned = String(value || "")
+    const cleaned = String(value)
       .replace(/,/g, "")
       .replace(/[^\d.]/g, "");
-
     const num = Number(cleaned);
     return isNaN(num) ? 0 : Number(num.toFixed(2));
   };
 
-  /**
-   * LOAD PAYMENT METHODS
-   */
   const loadMethods = async () => {
     try {
       const res = await getPaymentMethods();
-
       const list = Array.isArray(res)
         ? res
         : Array.isArray(res?.data)
           ? res.data
           : [];
 
-      const formatted = list.map((item: any) => ({
+      const formatted: PaymentMethod[] = list.map((item: any) => ({
         id: item?.id,
         name: item?.attributes?.name,
         gateway_type: (item?.attributes?.gateway_type || "").toLowerCase(),
       }));
 
-      const filtered = formatted.filter((m: any) =>
+      const filtered = formatted.filter((m) =>
         ["qrph", "paymaya", "billease", "grab_pay"].includes(m.gateway_type),
       );
 
       setMethods(filtered);
       setSelectedMethod(filtered[0] || null);
     } catch (err) {
-      console.log("❌ Failed to load methods", err);
+      console.log("Failed to load payment methods", err);
     }
   };
 
@@ -98,103 +93,68 @@ export default function MembershipCheckoutPage() {
     loadMethods();
   }, []);
 
-  /**
-   * HANDLE PAYMENT
-   */
   const handleProceed = async () => {
     if (isProcessing.current || navigating || loading) return;
 
     if (!selectedMethod) {
-      Alert.alert("Error", "Select payment method");
+      Alert.alert("Error", "Please select a payment method");
       return;
     }
 
     const parsedAmount = parseAmount(safeAmount);
-    if (parsedAmount <= 0) {
-      Alert.alert("Error", "Invalid amount");
-      return;
-    }
-
-    if (!safeScheduleId) {
-      Alert.alert("Error", "Missing schedule ID");
-      return;
-    }
-
     isProcessing.current = true;
     setLoading(true);
-    setNavigating(true);
 
     try {
       const payload = {
+        membership_schedule_id: Number(safeScheduleId),
         payment_method_id: selectedMethod.id,
         amount: parsedAmount,
         gateway: "paymongo",
       };
 
-      console.log("🚀 PAYLOAD SENT:", payload);
-      console.log("📌 scheduleId:", safeScheduleId);
+      const response = await payMembership(String(safeScheduleId), payload);
+      const result = response?.data;
 
-      const result = await payMembership(String(safeScheduleId), payload);
-
-      console.log(
-        "🔥 FULL RESPONSE (MEMBERSHIP):",
-        JSON.stringify(result, null, 2),
-      );
-
-      /**
-       * ✅ FIX: correct response structure
-       */
+      // 1. EXTRACT ACTIONS
       const nextAction = result?.next_action;
-
-      const url = nextAction?.redirect_url;
       const qr = nextAction?.qr_code_url;
+      const url = nextAction?.redirect_url;
 
-      /**
-       * optional safety (your backend has no paymentIntentId here)
-       */
-      const paymentIntentId =
-        result?.data?.id || result?.payment_intent_id || null;
+      // 2. FLEXIBLE ID EXTRACTION (The Fix)
+      const intentId = result?.data?.payment?.gateway_payment_intent_id;
 
-      if (url) {
-        console.log("🌐 WEB FLOW TRIGGERED");
-        setCheckoutUrl(url);
+      // 3. VALIDATION
+      if (!intentId && qr) {
+        Alert.alert("Error", "Payment ID not found in response.");
         return;
       }
 
-      if (qr) {
-        console.log("📱 QR FLOW TRIGGERED");
+      // 4. ROUTING
+      if (url) {
+        setCheckoutUrl(url);
+      }
 
+      if (qr) {
         router.push({
           pathname: "/profile/membership-qrph",
           params: {
             qrUrl: qr,
-            paymentIntentId: paymentIntentId ?? safeScheduleId,
+            paymentIntentId: String(intentId),
           },
         });
-
-        return;
       }
-
-      throw new Error(result?.message || "No payment action returned");
-    } catch (err: any) {
-      console.log("🔥 ERROR OBJECT:", err);
-
+    } catch (error: any) {
       setLoading(false);
-      setNavigating(false);
       isProcessing.current = false;
-
       const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Failed to create payment session";
-
-      Alert.alert("Payment Failed", message);
+        error?.response?.data?.message || error.message || "Payment failed";
+      Alert.alert("Error", message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  /**
-   * WEBVIEW FLOW
-   */
   if (checkoutUrl) {
     return (
       <WebView
@@ -202,10 +162,8 @@ export default function MembershipCheckoutPage() {
         style={{ flex: 1 }}
         startInLoadingState
         onNavigationStateChange={(nav) => {
-          console.log("🌐 WEBVIEW URL:", nav.url);
-
           if (nav.url.includes("payment/success")) {
-            router.replace("/profile/membership-breakdown");
+            router.replace("/payment-success");
           }
         }}
       />
@@ -215,7 +173,7 @@ export default function MembershipCheckoutPage() {
   return (
     <View className="flex-1 bg-gray-50">
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
-        <View className="bg-white rounded-3xl p-6 mb-6">
+        <View className="bg-white rounded-3xl p-6 mb-6 shadow-sm">
           <Text className="text-slate-400 text-xs font-bold uppercase">
             Membership Payment
           </Text>
@@ -252,7 +210,7 @@ export default function MembershipCheckoutPage() {
         })}
       </ScrollView>
 
-      <View className="absolute bottom-0 w-full p-5 bg-white border-t">
+      <View className="absolute bottom-0 w-full p-5 bg-white border-t border-gray-100">
         <TouchableOpacity
           onPress={handleProceed}
           disabled={loading || navigating}

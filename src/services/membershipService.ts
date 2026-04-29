@@ -35,3 +35,9 @@ export const checkMembershipPaymentStatus = async (paymentIntentId: string) => {
   const res = await api.get(`/payment/status/${paymentIntentId}`);
   return res.data;
 };
+
+export interface PaymentMethod {
+  id: number;
+  name: string;
+  gateway_type: string;
+}

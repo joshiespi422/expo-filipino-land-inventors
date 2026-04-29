@@ -1,12 +1,11 @@
-import { checkPaymentStatus } from "@/services/loanService"; // Or membership equivalent
+import { checkMembershipPaymentStatus } from "@/services/membershipService";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { ActivityIndicator, Alert, Image, Text, View } from "react-native";
 
 export default function QRPaymentPage() {
   const { qrUrl, paymentIntentId } = useLocalSearchParams();
   const router = useRouter();
-  const [checking, setChecking] = useState(true);
 
   const pollingInterval = useRef<NodeJS.Timeout | null>(null);
   const hasShownSuccess = useRef(false);
@@ -16,68 +15,61 @@ export default function QRPaymentPage() {
 
     pollingInterval.current = setInterval(async () => {
       try {
-        const res = await checkPaymentStatus(paymentIntentId as string);
-        const status = Number(res?.status);
+        const res = await checkMembershipPaymentStatus(
+          paymentIntentId as string,
+        );
 
-        // Status 11 = PAID in your system
-        if (status === 11 && !hasShownSuccess.current) {
+        console.log("🔄 FULL RESPONSE:", res);
+
+        // NOW DIRECT ACCESS (NO .data)
+        const rawStatus = res?.status;
+
+        const status = Number(rawStatus);
+
+        console.log("🔄 PARSED STATUS:", status);
+
+        // SUCCESS CHECK (11 = paid)
+        const isSuccess = status === 11;
+
+        if (isSuccess && !hasShownSuccess.current) {
           hasShownSuccess.current = true;
-          if (pollingInterval.current) clearInterval(pollingInterval.current);
+
+          clearInterval(pollingInterval.current!);
 
           Alert.alert("Success", "Payment successful!", [
             {
               text: "OK",
-              onPress: () => router.replace("/profile/membership-breakdown"),
+              onPress: () => router.replace("/(main)"),
             },
           ]);
         }
       } catch (err) {
-        console.log("🔄 Polling status...", err);
+        console.log("Polling error:", err, paymentIntentId);
       }
-    }, 3000);
+    }, 2000);
 
     return () => {
-      if (pollingInterval.current) clearInterval(pollingInterval.current);
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current);
+      }
     };
   }, [paymentIntentId]);
 
   return (
     <View className="flex-1 bg-white items-center justify-center px-6">
-      <View className="bg-slate-50 p-8 rounded-[40px] items-center border border-slate-100">
-        <Text className="text-2xl font-black text-slate-800 mb-2">
-          Scan QR Ph
-        </Text>
-        <Text className="text-slate-500 text-center mb-8">
-          Use your banking or e-wallet app to scan and pay.
-        </Text>
+      <Text className="text-xl font-bold mb-4">Scan to Pay</Text>
 
-        <View className="bg-white p-4 rounded-3xl shadow-xl">
-          {qrUrl ? (
-            <Image
-              source={{ uri: qrUrl as string }}
-              style={{ width: 260, height: 260 }}
-              resizeMode="contain"
-            />
-          ) : (
-            <View
-              style={{ width: 260, height: 260 }}
-              className="justify-center items-center"
-            >
-              <ActivityIndicator size="large" color="#0000ff" />
-            </View>
-          )}
-        </View>
+      {qrUrl ? (
+        <Image
+          source={{ uri: qrUrl as string }}
+          style={{ width: 250, height: 250 }}
+        />
+      ) : (
+        <ActivityIndicator />
+      )}
 
-        <View className="flex-row items-center mt-10">
-          <ActivityIndicator size="small" color="#64748b" />
-          <Text className="ml-3 text-slate-500 font-medium">
-            Waiting for confirmation...
-          </Text>
-        </View>
-      </View>
-
-      <Text className="absolute bottom-12 text-slate-400 text-xs text-center px-10">
-        Do not close this screen until the payment is confirmed.
+      <Text className="mt-6 text-gray-500 text-center">
+        Waiting for payment confirmation...
       </Text>
     </View>
   );
