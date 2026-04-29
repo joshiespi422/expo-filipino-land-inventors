@@ -33,6 +33,7 @@ export default function ProfileScreen() {
   const isBasic = userTypeName === "BASIC";
   const isMember = userTypeName === "MEMBER";
   const isActive = statusName === "active";
+  const isApproved = statusName === "approved";
   const isForApproval = statusName === "for_approval";
 
   const fetchProfile = async (isRefresh = false) => {
@@ -234,7 +235,7 @@ export default function ProfileScreen() {
       )}
 
       {/* --- CAPITAL CONTRIBUTION SECTION --- */}
-      {isBasic && !isActive && (
+      {isBasic && isApproved && (
         <View className="mt-6 px-4">
           <View className="bg-green-50 border border-green-200 p-5 rounded-[30px]">
             <View className="flex-row items-center">
@@ -274,7 +275,9 @@ export default function ProfileScreen() {
       {/* --- MENU ITEMS --- */}
 
       <View className="mt-6 px-4">
-        {((isBasic && isForApproval) || (isMember && isActive)) && (
+        {((isBasic && isForApproval) ||
+          (isBasic && isApproved) ||
+          (isMember && isActive)) && (
           <View>
             <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
               Account Settings
