@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   Text,
@@ -13,7 +15,7 @@ import {
 
 // Components
 import { AuthInput } from "@/components/AuthInput";
-import { CustomAlert } from "@/components/CustomAlert"; // Added this
+import { CustomAlert } from "@/components/CustomAlert";
 import HeaderAuth from "@/components/HeaderAuth";
 import LinkAuth from "@/components/LinkAuth";
 import { LoginSkeleton } from "@/components/LoginSkeleton";
@@ -24,6 +26,10 @@ import "../../global.css";
 export default function LoginPage() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
+
+  const scrollRef = useRef<ScrollView>(null);
+
+  const scrollPosition = useRef(0);
 
   const [form, setForm] = useState({ number: "", password: "" });
   const [rememberMe, setRememberMe] = useState(false);
@@ -49,6 +55,26 @@ export default function LoginPage() {
       400,
     );
     return () => clearTimeout(timer);
+  }, []);
+
+  // 🔥 SAVE POSITION WHEN KEYBOARD OPENS
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      scrollRef.current?.scrollTo({
+        y: scrollPosition.current,
+        animated: true,
+      });
+    });
+
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      // 🔥 restore to top smoothly when keyboard closes
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+
+    return () => {
+      show.remove();
+      hide.remove();
+    };
   }, []);
 
   const showAlert = (title: string, message: string) => {
@@ -96,12 +122,21 @@ export default function LoginPage() {
   const isDisabled = loadingState.action || loadingState.nav;
 
   return (
-    <>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+    >
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets={Platform.OS === "android"}
         showsVerticalScrollIndicator={false}
+        bounces={false} // 🔥 prevents snap-back issues
+        onScroll={(e) => {
+          scrollPosition.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
       >
         <View className="flex-1 bg-slate-50">
           <HeaderAuth title="Hello" subtitle="Welcome back!" />
@@ -109,13 +144,14 @@ export default function LoginPage() {
           <View className="flex-1 -mt-10">
             <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
-            <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
+            <View className="mx-5 pb-10 pt-5 max-w-[500px] w-[90%] self-center">
               <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4 mb-10">
                 {loadingState.page ? (
                   <LoginSkeleton />
                 ) : (
                   <>
                     <LogoAuth />
+
                     <TitleAuth
                       title="Login Account"
                       description="Log in to your account to securely access your dashboard and manage your features."
@@ -143,36 +179,6 @@ export default function LoginPage() {
                       onTogglePassword={() => setShowPassword(!showPassword)}
                     />
 
-                    <View className="flex-row justify-between items-center px-1">
-                      <TouchableOpacity
-                        onPress={() => setRememberMe(!rememberMe)}
-                        className="flex-row items-center"
-                        disabled={isDisabled}
-                        activeOpacity={0.7}
-                      >
-                        <View
-                          className={`w-5 h-5 rounded border mr-2 items-center justify-center ${
-                            rememberMe
-                              ? "bg-primary border-primary"
-                              : "border-slate-300 bg-slate-50"
-                          }`}
-                        >
-                          {rememberMe && (
-                            <View className="w-1.5 h-1.5 bg-white rounded-sm" />
-                          )}
-                        </View>
-                        <Text className="text-primary text-sm">
-                          Remember me
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity disabled={isDisabled}>
-                        <Text className="text-primary text-sm underline">
-                          Forgot Password?
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
                     <TouchableOpacity
                       onPress={handleLogin}
                       disabled={isDisabled}
@@ -192,7 +198,10 @@ export default function LoginPage() {
 
                     <LinkAuth
                       onNavigating={(val) =>
-                        setLoadingState((p) => ({ ...p, nav: val }))
+                        setLoadingState((p) => ({
+                          ...p,
+                          nav: val,
+                        }))
                       }
                       isNavigating={loadingState.nav}
                     />
@@ -204,13 +213,12 @@ export default function LoginPage() {
         </View>
       </ScrollView>
 
-      {/* Custom Alert Implementation */}
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
         onClose={() => setAlert({ ...alert, visible: false })}
       />
-    </>
+    </KeyboardAvoidingView>
   );
 }

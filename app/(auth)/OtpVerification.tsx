@@ -1,4 +1,4 @@
-import { CustomAlert } from "@/components/CustomAlert"; // Added
+import { CustomAlert } from "@/components/CustomAlert";
 import HeaderAuth from "@/components/HeaderAuth";
 import LinkAuth from "@/components/LinkAuth";
 import LogoAuth from "@/components/LogoAuth";
@@ -11,6 +11,7 @@ import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   Pressable,
   ScrollView,
   Text,
@@ -21,7 +22,7 @@ import {
 import OTPVerification from "../../assets/images/vector/OTPVerificationCode.png";
 import "../../global.css";
 
-// Memoized individual digit box for performance
+/* ---------------- OTP BOX ---------------- */
 const OtpInputBox = memo(function OtpInputBox({
   digit,
   isFocused,
@@ -44,14 +45,15 @@ export default function OtpVerificationPage() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
 
-  // States
+  const scrollRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
+  const otpContainerRef = useRef<View>(null);
+
   const [otp, setOtp] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
   const [navigating, setNavigating] = useState(false);
-  const [timer, setTimer] = useState(300); // 5 minutes
-  const inputRef = useRef<TextInput>(null);
+  const [timer, setTimer] = useState(300);
 
-  // Alert State
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
@@ -62,24 +64,50 @@ export default function OtpVerificationPage() {
     setAlert({ visible: true, title, message });
   };
 
-  // Reset internal navigation states when the screen comes into focus
+  /* ---------------- RESET NAV STATE ---------------- */
   useFocusEffect(
     useCallback(() => {
       setNavigating(false);
     }, []),
   );
 
-  // Initial loading and countdown logic
+  /* ---------------- PAGE LOAD + TIMER ---------------- */
   useEffect(() => {
-    const loadTimer = setTimeout(() => setPageLoading(false), 400);
+    const load = setTimeout(() => setPageLoading(false), 400);
 
     const countdown = setInterval(() => {
       setTimer((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
     return () => {
-      clearTimeout(loadTimer);
+      clearTimeout(load);
       clearInterval(countdown);
+    };
+  }, []);
+
+  /* ---------------- KEYBOARD FIX (REAL VERSION) ---------------- */
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      setTimeout(() => {
+        otpContainerRef.current?.measure((x, y, w, h, px, py) => {
+          scrollRef.current?.scrollTo({
+            y: py - 120,
+            animated: true,
+          });
+        });
+      }, 100);
+    });
+
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      scrollRef.current?.scrollTo({
+        y: 0,
+        animated: true,
+      });
+    });
+
+    return () => {
+      show.remove();
+      hide.remove();
     };
   }, []);
 
@@ -89,9 +117,7 @@ export default function OtpVerificationPage() {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  // --- MUTATIONS ---
-
-  // Verify OTP Mutation
+  /* ---------------- VERIFY OTP ---------------- */
   const verifyMutation = useMutation({
     mutationFn: (otpCode: string) =>
       phoneVerificationService.verify({
@@ -109,34 +135,27 @@ export default function OtpVerificationPage() {
       const message =
         error.response?.data?.message || "Invalid OTP code. Please try again.";
 
-      if (error.status === 429) {
-        showAlert(
-          "Too Many Attempts",
-          "You have tried too many times. Please wait a minute before trying again.",
-        );
-      } else {
-        showAlert("Verification Failed", message);
-      }
-
-      setOtp(""); // Clear input on error to let them retry
+      showAlert("Verification Failed", message);
+      setOtp("");
     },
   });
 
-  // Resend OTP Mutation
+  /* ---------------- RESEND OTP ---------------- */
   const resendMutation = useMutation({
     mutationFn: () =>
       phoneVerificationService.resend({ phone: phone as string }),
     onSuccess: (data) => {
-      setTimer(300); // Reset timer to 5 mins
+      setTimer(300);
       showAlert(
         "OTP Sent",
-        data.message || "A new verification code has been sent to your device.",
+        data.message || "A new verification code has been sent.",
       );
     },
     onError: (error: any) => {
-      const message =
-        error.response?.data?.message || "Too many requests. Please wait.";
-      showAlert("Resend Error", message);
+      showAlert(
+        "Resend Error",
+        error.response?.data?.message || "Too many requests.",
+      );
     },
   });
 
@@ -146,11 +165,18 @@ export default function OtpVerificationPage() {
     }
   };
 
+  /* ---------------- UI ---------------- */
   return (
     <>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
+        ref={scrollRef}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: 40,
+        }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
         <View className="flex-1 bg-slate-50">
           <HeaderAuth title="Join Us" />
@@ -161,9 +187,7 @@ export default function OtpVerificationPage() {
             <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
               <View className="bg-white p-6 rounded-[40px] shadow-md elevation-4">
                 {pageLoading ? (
-                  <View className="items-center mb-4">
-                    <Skeleton className="w-32 h-32 rounded-full mt-[-76px] border-4 border-white" />
-                  </View>
+                  <Skeleton className="w-32 h-32 rounded-full mt-[-76px] border-4 border-white" />
                 ) : (
                   <LogoAuth />
                 )}
@@ -172,12 +196,6 @@ export default function OtpVerificationPage() {
                   <View className="gap-y-6">
                     <Skeleton className="w-40 h-48 self-center mt-3" />
                     <Skeleton className="h-8 w-56 self-center" />
-                    <View className="flex-row justify-between px-2">
-                      {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <Skeleton key={i} className="w-[14%] h-14 rounded-xl" />
-                      ))}
-                    </View>
-                    <Skeleton className="h-16 w-full rounded-2xl" />
                   </View>
                 ) : (
                   <>
@@ -189,48 +207,43 @@ export default function OtpVerificationPage() {
 
                     <TitleAuth
                       title="OTP Verification"
-                      containerClass="mb-5 mt-4"
-                      description={
-                        <Text className="text-center text-slate-500 text-sm">
-                          Enter the OTP sent to{" "}
-                          <Text className="font-bold text-slate-800">
-                            {phone ? `+${phone}` : "+63 9XX XXX XXXX"}
-                          </Text>
-                        </Text>
-                      }
+                      description={`Enter OTP sent to +${phone}`}
                     />
 
-                    {/* OTP INPUT SECTION */}
-                    <View className="relative">
-                      <TextInput
-                        ref={inputRef}
-                        value={otp}
-                        onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, ""))}
-                        maxLength={6}
-                        keyboardType="number-pad"
-                        autoFocus
-                        style={{
-                          position: "absolute",
-                          width: "100%",
-                          height: "100%",
-                          opacity: 0,
-                          zIndex: 1,
-                        }}
-                      />
-                      <Pressable
-                        onPress={() => inputRef.current?.focus()}
-                        className="flex-row justify-between items-center px-2"
-                      >
-                        {[0, 1, 2, 3, 4, 5].map((i) => (
-                          <OtpInputBox
-                            key={i}
-                            digit={otp[i] || ""}
-                            isFocused={otp.length === i}
-                          />
-                        ))}
-                      </Pressable>
+                    {/* OTP INPUT */}
+                    <View ref={otpContainerRef}>
+                      <View className="relative">
+                        <TextInput
+                          ref={inputRef}
+                          value={otp}
+                          onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, ""))}
+                          maxLength={6}
+                          keyboardType="number-pad"
+                          autoFocus
+                          style={{
+                            position: "absolute",
+                            width: "100%",
+                            height: "100%",
+                            opacity: 0,
+                          }}
+                        />
+
+                        <Pressable
+                          onPress={() => inputRef.current?.focus()}
+                          className="flex-row justify-between items-center px-2"
+                        >
+                          {[0, 1, 2, 3, 4, 5].map((i) => (
+                            <OtpInputBox
+                              key={i}
+                              digit={otp[i] || ""}
+                              isFocused={otp.length === i}
+                            />
+                          ))}
+                        </Pressable>
+                      </View>
                     </View>
 
+                    {/* VERIFY */}
                     <TouchableOpacity
                       onPress={handleVerify}
                       disabled={
@@ -251,31 +264,23 @@ export default function OtpVerificationPage() {
                       )}
                     </TouchableOpacity>
 
-                    {/* RESEND SECTION */}
+                    {/* RESEND */}
                     <View className="mt-6 items-center">
-                      <Text className="text-slate-500 font-medium">
-                        Didn{"'"}t receive code?
+                      <Text className="text-slate-500">
+                        Didn’t receive code?
                       </Text>
+
                       {timer > 0 ? (
                         <Text className="text-slate-400 mt-1">
-                          Resend available in {formatTime(timer)}
+                          Resend in {formatTime(timer)}
                         </Text>
                       ) : (
                         <TouchableOpacity
                           onPress={() => resendMutation.mutate()}
-                          disabled={resendMutation.isPending}
                         >
-                          {resendMutation.isPending ? (
-                            <ActivityIndicator
-                              size="small"
-                              color="#000"
-                              className="mt-1"
-                            />
-                          ) : (
-                            <Text className="text-primary font-bold underline mt-1">
-                              Resend Code
-                            </Text>
-                          )}
+                          <Text className="text-primary font-bold underline mt-1">
+                            Resend Code
+                          </Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -292,7 +297,6 @@ export default function OtpVerificationPage() {
         </View>
       </ScrollView>
 
-      {/* Global Styled Alert */}
       <CustomAlert
         visible={alert.visible}
         title={alert.title}

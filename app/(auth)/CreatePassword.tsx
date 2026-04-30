@@ -7,11 +7,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { passwordService } from "@/services/passwordService";
 import { useMutation } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
   Keyboard,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   Text,
@@ -22,22 +23,23 @@ import "../../global.css";
 
 export default function CreatePasswordPage() {
   const router = useRouter();
+
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollPosition = useRef(0);
+
   const { phone, token } = useLocalSearchParams<{
     phone: string;
     token: string;
   }>();
 
-  // Form States
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeToTerms, setAgreeToTerms] = useState(false);
 
-  // UI States
   const [pageLoading, setPageLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Alert State
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
@@ -51,7 +53,7 @@ export default function CreatePasswordPage() {
     }, 150);
   };
 
-  // Prevent hardware back button
+  // prevent back
   useEffect(() => {
     const backAction = () => {
       showAlert(
@@ -65,6 +67,7 @@ export default function CreatePasswordPage() {
       "hardwareBackPress",
       backAction,
     );
+
     return () => backHandler.remove();
   }, []);
 
@@ -73,14 +76,37 @@ export default function CreatePasswordPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  // 🔥 KEYBOARD SCROLL TRACK (LIKE LOGIN)
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      scrollRef.current?.scrollTo({
+        y: scrollPosition.current,
+        animated: true,
+      });
+    });
+
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      scrollRef.current?.scrollTo({
+        y: 0,
+        animated: true,
+      });
+    });
+
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
   const mutation = useMutation({
     mutationFn: () =>
       passwordService.setPassword({
         phone: phone as string,
-        password: password,
+        password,
         password_confirmation: confirmPassword,
         verification_token: token as string,
       }),
+
     onSuccess: (data) => {
       Keyboard.dismiss();
       router.replace({
@@ -91,6 +117,7 @@ export default function CreatePasswordPage() {
         },
       });
     },
+
     onError: (error: any) => {
       const status = error.response?.status;
       const data = error.response?.data;
@@ -119,15 +146,18 @@ export default function CreatePasswordPage() {
     if (!password || !confirmPassword) {
       return showAlert("Required", "Please fill in both password fields.");
     }
+
     if (password.length < 8) {
       return showAlert(
         "Security",
         "Password must be at least 8 characters long.",
       );
     }
+
     if (password !== confirmPassword) {
       return showAlert("Mismatch", "Passwords do not match.");
     }
+
     if (!agreeToTerms) {
       return showAlert(
         "Agreement",
@@ -139,15 +169,28 @@ export default function CreatePasswordPage() {
   };
 
   return (
-    <>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+    >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
+        ref={scrollRef}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: 30,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        automaticallyAdjustKeyboardInsets={Platform.OS === "android"}
+        bounces={false}
+        onScroll={(e) => {
+          scrollPosition.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
       >
         <View className="flex-1 bg-slate-50">
           <HeaderAuth title="Join Us" />
+
           <View className="flex-1 -mt-10">
             <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
@@ -155,9 +198,7 @@ export default function CreatePasswordPage() {
               <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
                 {pageLoading ? (
                   <View className="items-center mb-4">
-                    <View className="mt-[-76px] bg-white rounded-full shadow-sm">
-                      <Skeleton className="w-32 h-32 rounded-full border-4 border-white" />
-                    </View>
+                    <Skeleton className="w-32 h-32 rounded-full border-4 border-white" />
                   </View>
                 ) : (
                   <LogoAuth />
@@ -165,57 +206,39 @@ export default function CreatePasswordPage() {
 
                 {pageLoading ? (
                   <View className="gap-y-6">
-                    <View className="items-center gap-y-3">
-                      <Skeleton className="h-8 w-56 rounded-lg" />
-                      <Skeleton className="h-3 w-[70%] rounded-md" />
-                    </View>
-                    <View className="gap-y-5">
-                      <Skeleton className="h-[70px] w-full rounded-2xl" />
-                      <Skeleton className="h-[70px] w-full rounded-2xl" />
-                    </View>
-                    <Skeleton className="h-[64px] w-full rounded-2xl mt-4" />
+                    <Skeleton className="h-8 w-56" />
+                    <Skeleton className="h-[70px] w-full rounded-2xl" />
                   </View>
                 ) : (
                   <>
                     <TitleAuth
                       title="Create Password"
-                      containerClass="mb-5 mt-4"
-                      description={
-                        <View>
-                          <Text className="text-center text-slate-900 text-sm">
-                            Set a password for{" "}
-                            <Text className="font-bold">+{phone}</Text> to
-                            finish your registration.
-                          </Text>
-                        </View>
-                      }
+                      description={`Set password for +${phone}`}
                     />
 
-                    <View>
-                      <AuthInput
-                        label="Password"
-                        placeholder="••••••••"
-                        value={password}
-                        onChangeText={setPassword}
-                        editable={!mutation.isPending}
-                        isPassword={true}
-                        showPassword={showPassword}
-                        onTogglePassword={() => setShowPassword(!showPassword)}
-                      />
+                    <AuthInput
+                      label="Password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChangeText={setPassword}
+                      editable={!mutation.isPending}
+                      isPassword
+                      showPassword={showPassword}
+                      onTogglePassword={() => setShowPassword(!showPassword)}
+                    />
 
-                      <AuthInput
-                        label="Retype Password"
-                        placeholder="••••••••"
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        editable={!mutation.isPending}
-                        isPassword={true}
-                        showPassword={showConfirmPassword}
-                        onTogglePassword={() =>
-                          setShowConfirmPassword(!showConfirmPassword)
-                        }
-                      />
-                    </View>
+                    <AuthInput
+                      label="Retype Password"
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      editable={!mutation.isPending}
+                      isPassword
+                      showPassword={showConfirmPassword}
+                      onTogglePassword={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
+                    />
 
                     <TouchableOpacity
                       onPress={() => setAgreeToTerms(!agreeToTerms)}
@@ -232,6 +255,7 @@ export default function CreatePasswordPage() {
                           <View className="w-1.5 h-1.5 bg-white rounded-sm" />
                         )}
                       </View>
+
                       <Text className="text-primary text-sm">
                         I agree to the{" "}
                         <Text className="underline font-bold">
@@ -243,7 +267,7 @@ export default function CreatePasswordPage() {
                     <TouchableOpacity
                       onPress={handleRegister}
                       disabled={mutation.isPending}
-                      className={`mt-5 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                      className={`mt-5 p-5 rounded-2xl flex-row justify-center items-center ${
                         mutation.isPending ? "bg-slate-400" : "bg-primary"
                       }`}
                     >
@@ -269,9 +293,12 @@ export default function CreatePasswordPage() {
         message={alert.message}
         onClose={() => {
           setAlert({ ...alert, visible: false });
-          if (alert.title === "Session Expired") router.replace("/register");
+
+          if (alert.title === "Session Expired") {
+            router.replace("/register");
+          }
         }}
       />
-    </>
+    </KeyboardAvoidingView>
   );
 }

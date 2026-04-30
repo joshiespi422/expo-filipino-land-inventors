@@ -5,6 +5,8 @@ interface AuthState {
   token: string | null;
   user: any | null;
   isLoading: boolean;
+  hydrated: boolean;
+
   setAuth: (token: string, user: any) => Promise<void>;
   setUser: (user: any) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -24,18 +26,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   user: null,
   isLoading: true,
+  hydrated: false,
 
+  // 🔥 FIXED: safe initialization (no race condition)
   initialize: async () => {
     try {
       const token = await SecureStore.getItemAsync("auth_token");
       const userStr = await SecureStore.getItemAsync("user_data");
 
-      if (token && userStr) {
-        set({
-          token,
-          user: JSON.parse(userStr),
-        });
+      if (token) {
+        set({ token });
+      }
 
+      if (userStr) {
+        set({ user: JSON.parse(userStr) });
+      }
+
+      set({ hydrated: true, isLoading: false });
+
+      // 🔥 FIXED: run refresh safely AFTER hydration
+      if (token) {
         setTimeout(() => {
           get().refreshUser();
         }, 0);
@@ -44,8 +54,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.error("Failed to initialize auth store:", e);
       await SecureStore.deleteItemAsync("auth_token");
       await SecureStore.deleteItemAsync("user_data");
-    } finally {
-      set({ isLoading: false });
+      set({ token: null, user: null, hydrated: true, isLoading: false });
     }
   },
 
@@ -54,7 +63,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { token } = get();
       if (!token) return;
 
-      // BREAKS THE CYCLE: Dynamic import only when the function runs
       const api = (await import("@/services/api")).default;
 
       const response = await api.get("/profile");
@@ -64,7 +72,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: freshUser });
     } catch (e) {
       console.error("Auth Store: Failed to sync user data:", e);
-      // If profile fails with 401, the interceptor in api.ts will handle clearAuth
     }
   },
 
@@ -76,7 +83,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await SecureStore.setItemAsync("auth_token", token);
       await SecureStore.setItemAsync("user_data", JSON.stringify(userObject));
 
-      set({ token, user: userObject, isLoading: false });
+      set({
+        token,
+        user: userObject,
+        isLoading: false,
+        hydrated: true,
+      });
     } catch (e) {
       console.error("Error saving auth session:", e);
       throw e;
@@ -90,6 +102,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const updatedUser = { ...currentState.user, ...userUpdate };
 
       await SecureStore.setItemAsync("user_data", JSON.stringify(updatedUser));
+
       set({ user: updatedUser });
     } catch (e) {
       console.error("Error updating user data:", e);
@@ -100,7 +113,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await SecureStore.deleteItemAsync("auth_token");
       await SecureStore.deleteItemAsync("user_data");
-      set({ token: null, user: null, isLoading: false });
+
+      set({
+        token: null,
+        user: null,
+        isLoading: false,
+        hydrated: true,
+      });
     } catch (e) {
       console.error("Error clearing auth session:", e);
     }
