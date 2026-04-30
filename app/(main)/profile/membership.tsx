@@ -38,7 +38,7 @@ export default function MembershipPage() {
         if (res?.data && isMounted) {
           const attr = res.data.attributes;
 
-          // If ACTIVE, go to dashboard
+          // If ACTIVE,
           if (attr.status.toLowerCase() === "active") {
             router.replace("../profile/index");
             return; // STOP execution here

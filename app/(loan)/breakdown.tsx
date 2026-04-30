@@ -34,18 +34,12 @@ export default function LoanPaymentPage() {
     }, []),
   );
 
-  /**
-   * 🔒 LOAN STATUS
-   */
   const loanStatus = (loanData?.attributes?.status || loanData?.status || "")
     .toLowerCase()
     .trim();
 
   const isPayable = loanStatus === "active" || loanStatus === "approved";
 
-  /**
-   * 💰 FORMAT MONEY
-   */
   const formatMoney = (value: any) => {
     const num = Number(value || 0);
     if (isNaN(num)) return "0.00";
@@ -55,9 +49,6 @@ export default function LoanPaymentPage() {
     });
   };
 
-  /**
-   * 📅 FORMAT DATE
-   */
   const formatDate = (dateString: string) => {
     if (!dateString || dateString === "N/A") return "N/A";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -67,9 +58,6 @@ export default function LoanPaymentPage() {
     });
   };
 
-  /**
-   * 📦 MAP BACKEND
-   */
   const formatBackendSchedule = (response: any) => {
     const loan = response?.data;
     const included = response?.included || [];
