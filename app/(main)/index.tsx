@@ -25,19 +25,19 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons } from "@expo/vector-icons";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import AlertIcon from "../../assets/images/icon/alert.png"; // New Alert Asset
-import Ask from "../../assets/images/icon/Ask.png";
+// import Ask from "../../assets/images/icon/Ask.png";
 import Businessicon from "../../assets/images/icon/Businessicon.png";
 import Coop from "../../assets/images/icon/coop.png";
 import FISMPC from "../../assets/images/icon/FISMPC.png";
-import Funding from "../../assets/images/icon/Funding.png";
+// import Funding from "../../assets/images/icon/Funding.png";
 import Intellectual from "../../assets/images/icon/Intellectual.png";
-import Licensing from "../../assets/images/icon/Licensing.png";
+// import Licensing from "../../assets/images/icon/Licensing.png";
 import Loan from "../../assets/images/icon/Loan.png";
-import Lost from "../../assets/images/icon/Lost.png";
+// import Lost from "../../assets/images/icon/Lost.png";
 import News from "../../assets/images/icon/News.png";
-import Product from "../../assets/images/icon/Product.png";
-import RD from "../../assets/images/icon/RD.png";
-import Suggest from "../../assets/images/icon/Suggest.png";
+// import Product from "../../assets/images/icon/Product.png";
+// import RD from "../../assets/images/icon/RD.png";
+// import Suggest from "../../assets/images/icon/Suggest.png";
 import image from "../../assets/images/image.png";
 
 const { width } = Dimensions.get("window");
@@ -116,22 +116,22 @@ export default function DashboardPage() {
       source: Intellectual,
     },
     { label: "Loan Assistance", href: "../(loan)/", source: Loan },
-    {
-      label: "Funding & Invest Opportunities",
-      href: "/(auth)/login",
-      source: Funding,
-    },
-    {
-      label: "Licensing & Permit Assistance",
-      href: "/(business)/",
-      source: Licensing,
-    },
-    { label: "R & D Collaboration", href: "/", source: RD },
-    { label: "Ask an Expert Assistance", href: "/", source: Ask },
+    // {
+    //   label: "Funding & Invest Opportunities",
+    //   href: "/(auth)/login",
+    //   source: Funding,
+    // },
+    // {
+    //   label: "Licensing & Permit Assistance",
+    //   href: "/(business)/",
+    //   source: Licensing,
+    // },
+    // { label: "R & D Collaboration", href: "/", source: RD },
+    // { label: "Ask an Expert Assistance", href: "/", source: Ask },
     { label: "FISMPC Online Store", href: "/", source: FISMPC },
-    { label: "Product Validation Services", href: "/", source: Product },
-    { label: "Lost & Found", href: "/", source: Lost },
-    { label: "Suggest a Service", href: "/", source: Suggest },
+    // { label: "Product Validation Services", href: "/", source: Product },
+    // { label: "Lost & Found", href: "/", source: Lost },
+    // { label: "Suggest a Service", href: "/", source: Suggest },
     { label: "Coop Membership", href: "/", source: Coop },
     { label: "News & Event", href: "/", source: News },
   ];

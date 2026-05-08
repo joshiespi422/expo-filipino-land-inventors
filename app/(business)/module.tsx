@@ -219,7 +219,7 @@ export default function ModulePage() {
       </ScrollView>
 
       {/* FOOTER */}
-      <View className="p-5 bg-white border-t flex-row gap-x-3">
+      <View className="w-full p-5 bg-white border-t border-slate-200 flex-row gap-x-3">
         {!meta?.is_first && (
           <TouchableOpacity
             onPress={handleBack}

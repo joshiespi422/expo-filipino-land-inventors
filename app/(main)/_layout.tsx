@@ -39,6 +39,8 @@ export default function MainLayout() {
     pathname === "/profile" || pathname === "/(main)/profile";
   const isProfileEdit = pathname === "/profile/editProfile";
   const isProfileSetup = pathname === "/profile/setupProfile";
+  const isWelcomePage =
+    pathname === "/welcomePage" || pathname === "/(main)/welcomePage";
 
   const showFooter = isMainIndex || isProfileIndex;
 
@@ -79,7 +81,7 @@ export default function MainLayout() {
           className="flex-1"
         >
           {/* --- GLOBAL HEADER --- */}
-          {isMainIndex ? (
+          {isWelcomePage ? null : isMainIndex ? (
             <View className="bg-primary mb-12 z-10 w-full h-28 items-center justify-between pt-8">
               <View
                 className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full shadow-brand"

@@ -343,7 +343,7 @@ export default function ProfileScreen() {
             <Text className="text-xl font-bold text-[#333] mb-2 text-center">
               Profile Photo
             </Text>
-            <div className="w-full gap-y-3 mt-4">
+            <View className="w-full gap-y-3 mt-4">
               <TouchableOpacity
                 onPress={() => {
                   setShowOptions(false);
@@ -373,7 +373,7 @@ export default function ProfileScreen() {
               >
                 <Text className="text-gray-400 font-bold">Close</Text>
               </TouchableOpacity>
-            </div>
+            </View>
           </View>
         </View>
       </Modal>

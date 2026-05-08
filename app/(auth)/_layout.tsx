@@ -2,9 +2,9 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { ActivityIndicator, Platform, StatusBar, View } from "react-native";
 import "../../global.css";
 
 const queryClient = new QueryClient();
@@ -20,13 +20,12 @@ export default function AuthLayout() {
     const configureSystemUI = async () => {
       if (Platform.OS === "android") {
         try {
-          // Set behavior to sticky so swipes still work
+          // 🔥 TRUE FULLSCREEN MODE
           await NavigationBar.setBehaviorAsync("sticky-immersive");
-          // Make the background transparent so the View's bg color shows through
-          await NavigationBar.setBackgroundColorAsync("#ffffff00");
-          // Position absolute allows the app to draw under the nav buttons
+          await NavigationBar.setBackgroundColorAsync("#00000000");
           await NavigationBar.setPositionAsync("absolute");
-          // Hide it, but if it triggers, it's now transparent
+
+          // optional (better fullscreen effect)
           await NavigationBar.setVisibilityAsync("hidden");
         } catch (e) {
           console.log("NavigationBar error:", e);
@@ -35,10 +34,18 @@ export default function AuthLayout() {
     };
 
     configureSystemUI();
+
+    // 🔥 THIS IS THE IMPORTANT PART (FOR STATUS BAR)
+    if (Platform.OS === "android") {
+      StatusBar.setTranslucent(true);
+      StatusBar.setBackgroundColor("transparent");
+      StatusBar.setBarStyle("light-content");
+    }
   }, []);
 
   useEffect(() => {
     const isCongratsPage = segments.some((s) => s.includes("congratulations"));
+
     if (!isLoading && token && !isCongratsPage) {
       router.replace("/(main)");
     }
@@ -54,18 +61,18 @@ export default function AuthLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Ensure Status bar is translucent to match the theme */}
-      <StatusBar
-        style="light"
-        translucent={true}
-        backgroundColor="transparent"
-      />
+      {/* 🔥 FULLSCREEN STATUS BAR CONTROL */}
+      <ExpoStatusBar style="light" translucent />
+
       <View className="flex-1 bg-slate-50">
         <Stack
           screenOptions={{
             headerShown: false,
             animation: "fade",
-            contentStyle: { backgroundColor: "#f8fafc" },
+            contentStyle: {
+              backgroundColor: "#f8fafc",
+              paddingTop: 0,
+            },
           }}
         >
           <Stack.Screen name="login" />

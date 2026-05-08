@@ -36,7 +36,6 @@ export default function CongratulationsPage() {
   }, []);
 
   const handleContinue = async () => {
-    // Prevent double execution
     if (isProcessing.current || isLoading) return;
 
     isProcessing.current = true;
@@ -47,13 +46,9 @@ export default function CongratulationsPage() {
 
       if (token && user) {
         const userData = typeof user === "string" ? JSON.parse(user) : user;
-
-        // Save to Zustand store (which usually triggers the Layout redirect)
         await setAuth(token, userData);
-
-        // Small delay to ensure state is persisted before we replace the route
         setTimeout(() => {
-          router.replace("/(main)");
+          router.replace("/(main)/welcomePage");
         }, 500);
       } else {
         console.error("Missing credentials in params.");
@@ -63,8 +58,6 @@ export default function CongratulationsPage() {
       console.error("Transition Error:", error);
       router.replace("/login");
     } finally {
-      // We don't necessarily need to set isLoading(false) here if we are navigating away,
-      // but it's good practice for safety.
       isProcessing.current = false;
     }
   };
