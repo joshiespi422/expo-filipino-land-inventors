@@ -166,9 +166,8 @@ export default function PropertyForm() {
 
       console.log("✅ RESPONSE:", res);
 
-      Alert.alert("Success", res.message || "Application submitted!", [
-        { text: "OK", onPress: () => router.replace("/registered") },
-      ]);
+      // ✅ MODIFIED: Navigate to congratulations instead of Alert
+      router.replace("/congratulations");
     } catch (error: any) {
       console.log("❌ ERROR:", error?.response?.data || error);
 
