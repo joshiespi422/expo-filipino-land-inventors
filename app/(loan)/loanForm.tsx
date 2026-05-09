@@ -207,12 +207,15 @@ export default function LoanFormPage() {
                   <Picker
                     selectedValue={months}
                     onValueChange={(v) => setMonths(v)}
+                    dropdownIconColor="#000000"
+                    style={{ color: "#000000" }}
                   >
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
                       <Picker.Item
                         key={m}
                         label={`${m} Months`}
                         value={String(m)}
+                        color="#000000"
                       />
                     ))}
                   </Picker>

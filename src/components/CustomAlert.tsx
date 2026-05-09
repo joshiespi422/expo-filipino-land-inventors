@@ -1,19 +1,13 @@
 import * as NavigationBar from "expo-navigation-bar";
 import React, { useEffect } from "react";
-import {
-  Modal,
-  Platform,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Modal, Platform, Text, TouchableOpacity, View } from "react-native";
 
 interface CustomAlertProps {
   visible: boolean;
   title: string;
   message: string;
   onClose: () => void;
+  onConfirm?: () => void; // Added optional confirm prop
 }
 
 export const CustomAlert = ({
@@ -21,8 +15,8 @@ export const CustomAlert = ({
   title,
   message,
   onClose,
+  onConfirm,
 }: CustomAlertProps) => {
-  // Re-hide the navigation bar specifically when the modal is active
   useEffect(() => {
     if (visible && Platform.OS === "android") {
       const reHide = async () => {
@@ -40,26 +34,17 @@ export const CustomAlert = ({
       statusBarTranslucent={true}
       onRequestClose={onClose}
     >
-      {visible && (
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="rgba(0,0,0,0.6)"
-          translucent={true}
-        />
-      )}
-
       <View
         className="flex-1 justify-center items-center bg-black/60 px-8"
         style={{
           width: "100%",
-          // Height 120% ensures the overlay covers the nav bar area even when it shifts
-          height: Platform.OS === "android" ? "100%" : "100%",
+          height: "100%",
           position: "absolute",
           top: 0,
           left: 0,
         }}
       >
-        <View className="bg-white w-full max-w-[400px] rounded-[35px] p-5 shadow-2xl elevation-10">
+        <View className="bg-white w-full max-w-[400px] rounded-[35px] p-6 shadow-2xl elevation-10">
           <Text className="text-primary text-2xl font-bold text-center mb-3">
             {title}
           </Text>
@@ -68,15 +53,37 @@ export const CustomAlert = ({
             {message}
           </Text>
 
-          <TouchableOpacity
-            onPress={onClose}
-            activeOpacity={0.8}
-            className="bg-primary p-4 rounded-2xl shadow-md shadow-primary/30"
-          >
-            <Text className="text-white text-center font-bold text-base">
-              Okay
-            </Text>
-          </TouchableOpacity>
+          {/* Logic to switch between 1 button or 2 buttons */}
+          {onConfirm ? (
+            <View className="flex-row gap-x-3">
+              <TouchableOpacity
+                onPress={onClose}
+                className="flex-1 bg-gray-100 p-4 rounded-2xl"
+              >
+                <Text className="text-gray-600 text-center font-bold text-base">
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onConfirm}
+                className="flex-1 bg-red-500 p-4 bg-primary rounded-2xl"
+              >
+                <Text className="text-white text-center font-bold text-base">
+                  Logout
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={onClose}
+              activeOpacity={0.8}
+              className="bg-primary p-4 rounded-2xl"
+            >
+              <Text className="text-white text-center font-bold text-base">
+                Okay
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>

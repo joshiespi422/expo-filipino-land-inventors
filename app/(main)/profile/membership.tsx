@@ -156,7 +156,7 @@ export default function MembershipPage() {
             <View
               className={`w-5 h-5 rounded-full border ${
                 selectedOption?.term_months === opt.term_months
-                  ? "bg-primary border-primary"
+                  ? "border-4 border-primary"
                   : "border-gray-400"
               }`}
             />

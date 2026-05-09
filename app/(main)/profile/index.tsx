@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -26,6 +27,13 @@ export default function ProfileScreen() {
 
   const [showOptions, setShowOptions] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
+
+  // State for CustomAlert
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
 
   const userTypeName = user?.user_type?.name?.toUpperCase() || "";
   const statusName = user?.status?.name?.toLowerCase() || "";
@@ -95,23 +103,23 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setLoggingOut(true);
-            await clearAuth();
-            router.replace("/login");
-          } catch (error) {
-            setLoggingOut(false);
-            Alert.alert("Error", "Logout failed. Please try again.");
-          }
-        },
-      },
-    ]);
+    setAlert({
+      visible: true,
+      title: "Logout",
+      message: "Are you sure you want to log out?",
+    });
+  };
+
+  const confirmLogout = async () => {
+    try {
+      setAlert({ ...alert, visible: false });
+      setLoggingOut(true);
+      await clearAuth();
+      router.replace("/login");
+    } catch (error) {
+      setLoggingOut(false);
+      Alert.alert("Error", "Logout failed. Please try again.");
+    }
   };
 
   const getStatusColor = (statusName: string) => {
@@ -142,6 +150,15 @@ export default function ProfileScreen() {
         />
       }
     >
+      {/* Custom Alert Component */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => setAlert({ ...alert, visible: false })}
+        onConfirm={confirmLogout}
+      />
+
       {/* --- PROFILE HEADER --- */}
       <View className="bg-white px-8 py-12 items-center shadow-sm border-b border-gray-100">
         <TouchableOpacity
@@ -272,8 +289,8 @@ export default function ProfileScreen() {
           </View>
         </View>
       )}
-      {/* --- MENU ITEMS --- */}
 
+      {/* --- MENU ITEMS --- */}
       <View className="mt-6 px-4">
         {((isBasic && isForApproval) ||
           (isBasic && isApproved) ||
@@ -343,7 +360,7 @@ export default function ProfileScreen() {
             <Text className="text-xl font-bold text-[#333] mb-2 text-center">
               Profile Photo
             </Text>
-            <View className="w-full gap-y-3 mt-4">
+            <div className="w-full gap-y-3 mt-4">
               <TouchableOpacity
                 onPress={() => {
                   setShowOptions(false);
@@ -373,7 +390,7 @@ export default function ProfileScreen() {
               >
                 <Text className="text-gray-400 font-bold">Close</Text>
               </TouchableOpacity>
-            </View>
+            </div>
           </View>
         </View>
       </Modal>

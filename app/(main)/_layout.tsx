@@ -37,6 +37,7 @@ export default function MainLayout() {
 
   const isProfileIndex =
     pathname === "/profile" || pathname === "/(main)/profile";
+  const isProfileCongrats = pathname === "/profile/congratulations";
   const isProfileEdit = pathname === "/profile/editProfile";
   const isProfileSetup = pathname === "/profile/setupProfile";
   const isWelcomePage =
@@ -126,7 +127,7 @@ export default function MainLayout() {
                 </TouchableOpacity>
 
                 <Text className="text-white text-2xl font-bold">
-                  {isProfileIndex
+                  {isProfileIndex || isProfileCongrats
                     ? "Profile"
                     : isProfileEdit
                       ? "Edit Profile"

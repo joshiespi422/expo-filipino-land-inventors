@@ -252,6 +252,20 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* <Text className={label}>Full Name (Locked)</Text>
+        <TextInput
+          value={form.name}
+          editable={false}
+          className={`${inputStyle} bg-gray-100 border-gray-200 color-gray-500`}
+        />
+
+        <Text className={label}>Phone Number (Locked)</Text>
+        <TextInput
+          value={form.phone}
+          editable={false}
+          className={`${inputStyle} bg-gray-100 border-gray-200 color-gray-500`}
+        /> */}
+
         {/* --- BASIC INFO --- */}
         {showInfo && (
           <View className={card}>
@@ -259,24 +273,27 @@ export default function EditProfileScreen() {
               Basic Info
             </Text>
 
-            <Text className={label}>Full Name</Text>
+            <Text className={label}>Full Name (Locked)</Text>
             {isEditing ? (
               <TextInput
                 value={form.name}
-                onChangeText={(t) => setForm({ ...form, name: t })}
-                className={inputStyle}
+                editable={false}
+                className={
+                  inputStyle + " bg-gray-100 border-gray-200 color-gray-500"
+                }
               />
             ) : (
               <Text className={valueStyle}>{form.name || "---"}</Text>
             )}
 
-            <Text className={label}>Phone Number</Text>
+            <Text className={label}>Phone Number (Locked)</Text>
             {isEditing ? (
               <TextInput
                 value={form.phone}
-                keyboardType="phone-pad"
-                onChangeText={(t) => setForm({ ...form, phone: t })}
-                className={inputStyle}
+                editable={false}
+                className={
+                  inputStyle + " bg-gray-100 border-gray-200 color-gray-500"
+                }
               />
             ) : (
               <Text className={valueStyle}>{form.phone || "---"}</Text>
