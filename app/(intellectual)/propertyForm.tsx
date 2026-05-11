@@ -1,10 +1,12 @@
-import { createIntellectualProperty } from "@/services/intellectualService";
+import {
+  applyIntellectualPayment,
+  createIntellectualProperty,
+} from "@/services/intellectualService";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import {
   Check,
-  FileText,
   Image as ImageIcon,
   Plus,
   Trash2,
@@ -62,7 +64,6 @@ export default function PropertyForm() {
     privacy: false,
   });
 
-  // ✅ ADDED: FORM TYPE STATE
   const [formType, setFormType] = useState<"grant" | "payment">("grant");
 
   const addClaim = () => setClaims([...claims, ""]);
@@ -74,22 +75,23 @@ export default function PropertyForm() {
   const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*",
+        type: "image/*",
+        multiple: true,
         copyToCacheDirectory: true,
       });
 
-      if (!result.canceled) {
-        const file = result.assets[0];
-        const newAttachment: Attachment = {
-          id: Math.random().toString(36).substring(7),
-          name: file.name,
-          uri: file.uri,
-          type: file.mimeType || "file",
-        };
-        setAttachments([...attachments, newAttachment]);
-      }
+      if (result.canceled) return;
+
+      const selectedFiles = result.assets.map((asset: any, index: number) => ({
+        id: Date.now() + index,
+        uri: asset.uri,
+        name: asset.name,
+        type: asset.mimeType || "image/jpeg",
+      }));
+
+      setAttachments((prev: any) => [...prev, ...selectedFiles]);
     } catch (error) {
-      Alert.alert("Error", "Could not access files.");
+      console.log("FILE PICK ERROR:", error);
     }
   };
 
@@ -132,12 +134,8 @@ export default function PropertyForm() {
       setLoading(true);
 
       const formData = new FormData();
-
       formData.append("creation_type", "invention");
-
-      // ✅ UPDATED: dynamic form_type
       formData.append("form_type", formType);
-
       formData.append("title", generalInfo.title);
       formData.append("description", generalInfo.description);
       formData.append("applicability", industrial.applicability);
@@ -160,17 +158,26 @@ export default function PropertyForm() {
       formData.append("agreed_terms", "1");
       formData.append("agreed_privacy", "1");
 
-      console.log("🚀 SUBMITTING IP FORM...");
-
       const res = await createIntellectualProperty(formData);
 
-      console.log("✅ RESPONSE:", res);
+      // ✅ IF PAYMENT TYPE: Generate schedule and go to checkout
+      if (formType === "payment") {
+        const ipId = res.data.id;
+        const applied = await applyIntellectualPayment(ipId, {
+          term_months: 1,
+        });
 
-      // ✅ MODIFIED: Navigate to congratulations instead of Alert
-      router.replace("/congratulations");
+        const scheduleId = applied.data.relationships.schedules.data[0]?.id;
+        const totalAmount = applied.data.attributes.total_amount;
+
+        router.push({
+          pathname: "/checkout",
+          params: { id: ipId, scheduleId, amount: totalAmount },
+        });
+      } else {
+        router.replace("/congratulations");
+      }
     } catch (error: any) {
-      console.log("❌ ERROR:", error?.response?.data || error);
-
       Alert.alert(
         "Error",
         error?.response?.data?.message || "Submission failed.",
@@ -278,44 +285,41 @@ export default function PropertyForm() {
             <Text className="text-slate-500 mb-2">
               Upload your Drawing, Diagram, or Photos below.
             </Text>
-            {attachments.map((file) => (
-              <View
-                key={file.id}
-                className="flex-row items-center bg-slate-50 border border-slate-200 p-4 rounded-2xl"
-              >
-                <View className="bg-slate-200 p-2 rounded-lg">
-                  {file.type.includes("image") ? (
-                    <ImageIcon size={20} color="#64748b" />
-                  ) : (
-                    <FileText size={20} color="#64748b" />
-                  )}
-                </View>
-                <Text
-                  className="text-slate-700 ml-3 flex-1 font-medium"
-                  numberOfLines={1}
+
+            {attachments.map((file) => {
+              // ONLY SHOW IMAGE FILES
+              if (!file.type?.includes("image")) return null;
+
+              return (
+                <View
+                  key={file.id}
+                  className="flex-row items-center bg-slate-50 border border-slate-200 p-4 rounded-2xl"
                 >
-                  {file.name}
-                </Text>
-                <TouchableOpacity onPress={() => removeAttachment(file.id)}>
-                  <Trash2 size={20} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
-            ))}
+                  <View className="bg-slate-200 p-2 rounded-lg">
+                    <ImageIcon size={20} color="#64748b" />
+                  </View>
+
+                  <Text
+                    className="text-slate-700 ml-3 flex-1 font-medium"
+                    numberOfLines={1}
+                  >
+                    {file.name}
+                  </Text>
+
+                  <TouchableOpacity onPress={() => removeAttachment(file.id)}>
+                    <Trash2 size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+
             <TouchableOpacity
               onPress={handlePickFile}
               className="flex-row items-center justify-center bg-primary/10 p-5 rounded-2xl mt-2 border border-dashed border-primary"
             >
               <Upload size={22} color="#007AFF" />
               <Text className="text-primary font-bold ml-3 text-lg">
-                Select File / Image
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleNext}
-              className="mt-10 p-4 items-center"
-            >
-              <Text className="text-slate-400 font-bold tracking-widest text-xs uppercase">
-                Not Applicable (Skip Step)
+                Select Image
               </Text>
             </TouchableOpacity>
           </View>
@@ -323,36 +327,30 @@ export default function PropertyForm() {
 
         {step === 4 && (
           <View className="gap-y-6">
-            {/* ✅ ADDED: FORM TYPE SELECTION */}
             <View>
               <Text className="text-slate-600 font-bold mb-3">
                 Application Type
               </Text>
-
               <View className="flex-row gap-x-3">
                 <TouchableOpacity
                   onPress={() => setFormType("grant")}
-                  className={`flex-1 p-4 justify-center rounded-2xl border ${
-                    formType === "grant"
-                      ? "bg-primary border-primary"
-                      : "bg-white border-slate-200"
-                  }`}
+                  className={`flex-1 p-4 justify-center rounded-2xl border ${formType === "grant" ? "bg-primary border-primary" : "bg-white border-slate-200"}`}
                 >
                   <Text
-                    className={`text-center font-bold ${
-                      formType === "grant" ? "text-white" : "text-slate-600"
-                    }`}
+                    className={`text-center font-bold ${formType === "grant" ? "text-white" : "text-slate-600"}`}
                   >
                     Grant
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  disabled
-                  className="flex-1 p-4 rounded-2xl border bg-slate-100 border-slate-200 opacity-60"
+                  onPress={() => setFormType("payment")}
+                  className={`flex-1 p-4 rounded-2xl border ${formType === "payment" ? "bg-primary border-primary" : "bg-white border-slate-200"}`}
                 >
-                  <Text className="text-center font-bold text-slate-400">
-                    Payment (Disabled)
+                  <Text
+                    className={`text-center font-bold ${formType === "payment" ? "text-white" : "text-slate-600"}`}
+                  >
+                    Payment
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -402,7 +400,6 @@ export default function PropertyForm() {
             </View>
           </View>
         )}
-
         <View className="h-24" />
       </ScrollView>
 
