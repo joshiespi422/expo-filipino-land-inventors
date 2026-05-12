@@ -6,14 +6,26 @@ import {
 } from "@/services/intellectualService";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { FileText, Plus, Trash2, Upload, X } from "lucide-react-native";
-import React, { useCallback, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
+import {
+  Eye,
+  Layers,
+  Plus,
+  Smartphone,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   Text,
@@ -24,10 +36,10 @@ import {
 
 import "../../global.css";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 const STORAGE_URL = `${BASE_URL}/storage/`;
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const TOTAL_MAX_UPLOAD_SIZE = 8 * 1024 * 1024; // 8MB
 
 const normalizeFileUrl = (path: string | null) => {
   if (!path) return "";
@@ -46,60 +58,68 @@ interface Attachment {
 }
 
 export default function DetailsPage() {
-  const router = useRouter();
   const { id } = useLocalSearchParams();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollPosition = useRef(0);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [updating, setUpdating] = useState(false);
 
-  const [data, setData] = useState<any>(null);
-  const [includedData, setIncludedData] = useState<any[]>([]);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+  const [data, setData] = useState<any>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const [form, setForm] = useState({
     title: "",
     description: "",
     applicability: "",
+    creation_type: "",
+    form_type: "",
     claims: [{ description: "" }],
     delete_document_ids: [] as number[],
   });
+
+  // Keyboard Handling Logic
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      scrollRef.current?.scrollTo({
+        y: scrollPosition.current,
+        animated: true,
+      });
+    });
+
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      // restore smoothly when keyboard closes if needed
+    });
+
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const fetchDetails = async () => {
     try {
       setLoading(true);
       const res = await getIntellectualProperty(id as string);
-
-      console.log(
-        "INTELLECTUAL PROPERTY RESPONSE",
-        JSON.stringify(res, null, 2),
-      );
-
       const ip = res.data;
       const included = res.included || [];
 
       setData(ip);
-      setIncludedData(included);
 
-      // =========================
-      // CLAIMS MAPPING
-      // =========================
       const claimRefs = ip.relationships?.claims?.data || [];
       const mappedClaims = claimRefs.map((ref: any) => {
         const fullClaim = included.find(
           (inc: any) =>
             String(inc.id) === String(ref.id) && inc.type.includes("claim"),
         );
-        return {
-          description: fullClaim?.attributes?.description || "",
-        };
+        return { description: fullClaim?.attributes?.description || "" };
       });
 
-      // =========================
-      // DOCUMENTS MAPPING
-      // =========================
       const docRefs = ip.relationships?.documents?.data || [];
       const mappedAttachments = docRefs
         .map((ref: any) => {
@@ -112,7 +132,7 @@ export default function DetailsPage() {
           const attachment = fullDoc?.attributes?.attachment || "";
           return {
             id: fullDoc.id,
-            name: attachment.split("/").pop() || "Image",
+            name: attachment.split("/").pop() || "File",
             uri: normalizeFileUrl(attachment),
             type: "image/jpeg",
             isNew: false,
@@ -121,19 +141,16 @@ export default function DetailsPage() {
         .filter(Boolean);
 
       setAttachments(mappedAttachments as Attachment[]);
-
       setForm({
         title: ip.attributes?.title || "",
         description: ip.attributes?.description || "",
         applicability: ip.attributes?.applicability || "",
+        creation_type: ip.attributes?.creation_type || "",
+        form_type: ip.attributes?.form_type || "",
         claims: mappedClaims.length > 0 ? mappedClaims : [{ description: "" }],
         delete_document_ids: [],
       });
-    } catch (error: any) {
-      console.error(
-        "FETCH ERROR",
-        JSON.stringify(error?.response?.data || error, null, 2),
-      );
+    } catch (error) {
       Alert.alert("Error", "Failed to load details.");
     } finally {
       setLoading(false);
@@ -152,28 +169,18 @@ export default function DetailsPage() {
     fetchDetails();
   }, [id]);
 
-  // =========================
-  // CLAIMS LOGIC
-  // =========================
   const addClaim = () => {
     const lastClaim = form.claims[form.claims.length - 1];
     if (!lastClaim.description.trim()) {
-      Alert.alert("Required", "Please complete the current claim first.");
+      Alert.alert("Required", "Complete current claim first.");
       return;
     }
-    setForm({
-      ...form,
-      claims: [...form.claims, { description: "" }],
-    });
+    setForm({ ...form, claims: [...form.claims, { description: "" }] });
   };
 
   const removeClaim = (index: number) => {
-    if (form.claims.length === 1) {
-      Alert.alert("Required", "At least one claim is required.");
-      return;
-    }
-    const newClaims = form.claims.filter((_, i) => i !== index);
-    setForm({ ...form, claims: newClaims });
+    if (form.claims.length === 1) return;
+    setForm({ ...form, claims: form.claims.filter((_, i) => i !== index) });
   };
 
   const updateClaim = (text: string, index: number) => {
@@ -182,38 +189,28 @@ export default function DetailsPage() {
     setForm({ ...form, claims: newClaims });
   };
 
-  // =========================
-  // FILE PICKER LOGIC
-  // =========================
   const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["image/jpeg", "image/png", "image/jpg", "image/svg+xml"],
+        type: ["image/*"],
         multiple: true,
-        copyToCacheDirectory: true,
       });
-
       if (result.canceled) return;
 
-      const validFiles: Attachment[] = [];
-      for (const asset of result.assets) {
-        if (asset.size && asset.size > MAX_FILE_SIZE) {
-          Alert.alert("File Too Large", `${asset.name} exceeds 10MB.`);
-          continue;
-        }
-        validFiles.push({
+      const validFiles: Attachment[] = result.assets
+        .filter((asset) => (asset.size || 0) <= TOTAL_MAX_UPLOAD_SIZE)
+        .map((asset) => ({
           id: `new-${Date.now()}-${Math.random()}`,
           uri: asset.uri,
           name: asset.name,
           type: asset.mimeType || "image/jpeg",
           size: asset.size,
           isNew: true,
-        });
-      }
+        }));
 
       setAttachments((prev) => [...prev, ...validFiles]);
     } catch (error) {
-      Alert.alert("Error", "Failed to pick attachment.");
+      Alert.alert("Error", "Failed to pick file.");
     }
   };
 
@@ -227,331 +224,301 @@ export default function DetailsPage() {
     setAttachments((prev) => prev.filter((a) => a.id !== file.id));
   };
 
-  // =========================
-  // UPDATE LOGIC
-  // =========================
-  // Place these constants at the top of your file if they aren't there
-  const MAX_SINGLE_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  const TOTAL_MAX_UPLOAD_SIZE = 8 * 1024 * 1024; // 8MB (Matches your current PHP limit)
-
   const handleUpdate = async () => {
     try {
-      const validClaims = form.claims.filter((claim) =>
-        claim.description.trim(),
-      );
-
-      // 1. Basic Validation
-      if (
-        validClaims.length === 0 ||
-        !form.title.trim() ||
-        !form.description.trim() ||
-        !form.applicability.trim()
-      ) {
-        Alert.alert("Required", "Please fill in all required fields.");
-        return;
-      }
-
-      // 2. Client-side Size Check (Prevents PHP Crash)
-      const newAttachments = attachments.filter((file) => file.isNew);
-      const totalSize = newAttachments.reduce(
-        (sum, file) => sum + (file.size || 0),
-        0,
-      );
-
-      if (totalSize > TOTAL_MAX_UPLOAD_SIZE) {
-        const sizeInMB = (totalSize / (1024 * 1024)).toFixed(2);
-        Alert.alert(
-          "Files Too Large",
-          `Total upload size is ${sizeInMB}MB, which exceeds the server limit of 8MB. Please remove some attachments.`,
-        );
-        return;
-      }
-
       setUpdating(true);
       const formData = new FormData();
-
-      // Append text fields
       formData.append("title", form.title);
       formData.append("description", form.description);
       formData.append("applicability", form.applicability);
+      formData.append("creation_type", form.creation_type);
+      formData.append("form_type", form.form_type);
 
-      // Append Claims
-      validClaims.forEach((claim, index) => {
-        formData.append(`claims[${index}][description]`, claim.description);
-      });
+      form.claims
+        .filter((c) => c.description.trim())
+        .forEach((c, i) => {
+          formData.append(`claims[${i}][description]`, c.description);
+        });
 
-      // Append IDs for deletion
-      form.delete_document_ids.forEach((docId, index) => {
-        formData.append(`delete_document_ids[${index}]`, docId.toString());
-      });
+      form.delete_document_ids.forEach((id, i) =>
+        formData.append(`delete_document_ids[${i}]`, id.toString()),
+      );
 
-      // Append Files
-      newAttachments.forEach((file, index) => {
-        formData.append(`documents[${index}]`, {
-          uri: file.uri,
-          name: file.name,
-          type: file.type,
-        } as any);
-      });
+      attachments
+        .filter((f) => f.isNew)
+        .forEach((f, i) => {
+          formData.append(`documents[${i}]`, {
+            uri: f.uri,
+            name: f.name,
+            type: f.type,
+          } as any);
+        });
 
       await updateIntellectualProperty(id as string, formData);
-
-      Alert.alert("Success", "Your application has been updated successfully.");
       setIsEditing(false);
       fetchDetails();
-    } catch (error: any) {
-      const status = error?.response?.status;
-      const errorMessage = error?.response?.data?.message || "";
-
-      // 3. Graceful Error Handling for Large Payload
-      if (status === 413 || errorMessage.includes("too large")) {
-        Alert.alert(
-          "Upload Error",
-          "The server rejected the request because the files are too large. Please try uploading fewer or smaller files.",
-        );
-      } else {
-        console.error(
-          "UPDATE ERROR",
-          JSON.stringify(error?.response?.data || error, null, 2),
-        );
-        Alert.alert(
-          "Error",
-          "Failed to save changes. Please check your connection and try again.",
-        );
-      }
+      Alert.alert("Success", "Updated successfully.");
+    } catch (error) {
+      Alert.alert("Error", "Update failed.");
     } finally {
-      setUpdating(true); // Usually set to false here, but set to false after logic finishes
       setUpdating(false);
     }
+  };
+
+  const openPreview = (uri: string) => {
+    setSelectedImage(uri);
+    setPreviewVisible(true);
   };
 
   if (loading && !refreshing) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator color="#007AFF" />
       </View>
     );
   }
 
   const attr = data?.attributes ?? {};
-  const canUserEdit = isEditable(data);
 
   return (
-    <View className="flex-1 bg-slate-50">
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 40 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View className="p-5">
-          {/* REFERENCE CARD - PRESERVED */}
-          <View className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 mb-6 flex-row justify-between items-center">
-            <View>
-              <Text className="text-slate-400 font-bold text-[10px] uppercase">
-                Ref Number
-              </Text>
-              <Text className="text-2xl font-black text-primary">#{id}</Text>
-            </View>
-            <View
-              className={`px-4 py-1.5 rounded-full ${attr.status === "Pending" ? "bg-amber-100" : "bg-blue-100"}`}
-            >
-              <Text
-                className={`font-bold text-[11px] uppercase ${attr.status === "Pending" ? "text-amber-700" : "text-blue-700"}`}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+    >
+      <View className="flex-1 bg-[#F8FAFC]">
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            scrollPosition.current = e.nativeEvent.contentOffset.y;
+          }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {/* Header Section */}
+          <View className="p-6 bg-white border-b border-slate-100 rounded-b-[40px] shadow-sm">
+            <View className="flex-row justify-between items-center">
+              <View className="flex-row flex-wrap gap-2">
+                <View className="bg-slate-100 px-3 py-1.5 rounded-full flex-row items-center">
+                  <Layers size={12} color="#64748b" />
+                  <Text className="text-slate-600 font-semibold text-[10px] ml-1 uppercase">
+                    {form.creation_type}
+                  </Text>
+                </View>
+                <View className="bg-slate-100 px-3 py-1.5 rounded-full flex-row items-center">
+                  <Smartphone size={12} color="#64748b" />
+                  <Text className="text-slate-600 font-semibold text-[10px] ml-1 uppercase">
+                    {form.form_type}
+                  </Text>
+                </View>
+              </View>
+
+              {/* <View
+                className={`h-1 w-full ${
+                  attr.status === "registered"
+                    ? "bg-green-500"
+                    : attr.status === "pending"
+                      ? "bg-amber-500"
+                      : "bg-[#D70127]"
+                }`}
+              /> */}
+
+              <View
+                className={`px-4 py-2 rounded-2xl ${
+                  attr.status === "registered"
+                    ? "bg-green-100"
+                    : attr.status === "pending"
+                      ? "bg-amber-100"
+                      : "bg-[#FFE6E9]"
+                }`}
               >
-                {attr.status || "Draft"}
-              </Text>
+                <Text
+                  className={`font-bold text-xs ${
+                    attr.status === "registered"
+                      ? "text-green-700"
+                      : attr.status === "pending"
+                        ? "text-amber-700"
+                        : "text-[#D70127]"
+                  }`}
+                >
+                  {attr.status || "Draft"}
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* BASIC INFO - PRESERVED */}
-          <View className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mb-6">
-            <Text className="text-slate-400 text-[10px] font-bold mb-1 uppercase">
-              Property Title
-            </Text>
-            {isEditing ? (
-              <TextInput
-                className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-slate-900 mb-5 font-semibold"
-                value={form.title}
-                onChangeText={(t) => setForm({ ...form, title: t })}
-              />
-            ) : (
-              <Text className="text-lg font-semibold text-slate-800 mb-5">
-                {attr.title}
+          <View className="p-5">
+            {/* Main Content Card */}
+            <View className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 mb-6">
+              <Text className="text-slate-400 text-[10px] font-black uppercase mb-2">
+                Property Title
               </Text>
-            )}
+              {isEditing ? (
+                <TextInput
+                  className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-900 mb-6 font-bold"
+                  value={form.title}
+                  onChangeText={(t) => setForm({ ...form, title: t })}
+                />
+              ) : (
+                <Text className="text-xl font-bold text-slate-800 mb-6">
+                  {attr.title}
+                </Text>
+              )}
 
-            <Text className="text-slate-400 text-[10px] font-bold mb-1 uppercase">
-              Description
-            </Text>
-            {isEditing ? (
-              <TextInput
-                multiline
-                className="bg-slate-50 p-4 rounded-2xl border border-slate-200 min-h-[120px] text-slate-900 text-sm"
-                value={form.description}
-                onChangeText={(t) => setForm({ ...form, description: t })}
-              />
-            ) : (
-              <Text className="text-slate-600 leading-6 text-sm">
-                {attr.description}
+              <Text className="text-slate-400 text-[10px] font-black uppercase mb-2">
+                Detailed Description
               </Text>
-            )}
-          </View>
-
-          {/* CLAIMS - PRESERVED */}
-          <View className="mb-6">
-            <View className="flex-row justify-between items-center mb-4 px-2">
-              <Text className="text-slate-800 text-lg font-bold">Claims</Text>
-              {isEditing && (
-                <TouchableOpacity
-                  onPress={addClaim}
-                  className="bg-primary px-4 py-2 rounded-full flex-row items-center"
-                >
-                  <Plus size={16} color="white" />
-                  <Text className="text-white font-bold text-xs ml-1">Add</Text>
-                </TouchableOpacity>
+              {isEditing ? (
+                <TextInput
+                  multiline
+                  className="bg-slate-50 p-4 rounded-xl border border-slate-200 min-h-[100px] text-slate-700"
+                  value={form.description}
+                  onChangeText={(t) => setForm({ ...form, description: t })}
+                />
+              ) : (
+                <Text className="text-slate-600 leading-6 text-[15px]">
+                  {attr.description}
+                </Text>
               )}
             </View>
 
-            {form.claims.map((c: any, index: number) => (
-              <View
-                key={index}
-                className="bg-white p-5 rounded-3xl mb-3 border border-slate-100 flex-row items-center"
-              >
-                <View className="h-8 w-8 rounded-full bg-slate-100 items-center justify-center mr-3">
-                  <Text className="text-slate-500 font-bold text-xs">
-                    {index + 1}
-                  </Text>
-                </View>
-                <View className="flex-1">
-                  {isEditing ? (
-                    <View className="flex-row items-center">
-                      <TextInput
-                        multiline
-                        placeholder={`Claim #${index + 1}`}
-                        className="flex-1 text-slate-700 text-sm"
-                        value={c.description}
-                        onChangeText={(t) => updateClaim(t, index)}
-                      />
-                      <TouchableOpacity
-                        onPress={() => removeClaim(index)}
-                        className="ml-2 p-2"
-                      >
-                        <Trash2 size={18} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <Text className="text-slate-600 text-sm italic">
-                      {c.description || "No description provided."}
-                    </Text>
-                  )}
-                </View>
+            {/* Claims Section */}
+            <View className="mb-6">
+              <View className="flex-row justify-between items-center mb-4 px-2">
+                <Text className="text-slate-900 text-lg font-black">
+                  Claims List
+                </Text>
+                {isEditing && (
+                  <TouchableOpacity
+                    onPress={addClaim}
+                    className="bg-primary w-10 h-10 rounded-full items-center justify-center"
+                  >
+                    <Plus size={20} color="white" />
+                  </TouchableOpacity>
+                )}
               </View>
-            ))}
-          </View>
+              {form.claims.map((c, i) => (
+                <View
+                  key={i}
+                  className="bg-white p-4 rounded-2xl mb-3 border border-slate-100 flex-row"
+                >
+                  <Text className="text-primary font-black mr-3 mt-1">
+                    0{i + 1}
+                  </Text>
+                  <View className="flex-1">
+                    {isEditing ? (
+                      <View className="flex-row">
+                        <TextInput
+                          multiline
+                          className="flex-1 text-slate-700"
+                          value={c.description}
+                          onChangeText={(t) => updateClaim(t, i)}
+                          placeholder="Describe claim..."
+                        />
+                        <TouchableOpacity
+                          onPress={() => removeClaim(i)}
+                          className="ml-2"
+                        >
+                          <Trash2 size={18} color="#FDA4AF" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text className="text-slate-600 text-sm leading-5">
+                        {c.description}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
 
-          {/* ATTACHMENTS - FIXED DELETE & UI */}
-          <View className="mb-6 px-2">
-            <View className="flex-row justify-between items-center mb-4">
-              <View>
-                <Text className="text-slate-800 text-lg font-bold">
+            {/* Attachments Section */}
+            <View className="mb-6">
+              <View className="flex-row justify-between items-center mb-4 px-2">
+                <Text className="text-slate-900 text-lg font-black">
                   Attachments
                 </Text>
-                <Text className="text-slate-400 text-xs mt-1">
-                  JPG, PNG, PDF, SVG • Max 10MB
-                </Text>
-              </View>
-              {isEditing && (
-                <TouchableOpacity
-                  onPress={handlePickFile}
-                  className="bg-primary px-4 py-2 rounded-full flex-row items-center"
-                >
-                  <Upload size={16} color="white" />
-                  <Text className="text-white font-bold text-xs ml-2">
-                    Add File
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <View className="flex-row flex-wrap justify-between">
-              {attachments.map((file) => {
-                const isImg = file.type?.includes("image");
-                return (
-                  <View
-                    key={file.id}
-                    style={{ width: (width - 60) / 2 }}
-                    className="bg-white rounded-3xl border border-slate-100 mb-4 overflow-hidden shadow-sm"
+                {isEditing && (
+                  <TouchableOpacity
+                    onPress={handlePickFile}
+                    className="flex-row items-center bg-slate-100 px-4 py-2 rounded-full"
                   >
-                    {/* DELETE BUTTON FIXED - Visible in Editing Mode */}
-                    {isEditing && (
-                      <TouchableOpacity
-                        onPress={() => removeAttachment(file)}
-                        className="absolute top-2 right-2 z-50 bg-[#D70127] p-2 rounded-full shadow-lg"
-                      >
-                        <X size={14} color="white" />
-                      </TouchableOpacity>
-                    )}
-                    {isImg ? (
+                    <Upload size={16} color="#64748b" />
+                    <Text className="text-slate-600 font-bold text-xs ml-2">
+                      Upload
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View className="flex-row flex-wrap justify-between">
+                {attachments.map((file) => (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    key={file.id}
+                    onPress={() => openPreview(file.uri)}
+                    style={{ width: (width - 60) / 2 }}
+                    className="bg-white rounded-2xl border border-slate-100 mb-4 overflow-hidden shadow-sm p-2"
+                  >
+                    <View className="relative">
                       <Image
                         source={{ uri: file.uri }}
-                        className="h-36 w-full"
+                        className="h-32 w-full rounded-xl"
                         resizeMode="cover"
                       />
-                    ) : (
-                      <View className="h-36 w-full items-center justify-center bg-slate-100">
-                        <FileText size={48} color="#64748b" />
+                      <View className="absolute bottom-2 right-2 bg-black/50 p-1.5 rounded-lg">
+                        <Eye size={12} color="white" />
                       </View>
-                    )}
-                    <View className="p-3 bg-white flex-row items-center">
-                      <View className="flex-1">
-                        <Text
-                          numberOfLines={1}
-                          className="text-[11px] font-bold text-slate-500 uppercase"
+                      {isEditing && (
+                        <TouchableOpacity
+                          onPress={() => removeAttachment(file)}
+                          className="absolute -top-1 -right-1 bg-[#D70127] p-1.5 rounded-full border-2 border-white shadow-sm"
                         >
-                          {file.name}
-                        </Text>
-                      </View>
+                          <X size={12} color="white" />
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  </View>
-                );
-              })}
+                    <Text
+                      numberOfLines={1}
+                      className="text-[10px] font-bold text-slate-400 mt-2 px-1 uppercase"
+                    >
+                      {file.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-              {attachments.length === 0 && (
-                <View className="w-full py-10 items-center border-2 border-dashed border-slate-200 rounded-3xl">
-                  <FileText size={32} color="#94a3b8" />
-                  <Text className="text-slate-400 mt-3">
-                    No attachments uploaded
-                  </Text>
-                </View>
+            {/* Applicability Section */}
+            <View className="bg-primary/5 rounded-[32px] p-6 border border-primary/10">
+              <Text className="text-primary font-black text-[10px] uppercase mb-2">
+                Industrial Applicability
+              </Text>
+              {isEditing ? (
+                <TextInput
+                  multiline
+                  className="bg-white p-4 rounded-xl border border-slate-200 text-slate-700"
+                  value={form.applicability}
+                  onChangeText={(t) => setForm({ ...form, applicability: t })}
+                />
+              ) : (
+                <Text className="text-slate-700 text-sm italic">
+                  {form.applicability || "N/A"}
+                </Text>
               )}
             </View>
           </View>
+        </ScrollView>
 
-          {/* INDUSTRIAL APPLICABILITY - PRESERVED */}
-          <View className="bg-primary/5 rounded-3xl p-6 border border-primary/10 mb-8">
-            <Text className="text-primary font-black text-[10px] mb-2 uppercase tracking-widest">
-              Industrial Applicability
-            </Text>
-            {isEditing ? (
-              <TextInput
-                multiline
-                className="bg-white p-4 rounded-2xl border border-slate-200 min-h-[100px] text-slate-900 text-sm"
-                value={form.applicability}
-                onChangeText={(t) => setForm({ ...form, applicability: t })}
-              />
-            ) : (
-              <Text className="text-slate-700 leading-6 text-sm">
-                {attr.applicability || "N/A"}
-              </Text>
-            )}
-          </View>
-
-          {/* ACTIONS - PRESERVED */}
-          {canUserEdit && !isEditing ? (
+        {/* Action Bar */}
+        <View className="w-full p-5 bg-white border-t border-slate-200">
+          {isEditable(data) && !isEditing ? (
             <TouchableOpacity
               onPress={() => setIsEditing(true)}
-              className="bg-primary h-16 rounded-3xl justify-center items-center shadow-xl"
+              className="bg-primary h-14 rounded-2xl justify-center items-center shadow-lg shadow-primary/30"
             >
               <Text className="text-white font-black text-lg">
                 Modify Application
@@ -565,29 +532,49 @@ export default function DetailsPage() {
                     setIsEditing(false);
                     fetchDetails();
                   }}
-                  className="flex-1 bg-white h-16 rounded-3xl justify-center items-center border border-slate-200"
+                  className="flex-1 h-14 rounded-2xl justify-center items-center border border-slate-200 bg-white"
                 >
-                  <Text className="text-slate-500 font-bold text-lg">
-                    Cancel
-                  </Text>
+                  <Text className="text-slate-500 font-bold">Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleUpdate}
-                  className="flex-[2] bg-green-600 h-16 rounded-3xl justify-center items-center"
+                  className="flex-[2] bg-green-500 h-14 rounded-2xl justify-center items-center shadow-lg shadow-green-200"
                 >
                   {updating ? (
                     <ActivityIndicator color="white" />
                   ) : (
-                    <Text className="text-white font-black text-lg">
-                      Save Changes
-                    </Text>
+                    <Text className="text-white font-black">Save Changes</Text>
                   )}
                 </TouchableOpacity>
               </View>
             )
           )}
         </View>
-      </ScrollView>
-    </View>
+
+        {/* Full Image Preview Modal */}
+        <Modal visible={previewVisible} transparent={true} animationType="fade">
+          <View className="flex-1 bg-black justify-center items-center">
+            <TouchableOpacity
+              onPress={() => setPreviewVisible(false)}
+              className="absolute top-12 right-6 z-50 bg-white/20 p-3 rounded-full"
+            >
+              <X size={24} color="white" />
+            </TouchableOpacity>
+            {selectedImage && (
+              <Image
+                source={{ uri: selectedImage }}
+                style={{ width: width, height: height * 0.7 }}
+                resizeMode="contain"
+              />
+            )}
+            <View className="absolute bottom-12">
+              <Text className="text-white/60 font-bold">
+                Tap Close to return
+              </Text>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
