@@ -1,14 +1,20 @@
-import {
-  applyIntellectualPayment,
-  createIntellectualProperty,
-} from "@/services/intellectualService";
+import { createIntellectualProperty } from "@/services/intellectualService";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
-import { Image as ImageIcon, Plus, Trash2, Upload } from "lucide-react-native";
-import React, { useCallback, useRef, useState } from "react";
+import {
+  Check,
+  Image as ImageIcon,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -33,12 +39,25 @@ interface Attachment {
 
 export default function PropertyForm() {
   const router = useRouter();
-
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollPosition = useRef(0);
   const isProcessing = useRef(false);
+
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
 
   const MAX_FILE_SIZE = 8 * 1024 * 1024;
+
+  // Keyboard Handling Logic
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      scrollRef.current?.scrollTo({
+        y: scrollPosition.current,
+        animated: true,
+      });
+    });
+    return () => show.remove();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -113,7 +132,6 @@ export default function PropertyForm() {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
-  // ✅ FIXED VALIDATION (STEP 3 ADDED)
   const validateStep = () => {
     if (step === 1) {
       if (!creationType) {
@@ -125,37 +143,18 @@ export default function PropertyForm() {
         return false;
       }
     }
-
     if (step === 2) {
       if (!claims.some((c) => c.trim() !== "")) {
         Alert.alert("Required", "Please enter at least one claim.");
         return false;
       }
     }
-
-    // ✅ STEP 3 FIX (ATTACHMENTS BLOCK NAVIGATION)
     if (step === 3) {
       if (attachments.length === 0) {
-        Alert.alert(
-          "Required",
-          "Please upload at least one image before continuing.",
-        );
-        return false;
-      }
-
-      const invalidFile = attachments.find(
-        (a) => a.size && a.size > MAX_FILE_SIZE,
-      );
-
-      if (invalidFile) {
-        Alert.alert(
-          "Invalid File",
-          `${invalidFile.name} exceeds the 8MB limit. Please remove it.`,
-        );
+        Alert.alert("Required", "Please upload at least one image.");
         return false;
       }
     }
-
     return true;
   };
 
@@ -178,7 +177,6 @@ export default function PropertyForm() {
       setLoading(true);
 
       const formData = new FormData();
-
       formData.append("creation_type", creationType);
       formData.append("form_type", formType);
       formData.append("title", generalInfo.title);
@@ -203,24 +201,8 @@ export default function PropertyForm() {
       formData.append("agreed_terms", "1");
       formData.append("agreed_privacy", "1");
 
-      const res = await createIntellectualProperty(formData);
-
-      if (formType === "payment") {
-        const ipId = res.data.id;
-        const applied = await applyIntellectualPayment(ipId, {
-          term_months: 1,
-        });
-
-        const scheduleId = applied.data.relationships.schedules.data[0]?.id;
-        const totalAmount = applied.data.attributes.total_amount;
-
-        router.push({
-          pathname: "/checkout",
-          params: { id: ipId, scheduleId, amount: totalAmount },
-        });
-      } else {
-        router.replace("/congratulations");
-      }
+      await createIntellectualProperty(formData);
+      router.replace("/congratulations");
     } catch (error: any) {
       Alert.alert(
         "Error",
@@ -233,296 +215,280 @@ export default function PropertyForm() {
   };
 
   return (
-    <View className="flex-1 bg-white">
-      <View className="px-6 pt-6 mb-4">
-        <Text className="text-xl font-bold text-primary text-center uppercase tracking-widest">
-          {step === 1 && "General Information"}
-          {step === 2 && "Claims"}
-          {step === 3 && "Attachments"}
-          {step === 4 && "Industrial Use"}
-        </Text>
-        <Text className="text-md text-black text-center">
-          {step === 2 && "Clearly define the features or process"}
-          {step === 3 && "Drawing / Diagram / Photos"}
-          {step === 4 && "Explain how your invention can be"}
-        </Text>
-        <Text className="text-md text-black text-center">
-          {step === 2 && "you want to protect:"}
-          {step === 4 && "used in industry or business:"}
-        </Text>
-      </View>
-
-      <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
-        <View className="flex-row justify-between mb-8 px-2">
-          {[1, 2, 3, 4].map((i) => (
-            <View
-              key={i}
-              className={`h-1.5 flex-1 mx-1 rounded-full ${
-                step >= i ? "bg-primary" : "bg-slate-200"
-              }`}
-            />
-          ))}
-        </View>
-
-        {/* STEP 1 */}
-        {step === 1 && (
-          <View className="gap-y-6">
-            <View>
-              <Text className="text-slate-600 font-bold mb-3">
-                What kind of creation you created?
-              </Text>
-
-              <View className="flex-row gap-x-3">
-                <TouchableOpacity
-                  onPress={() => setCreationType("business_idea")}
-                  className={`flex-1 p-4 rounded-2xl border ${
-                    creationType === "business_idea"
-                      ? "bg-primary border-primary"
-                      : "border-slate-200"
-                  }`}
-                >
-                  <Text
-                    className={`text-center font-bold ${
-                      creationType === "business_idea"
-                        ? "text-white"
-                        : "text-slate-600"
-                    }`}
-                  >
-                    Business Idea
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => setCreationType("invention")}
-                  className={`flex-1 p-4 rounded-2xl border ${
-                    creationType === "invention"
-                      ? "bg-primary border-primary"
-                      : "border-slate-200"
-                  }`}
-                >
-                  <Text
-                    className={`text-center font-bold ${
-                      creationType === "invention"
-                        ? "text-white"
-                        : "text-slate-600"
-                    }`}
-                  >
-                    Invention
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View>
-              <Text className="text-slate-600 font-bold mb-2">
-                Property Title *
-              </Text>
-              <TextInput
-                className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-slate-900"
-                value={generalInfo.title}
-                onChangeText={(text) =>
-                  setGeneralInfo({ ...generalInfo, title: text })
-                }
-              />
-            </View>
-
-            <View>
-              <Text className="text-slate-600 font-bold mb-2">
-                Description *
-              </Text>
-              <TextInput
-                multiline
-                numberOfLines={6}
-                textAlignVertical="top"
-                className="bg-slate-50 border border-slate-200 p-4 rounded-2xl h-44 text-slate-900"
-                value={generalInfo.description}
-                onChangeText={(text) =>
-                  setGeneralInfo({ ...generalInfo, description: text })
-                }
-              />
-            </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+    >
+      <View className="flex-1 bg-white">
+        <ScrollView
+          ref={scrollRef}
+          className="flex-1 px-6"
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            scrollPosition.current = e.nativeEvent.contentOffset.y;
+          }}
+        >
+          <View className="px-6 pt-6 mb-4">
+            <Text className="text-xl font-bold text-primary text-center uppercase tracking-widest">
+              {step === 1 && "General Information"}
+              {step === 2 && "Claims"}
+              {step === 3 && "Attachments"}
+              {step === 4 && "Industrial Use"}
+            </Text>
+            <Text className="text-md text-black text-center mt-1">
+              {step === 2 &&
+                "Clearly define the features or process you want to protect"}
+              {step === 3 && "Drawing / Diagram / Photos"}
+              {step === 4 &&
+                "Explain how your invention can be used in industry"}
+            </Text>
           </View>
-        )}
 
-        {/* STEP 2 */}
-        {step === 2 && (
-          <View>
-            {claims.map((claim, index) => (
-              <View key={index} className="flex-row items-center mb-4">
-                <TextInput
-                  className="flex-1 bg-slate-50 border border-slate-200 p-4 rounded-2xl"
-                  value={claim}
-                  placeholder={`Claim #${index + 1}`}
-                  onChangeText={(text) => {
-                    const updated = [...claims];
-                    updated[index] = text;
-                    setClaims(updated);
-                  }}
-                />
-                <TouchableOpacity
-                  onPress={() => removeClaim(index)}
-                  className="ml-2 p-2"
-                >
-                  <Trash2 size={20} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
-            ))}
-
-            <TouchableOpacity
-              onPress={addClaim}
-              className="flex-row items-center justify-center border border-dashed border-primary p-4 rounded-2xl"
-            >
-              <Plus size={20} color="#007AFF" />
-              <Text className="text-primary font-bold ml-2">Add Claim</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* STEP 3 */}
-        {step === 3 && (
-          <View className="gap-y-4">
-            {attachments.map((file) => (
+          <View className="flex-row justify-between mb-8 px-2">
+            {[1, 2, 3, 4].map((i) => (
               <View
-                key={file.id}
-                className="flex-row items-center bg-slate-50 border border-slate-200 p-4 rounded-2xl"
-              >
-                <ImageIcon size={20} color="#64748b" />
-                <Text className="ml-3 flex-1" numberOfLines={1}>
-                  {file.name}
-                </Text>
-                <TouchableOpacity onPress={() => removeAttachment(file.id)}>
-                  <Trash2 size={20} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
-            ))}
-
-            <TouchableOpacity
-              onPress={handlePickFile}
-              className="flex-row items-center justify-center p-5 rounded-2xl border border-dashed border-primary"
-            >
-              <Upload size={22} color="#007AFF" />
-              <Text className="text-primary font-bold ml-3">Add Image</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* STEP 4 */}
-        {step === 4 && (
-          <View className="gap-y-6">
-            <View>
-              <Text className="text-slate-600 font-bold mb-3">
-                Application Type
-              </Text>
-
-              <View className="flex-row gap-x-3">
-                <TouchableOpacity
-                  onPress={() => setFormType("grant")}
-                  className={`flex-1 p-4 rounded-2xl border ${
-                    formType === "grant"
-                      ? "bg-primary border-primary"
-                      : "border-slate-200"
-                  }`}
-                >
-                  <Text
-                    className={`text-center font-bold ${
-                      formType === "grant" ? "text-white" : "text-slate-600"
-                    }`}
-                  >
-                    Grant
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => setFormType("payment")}
-                  className={`flex-1 p-4 rounded-2xl border ${
-                    formType === "payment"
-                      ? "bg-primary border-primary"
-                      : "border-slate-200"
-                  }`}
-                >
-                  <Text
-                    className={`text-center font-bold ${
-                      formType === "payment" ? "text-white" : "text-slate-600"
-                    }`}
-                  >
-                    Payment
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View>
-              <Text className="text-slate-600 font-bold mb-2">
-                Industrial Applicability
-              </Text>
-              <TextInput
-                placeholder="Real world usage..."
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                className="bg-slate-50 border border-slate-200 p-4 rounded-2xl h-36"
-                value={industrial.applicability}
-                onChangeText={(text) => setIndustrial({ applicability: text })}
+                key={i}
+                className={`h-1.5 flex-1 mx-1 rounded-full ${
+                  step >= i ? "bg-primary" : "bg-slate-200"
+                }`}
               />
-            </View>
+            ))}
+          </View>
 
-            <View className="gap-y-5 pt-4">
-              {(Object.keys(agreed) as (keyof AgreedState)[]).map((key) => {
-                const labels = {
-                  original: "I declare that this invention is original.",
-                  terms: "I agree to the Terms and Conditions.",
-                  privacy: "I agree to the Data Privacy Policy.",
-                };
-
-                return (
+          {/* STEP 1 */}
+          {step === 1 && (
+            <View className="gap-y-6">
+              <View>
+                <Text className="text-slate-600 font-bold mb-3">
+                  What kind of creation you created?
+                </Text>
+                <View className="flex-row gap-x-3">
                   <TouchableOpacity
-                    key={key}
-                    onPress={() =>
-                      setAgreed({ ...agreed, [key]: !agreed[key] })
-                    }
-                    className="flex-row items-center"
+                    onPress={() => setCreationType("business_idea")}
+                    className={`flex-1 p-4 rounded-2xl border ${
+                      creationType === "business_idea"
+                        ? "bg-primary border-primary"
+                        : "border-slate-200"
+                    }`}
                   >
-                    <View
-                      className={`w-6 h-6 rounded border ${
-                        agreed[key]
-                          ? "bg-primary border-primary"
-                          : "border-slate-300"
-                      } items-center justify-center mr-4`}
+                    <Text
+                      className={`text-center font-bold ${creationType === "business_idea" ? "text-white" : "text-slate-600"}`}
                     >
-                      {agreed[key] && <Check size={16} color="white" />}
-                    </View>
-                    <Text className="text-slate-600 flex-1 text-sm">
-                      {labels[key]}
+                      Business Idea
                     </Text>
                   </TouchableOpacity>
-                );
-              })}
+                  <TouchableOpacity
+                    onPress={() => setCreationType("invention")}
+                    className={`flex-1 p-4 rounded-2xl border ${
+                      creationType === "invention"
+                        ? "bg-primary border-primary"
+                        : "border-slate-200"
+                    }`}
+                  >
+                    <Text
+                      className={`text-center font-bold ${creationType === "invention" ? "text-white" : "text-slate-600"}`}
+                    >
+                      Invention
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View>
+                <Text className="text-slate-600 font-bold mb-2">
+                  Property Title *
+                </Text>
+                <TextInput
+                  className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-slate-900"
+                  value={generalInfo.title}
+                  onChangeText={(text) =>
+                    setGeneralInfo({ ...generalInfo, title: text })
+                  }
+                />
+              </View>
+
+              <View>
+                <Text className="text-slate-600 font-bold mb-2">
+                  Description *
+                </Text>
+                <TextInput
+                  multiline
+                  numberOfLines={6}
+                  textAlignVertical="top"
+                  className="bg-slate-50 border border-slate-200 p-4 rounded-2xl h-44 text-slate-900"
+                  value={generalInfo.description}
+                  onChangeText={(text) =>
+                    setGeneralInfo({ ...generalInfo, description: text })
+                  }
+                />
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        <View className="h-24" />
-      </ScrollView>
+          {/* STEP 2 */}
+          {step === 2 && (
+            <View>
+              {claims.map((claim, index) => (
+                <View key={index} className="flex-row items-center mb-4">
+                  <TextInput
+                    className="flex-1 bg-slate-50 border border-slate-200 p-4 rounded-2xl"
+                    value={claim}
+                    placeholder={`Claim #${index + 1}`}
+                    onChangeText={(text) => {
+                      const updated = [...claims];
+                      updated[index] = text;
+                      setClaims(updated);
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={() => removeClaim(index)}
+                    className="ml-2 p-2"
+                  >
+                    <Trash2 size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity
+                onPress={addClaim}
+                className="flex-row items-center justify-center border border-dashed border-primary p-4 rounded-2xl"
+              >
+                <Plus size={20} color="#007AFF" />
+                <Text className="text-primary font-bold ml-2">Add Claim</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-      <View className="p-5 flex-row gap-x-3 border-t border-slate-200">
-        {step > 1 && (
+          {/* STEP 3 */}
+          {step === 3 && (
+            <View className="gap-y-4">
+              {attachments.map((file) => (
+                <View
+                  key={file.id}
+                  className="flex-row items-center bg-slate-50 border border-slate-200 p-4 rounded-2xl"
+                >
+                  <ImageIcon size={20} color="#64748b" />
+                  <Text className="ml-3 flex-1" numberOfLines={1}>
+                    {file.name}
+                  </Text>
+                  <TouchableOpacity onPress={() => removeAttachment(file.id)}>
+                    <Trash2 size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity
+                onPress={handlePickFile}
+                className="flex-row items-center justify-center p-5 rounded-2xl border border-dashed border-primary"
+              >
+                <Upload size={22} color="#007AFF" />
+                <Text className="text-primary font-bold ml-3">Add Image</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* STEP 4 */}
+          {step === 4 && (
+            <View className="gap-y-6">
+              <View>
+                <Text className="text-slate-600 font-bold mb-3">
+                  Application Type
+                </Text>
+                <View className="flex-row gap-x-3">
+                  <TouchableOpacity
+                    onPress={() => setFormType("grant")}
+                    className={`flex-1 p-4 rounded-2xl border ${formType === "grant" ? "bg-primary border-primary" : "border-slate-200"}`}
+                  >
+                    <Text
+                      className={`text-center font-bold ${formType === "grant" ? "text-white" : "text-slate-600"}`}
+                    >
+                      Grant
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setFormType("payment")}
+                    className={`flex-1 p-4 rounded-2xl border ${formType === "payment" ? "bg-primary border-primary" : "border-slate-200"}`}
+                  >
+                    <Text
+                      className={`text-center font-bold ${formType === "payment" ? "text-white" : "text-slate-600"}`}
+                    >
+                      Payment
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View>
+                <Text className="text-slate-600 font-bold mb-2">
+                  Industrial Applicability
+                </Text>
+                <TextInput
+                  placeholder="Real world usage..."
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  className="bg-slate-50 border border-slate-200 p-4 rounded-2xl h-36"
+                  value={industrial.applicability}
+                  onChangeText={(text) =>
+                    setIndustrial({ applicability: text })
+                  }
+                />
+              </View>
+
+              <View className="gap-y-5 pt-4">
+                {(Object.keys(agreed) as (keyof AgreedState)[]).map((key) => {
+                  const labels = {
+                    original: "I declare that this invention is original.",
+                    terms: "I agree to the Terms and Conditions.",
+                    privacy: "I agree to the Data Privacy Policy.",
+                  };
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      onPress={() =>
+                        setAgreed({ ...agreed, [key]: !agreed[key] })
+                      }
+                      className="flex-row items-center"
+                    >
+                      <View
+                        className={`w-6 h-6 rounded border ${agreed[key] ? "bg-primary border-primary" : "border-slate-300"} items-center justify-center mr-4`}
+                      >
+                        {agreed[key] && <Check size={16} color="white" />}
+                      </View>
+                      <Text className="text-slate-600 flex-1 text-sm">
+                        {labels[key]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          <View className="h-24" />
+        </ScrollView>
+
+        <View className="flex-row gap-x-3 w-full p-5 bg-white border-t border-slate-200">
+          {step > 1 && (
+            <TouchableOpacity
+              onPress={handleBack}
+              className="flex-1 h-16 rounded-2xl justify-center items-center border border-slate-200 bg-white"
+            >
+              <Text className="text-slate-600 font-bold text-lg">Previous</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            onPress={handleBack}
-            className="flex-1 h-16 rounded-2xl justify-center items-center border border-slate-200 bg-white"
+            onPress={step === 4 ? handleSubmit : handleNext}
+            disabled={loading}
+            className={`flex-[2] h-16 rounded-2xl justify-center items-center ${loading ? "bg-slate-400" : "bg-primary"}`}
           >
-            <Text className="text-slate-600 font-bold text-lg">Previous</Text>
+            <Text className="text-white font-bold text-lg">
+              {step === 4 ? (loading ? "Submitting..." : "Submit") : "Continue"}
+            </Text>
           </TouchableOpacity>
-        )}
-
-        <TouchableOpacity
-          onPress={step === 4 ? handleSubmit : handleNext}
-          className="flex-[2] h-16 bg-primary rounded-2xl justify-center items-center"
-        >
-          <Text className="text-white ffont-bold text-lg">
-            {step === 4 ? "Submit" : "Continue"}
-          </Text>
-        </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
