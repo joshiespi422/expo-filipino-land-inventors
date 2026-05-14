@@ -6,7 +6,7 @@ import {
 } from "@/services/intellectualService";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Eye,
   Layers,
@@ -14,6 +14,7 @@ import {
   Smartphone,
   Trash2,
   Upload,
+  Wallet,
   X,
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -59,6 +60,8 @@ interface Attachment {
 
 export default function DetailsPage() {
   const { id } = useLocalSearchParams();
+  const router = useRouter();
+
   const scrollRef = useRef<ScrollView>(null);
   const scrollPosition = useRef(0);
 
@@ -105,22 +108,29 @@ export default function DetailsPage() {
   const fetchDetails = async () => {
     try {
       setLoading(true);
+
       const res = await getIntellectualProperty(id as string);
+
       const ip = res.data;
       const included = res.included || [];
 
       setData(ip);
 
       const claimRefs = ip.relationships?.claims?.data || [];
+
       const mappedClaims = claimRefs.map((ref: any) => {
         const fullClaim = included.find(
           (inc: any) =>
             String(inc.id) === String(ref.id) && inc.type.includes("claim"),
         );
-        return { description: fullClaim?.attributes?.description || "" };
+
+        return {
+          description: fullClaim?.attributes?.description || "",
+        };
       });
 
       const docRefs = ip.relationships?.documents?.data || [];
+
       const mappedAttachments = docRefs
         .map((ref: any) => {
           const fullDoc = included.find(
@@ -128,8 +138,11 @@ export default function DetailsPage() {
               String(inc.id) === String(ref.id) &&
               inc.type.includes("document"),
           );
+
           if (!fullDoc) return null;
+
           const attachment = fullDoc?.attributes?.attachment || "";
+
           return {
             id: fullDoc.id,
             name: attachment.split("/").pop() || "File",
@@ -141,6 +154,7 @@ export default function DetailsPage() {
         .filter(Boolean);
 
       setAttachments(mappedAttachments as Attachment[]);
+
       setForm({
         title: ip.attributes?.title || "",
         description: ip.attributes?.description || "",
@@ -171,22 +185,36 @@ export default function DetailsPage() {
 
   const addClaim = () => {
     const lastClaim = form.claims[form.claims.length - 1];
+
     if (!lastClaim.description.trim()) {
       Alert.alert("Required", "Complete current claim first.");
       return;
     }
-    setForm({ ...form, claims: [...form.claims, { description: "" }] });
+
+    setForm({
+      ...form,
+      claims: [...form.claims, { description: "" }],
+    });
   };
 
   const removeClaim = (index: number) => {
     if (form.claims.length === 1) return;
-    setForm({ ...form, claims: form.claims.filter((_, i) => i !== index) });
+
+    setForm({
+      ...form,
+      claims: form.claims.filter((_, i) => i !== index),
+    });
   };
 
   const updateClaim = (text: string, index: number) => {
     const newClaims = [...form.claims];
+
     newClaims[index].description = text;
-    setForm({ ...form, claims: newClaims });
+
+    setForm({
+      ...form,
+      claims: newClaims,
+    });
   };
 
   const handlePickFile = async () => {
@@ -195,6 +223,7 @@ export default function DetailsPage() {
         type: ["image/*"],
         multiple: true,
       });
+
       if (result.canceled) return;
 
       const validFiles: Attachment[] = result.assets
@@ -221,13 +250,16 @@ export default function DetailsPage() {
         delete_document_ids: [...prev.delete_document_ids, Number(file.id)],
       }));
     }
+
     setAttachments((prev) => prev.filter((a) => a.id !== file.id));
   };
 
   const handleUpdate = async () => {
     try {
       setUpdating(true);
+
       const formData = new FormData();
+
       formData.append("title", form.title);
       formData.append("description", form.description);
       formData.append("applicability", form.applicability);
@@ -255,8 +287,11 @@ export default function DetailsPage() {
         });
 
       await updateIntellectualProperty(id as string, formData);
+
       setIsEditing(false);
+
       fetchDetails();
+
       Alert.alert("Success", "Updated successfully.");
     } catch (error) {
       Alert.alert("Error", "Update failed.");
@@ -279,6 +314,13 @@ export default function DetailsPage() {
   }
 
   const attr = data?.attributes ?? {};
+
+  // PAYMENT CHECK
+  // const schedules = data?.relationships?.schedules?.data || [];
+
+  const showPaymentButton =
+    attr.form_type === "payment" &&
+    attr.status?.toLowerCase() === "waiting_for_payment";
 
   return (
     <KeyboardAvoidingView
@@ -305,27 +347,20 @@ export default function DetailsPage() {
               <View className="flex-row flex-wrap gap-2">
                 <View className="bg-slate-100 px-3 py-1.5 rounded-full flex-row items-center">
                   <Layers size={12} color="#64748b" />
+
                   <Text className="text-slate-600 font-semibold text-[10px] ml-1 uppercase">
                     {form.creation_type}
                   </Text>
                 </View>
+
                 <View className="bg-slate-100 px-3 py-1.5 rounded-full flex-row items-center">
                   <Smartphone size={12} color="#64748b" />
+
                   <Text className="text-slate-600 font-semibold text-[10px] ml-1 uppercase">
                     {form.form_type}
                   </Text>
                 </View>
               </View>
-
-              {/* <View
-                className={`h-1 w-full ${
-                  attr.status === "registered"
-                    ? "bg-green-500"
-                    : attr.status === "pending"
-                      ? "bg-amber-500"
-                      : "bg-[#D70127]"
-                }`}
-              /> */}
 
               <View
                 className={`px-4 py-2 rounded-2xl ${
@@ -352,11 +387,44 @@ export default function DetailsPage() {
           </View>
 
           <View className="p-5">
+            {/* PAYMENT BUTTON */}
+            {showPaymentButton && (
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: "/intellectual-payment",
+                    params: {
+                      id: id as string,
+                    },
+                  })
+                }
+                className="bg-primary rounded-[28px] p-5 mb-6 shadow-lg shadow-primary/20"
+              >
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-1 pr-4">
+                    <Text className="text-white text-lg font-black mb-1">
+                      Payment Required
+                    </Text>
+
+                    <Text className="text-white/80 text-sm leading-5">
+                      Your application has been waiting for payment. Continue to
+                      choose your payment term.
+                    </Text>
+                  </View>
+
+                  <View className="bg-white/20 p-4 rounded-2xl">
+                    <Wallet size={28} color="white" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+
             {/* Main Content Card */}
             <View className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 mb-6">
               <Text className="text-slate-400 text-[10px] font-black uppercase mb-2">
                 Property Title
               </Text>
+
               {isEditing ? (
                 <TextInput
                   className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-900 mb-6 font-bold"
@@ -372,6 +440,7 @@ export default function DetailsPage() {
               <Text className="text-slate-400 text-[10px] font-black uppercase mb-2">
                 Detailed Description
               </Text>
+
               {isEditing ? (
                 <TextInput
                   multiline
@@ -392,6 +461,7 @@ export default function DetailsPage() {
                 <Text className="text-slate-900 text-lg font-black">
                   Claims List
                 </Text>
+
                 {isEditing && (
                   <TouchableOpacity
                     onPress={addClaim}
@@ -401,6 +471,7 @@ export default function DetailsPage() {
                   </TouchableOpacity>
                 )}
               </View>
+
               {form.claims.map((c, i) => (
                 <View
                   key={i}
@@ -409,6 +480,7 @@ export default function DetailsPage() {
                   <Text className="text-primary font-black mr-3 mt-1">
                     0{i + 1}
                   </Text>
+
                   <View className="flex-1">
                     {isEditing ? (
                       <View className="flex-row">
@@ -419,6 +491,7 @@ export default function DetailsPage() {
                           onChangeText={(t) => updateClaim(t, i)}
                           placeholder="Describe claim..."
                         />
+
                         <TouchableOpacity
                           onPress={() => removeClaim(i)}
                           className="ml-2"
@@ -442,18 +515,21 @@ export default function DetailsPage() {
                 <Text className="text-slate-900 text-lg font-black">
                   Attachments
                 </Text>
+
                 {isEditing && (
                   <TouchableOpacity
                     onPress={handlePickFile}
                     className="flex-row items-center bg-slate-100 px-4 py-2 rounded-full"
                   >
                     <Upload size={16} color="#64748b" />
+
                     <Text className="text-slate-600 font-bold text-xs ml-2">
                       Upload
                     </Text>
                   </TouchableOpacity>
                 )}
               </View>
+
               <View className="flex-row flex-wrap justify-between">
                 {attachments.map((file) => (
                   <TouchableOpacity
@@ -469,9 +545,11 @@ export default function DetailsPage() {
                         className="h-32 w-full rounded-xl"
                         resizeMode="cover"
                       />
+
                       <View className="absolute bottom-2 right-2 bg-black/50 p-1.5 rounded-lg">
                         <Eye size={12} color="white" />
                       </View>
+
                       {isEditing && (
                         <TouchableOpacity
                           onPress={() => removeAttachment(file)}
@@ -481,6 +559,7 @@ export default function DetailsPage() {
                         </TouchableOpacity>
                       )}
                     </View>
+
                     <Text
                       numberOfLines={1}
                       className="text-[10px] font-bold text-slate-400 mt-2 px-1 uppercase"
@@ -497,12 +576,18 @@ export default function DetailsPage() {
               <Text className="text-primary font-black text-[10px] uppercase mb-2">
                 Industrial Applicability
               </Text>
+
               {isEditing ? (
                 <TextInput
                   multiline
                   className="bg-white p-4 rounded-xl border border-slate-200 text-slate-700"
                   value={form.applicability}
-                  onChangeText={(t) => setForm({ ...form, applicability: t })}
+                  onChangeText={(t) =>
+                    setForm({
+                      ...form,
+                      applicability: t,
+                    })
+                  }
                 />
               ) : (
                 <Text className="text-slate-700 text-sm italic">
@@ -536,6 +621,7 @@ export default function DetailsPage() {
                 >
                   <Text className="text-slate-500 font-bold">Cancel</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   onPress={handleUpdate}
                   className="flex-[2] bg-green-500 h-14 rounded-2xl justify-center items-center shadow-lg shadow-green-200"
@@ -560,13 +646,18 @@ export default function DetailsPage() {
             >
               <X size={24} color="white" />
             </TouchableOpacity>
+
             {selectedImage && (
               <Image
                 source={{ uri: selectedImage }}
-                style={{ width: width, height: height * 0.7 }}
+                style={{
+                  width: width,
+                  height: height * 0.7,
+                }}
                 resizeMode="contain"
               />
             )}
+
             <View className="absolute bottom-12">
               <Text className="text-white/60 font-bold">
                 Tap Close to return
