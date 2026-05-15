@@ -65,7 +65,7 @@ export default function IntellectualCheckoutPage() {
     });
   };
 
-  // RESET LOCKS
+  // RESET LOCKS ON PAGE FOCUS
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
@@ -130,14 +130,15 @@ export default function IntellectualCheckoutPage() {
   // HANDLE PAYMENT
   // =========================
   const handleProceed = async () => {
+    // 1. Strict upfront check on the mutable ref lock
     if (isProcessing.current || navigating || loading) return;
 
     if (!selectedMethod) {
       return showAlert("Error", "Please select a payment method");
     }
 
+    // 2. Lock it down immediately across both state and ref
     isProcessing.current = true;
-
     setLoading(true);
     setNavigating(true);
 
@@ -147,7 +148,6 @@ export default function IntellectualCheckoutPage() {
       };
 
       const response = await payIntellectual(String(safeScheduleId), payload);
-
       const result = response?.data || response;
 
       console.log("FULL PAYMONGO RESPONSE:", JSON.stringify(result, null, 2));
@@ -156,19 +156,14 @@ export default function IntellectualCheckoutPage() {
       // FLEXIBLE EXTRACTION
       // =========================
       const payment = result?.payment;
-
       const gatewayResponse =
         payment?.gateway_response?.data || payment?.gateway_response;
-
       const gatewayAttributes = gatewayResponse?.attributes;
 
       const intentId =
         payment?.gateway_payment_intent_id || result?.gateway_payment_intent_id;
-
       const qr = gatewayAttributes?.next_action?.code?.image_url;
-
       const redirectUrl = gatewayAttributes?.next_action?.redirect?.url;
-
       const paymentAmount = payment?.amount;
 
       // =========================
@@ -176,24 +171,26 @@ export default function IntellectualCheckoutPage() {
       // =========================
       if (!intentId && qr) {
         showAlert("Error", "Payment ID not found in response.");
-
         setNavigating(false);
-
+        setLoading(false);
+        isProcessing.current = false; // Safely release lock since transaction aborted
         return;
       }
 
       setPaymentIntentId(String(intentId));
 
       // =========================
-      // REDIRECT URL
+      // REDIRECT URL (Webview Flow)
       // =========================
       if (redirectUrl) {
         setCheckoutUrl(redirectUrl);
+        // We DO NOT set isProcessing to false here because we want the screen locked
+        // until the WebView element takes over the viewport.
         return;
       }
 
       // =========================
-      // QR FLOW
+      // QR FLOW (Push Route)
       // =========================
       if (qr) {
         router.push({
@@ -205,7 +202,7 @@ export default function IntellectualCheckoutPage() {
             amount: String((paymentAmount || 0) / 100),
           },
         });
-
+        // Keeping locks active since app is changing views
         return;
       }
 
@@ -213,18 +210,18 @@ export default function IntellectualCheckoutPage() {
       // NO QR / NO REDIRECT
       // =========================
       showAlert("Error", "Could not generate payment session.");
-
       setNavigating(false);
+      setLoading(false);
+      isProcessing.current = false;
     } catch (error: any) {
       console.log("CHECKOUT ERROR:", error);
 
       const message =
         error?.response?.data?.message || error?.message || "Payment failed";
-
       showAlert("Error", message);
 
+      // Reset everything on actual API failure strings so they can try again
       setNavigating(false);
-    } finally {
       setLoading(false);
       isProcessing.current = false;
     }
@@ -276,8 +273,8 @@ export default function IntellectualCheckoutPage() {
           return (
             <TouchableOpacity
               key={m.id}
-              disabled={navigating}
-              onPress={() => !navigating && setSelectedMethod(m)}
+              disabled={loading || navigating}
+              onPress={() => !(loading || navigating) && setSelectedMethod(m)}
               className={`p-4 mb-3 rounded-xl border ${
                 active
                   ? "border-primary bg-blue-50"
@@ -298,12 +295,14 @@ export default function IntellectualCheckoutPage() {
       <View className="w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
           onPress={handleProceed}
-          disabled={loading || navigating}
+          disabled={loading || navigating || isProcessing.current}
           className={`h-16 rounded-2xl justify-center items-center ${
-            loading || navigating ? "bg-gray-300" : "bg-primary"
+            loading || navigating || isProcessing.current
+              ? "bg-gray-300"
+              : "bg-primary"
           }`}
         >
-          {loading || navigating ? (
+          {loading || navigating || isProcessing.current ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <Text className="text-white font-bold text-lg">

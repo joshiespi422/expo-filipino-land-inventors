@@ -76,6 +76,7 @@ export default function DetailsPage() {
 
   const [data, setData] = useState<any>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [hasSchedules, setHasSchedules] = useState(false);
 
   // ✅ CUSTOM ALERT STATE (FIXED)
   const [alert, setAlert] = useState({
@@ -120,6 +121,10 @@ export default function DetailsPage() {
       const included = res.included || [];
 
       setData(ip);
+
+      // Check if schedules exist in relationships
+      const schedulesRefs = ip.relationships?.schedules?.data || [];
+      setHasSchedules(schedulesRefs.length > 0);
 
       const claimRefs = ip.relationships?.claims?.data || [];
 
@@ -351,9 +356,10 @@ export default function DetailsPage() {
 
   const attr = data?.attributes ?? {};
 
+  // Display payment action if status is waiting_for_payment OR if they already have schedules set up
   const showPaymentButton =
     attr.form_type === "payment" &&
-    attr.status?.toLowerCase() === "waiting_for_payment";
+    (attr.status?.toLowerCase() === "waiting_for_payment" || hasSchedules);
 
   return (
     <KeyboardAvoidingView
@@ -376,9 +382,7 @@ export default function DetailsPage() {
         >
           {/* Header Section */}
           <View className="p-6 bg-white border-b border-slate-100 rounded-b-[40px] shadow-sm">
-            {/* Combined wrapping container */}
             <View className="flex-row flex-wrap justify-between items-center gap-3">
-              {/* Left Side Tags - flex-1 allows it to shrink if needed */}
               <View className="flex-row flex-wrap gap-2 flex-1 min-w-[60%]">
                 <View className="bg-slate-100 px-3 py-1.5 rounded-full flex-row items-center">
                   <Layers size={12} color="#64748b" />
@@ -395,7 +399,6 @@ export default function DetailsPage() {
                 </View>
               </View>
 
-              {/* Right Side Status */}
               <View
                 className={`px-4 py-2 rounded-2xl ${
                   attr.status === "registered"
@@ -438,11 +441,14 @@ export default function DetailsPage() {
                   {/* Text Block */}
                   <View className="flex-1 pr-4">
                     <Text className="text-white text-xl font-extrabold mb-1 tracking-wide">
-                      Proceed to Payment
+                      {hasSchedules
+                        ? "View Payment Breakdown"
+                        : "Proceed to Payment"}
                     </Text>
                     <Text className="text-white/80 text-xs font-medium leading-relaxed">
-                      Your application is approved. Tap here to choose your
-                      payment term and complete the process.
+                      {hasSchedules
+                        ? "Your payment schedule is active. Tap here to view your installment logs and outstanding balances."
+                        : "Your application is approved. Tap here to choose your payment term and complete the process."}
                     </Text>
                   </View>
 

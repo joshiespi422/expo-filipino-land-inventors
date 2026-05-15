@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import {
   applyIntellectualPayment,
   getIntellectualProperty,
@@ -8,7 +9,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -31,6 +31,20 @@ export default function IntellectualPaymentPage() {
 
   const [hasSchedules, setHasSchedules] = useState(false);
 
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  const showAlert = (title: string, message: string) => {
+    setAlert({
+      visible: true,
+      title,
+      message,
+    });
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -52,15 +66,7 @@ export default function IntellectualPaymentPage() {
 
         setHasSchedules(alreadyHasSchedules);
 
-        console.log("🔍 FULL IP:", JSON.stringify(ip, null, 2));
-        console.log("STATUS:", status);
-        console.log("SCHEDULES:", schedules.length);
-        console.log("HAS SCHEDULES:", alreadyHasSchedules);
-
-        /* FIXED */
         if (alreadyHasSchedules) {
-          console.log("✅ REDIRECTING TO BREAKDOWN");
-
           router.replace({
             pathname: "/intellectual-breakdown",
             params: {
@@ -71,55 +77,56 @@ export default function IntellectualPaymentPage() {
           return;
         }
 
-        /* FIXED */
         if (status !== "waiting_for_payment") {
-          Alert.alert(
+          showAlert(
             "Not Ready",
             "This intellectual property is not ready for payment.",
           );
-
-          router.back();
-
+          setTimeout(() => {
+            router.back();
+          }, 1500);
           return;
         }
 
         const settings = await getIntellectualSettings(id as string);
 
-        console.log("SETTINGS:", settings);
-
         if (!isMounted) return;
 
         const paymentOptions = settings?.payment_options || [];
 
-        console.log("PAYMENT OPTIONS RAW:", paymentOptions);
-
-        const totalAmount = Number(settings?.amount || attr?.amount || 0);
+        // 🪙 CONVERT TOTAL AMOUNT FROM CENTS TO PESOS
+        const totalAmountRaw = Number(settings?.amount || attr?.amount || 0);
+        const totalAmountPesos = totalAmountRaw / 100;
 
         if (!paymentOptions.length) {
-          Alert.alert(
+          showAlert(
             "Not Ready",
             "No payment options configured for this property.",
           );
-
-          router.back();
-
+          setTimeout(() => {
+            router.back();
+          }, 1500);
           return;
         }
 
-        if (totalAmount <= 0) {
-          Alert.alert("Not Ready", "Payment amount is not set properly.");
-
-          router.back();
-
+        if (totalAmountPesos <= 0) {
+          showAlert("Not Ready", "Payment amount is not set properly.");
+          setTimeout(() => {
+            router.back();
+          }, 1500);
           return;
         }
 
-        setAmount(totalAmount);
-        setOptions(paymentOptions);
+        // 🪙 CONVERT TERM AMOUNTS FROM CENTS TO PESOS
+        const mappedOptions = paymentOptions.map((opt: any) => ({
+          ...opt,
+          amount_per_term: Number(opt.amount_per_term || 0) / 100,
+        }));
+
+        setAmount(totalAmountPesos);
+        setOptions(mappedOptions);
       } catch (e: any) {
-        console.log("INIT ERROR:", e?.response?.data || e);
-
-        Alert.alert(
+        showAlert(
           "Error",
           e?.response?.data?.message || "Failed to load payment options.",
         );
@@ -141,7 +148,6 @@ export default function IntellectualPaymentPage() {
       return;
     }
 
-    /* FIXED */
     if (hasSchedules) {
       router.replace({
         pathname: "/intellectual-breakdown",
@@ -157,19 +163,12 @@ export default function IntellectualPaymentPage() {
       isProcessing.current = true;
       setSubmitting(true);
 
-      console.log("SELECTED:", selectedOption);
-
       const payload = {
         term_months: Number(selectedOption.term_months),
       };
 
-      console.log("PAYLOAD:", payload);
-
       const response = await applyIntellectualPayment(id as string, payload);
 
-      console.log("SUCCESS:", response);
-
-      /* FIXED */
       if (response?.conflict) {
         router.replace({
           pathname: "/intellectual-breakdown",
@@ -181,18 +180,18 @@ export default function IntellectualPaymentPage() {
         return;
       }
 
-      Alert.alert("Success", "Schedule created.");
+      showAlert("Success", "Schedule created.");
 
-      router.replace({
-        pathname: "/intellectual-breakdown",
-        params: {
-          id: String(id),
-        },
-      });
+      setTimeout(() => {
+        router.replace({
+          pathname: "/intellectual-breakdown",
+          params: {
+            id: String(id),
+          },
+        });
+      }, 1500);
     } catch (e: any) {
-      console.log("ERROR APPLY:", e?.response?.data || e);
-
-      Alert.alert(
+      showAlert(
         "Cannot Proceed",
         e?.response?.data?.message || "Property not ready for payment.",
       );
@@ -206,7 +205,6 @@ export default function IntellectualPaymentPage() {
     return (
       <View className="flex-1 justify-center items-center bg-white">
         <ActivityIndicator size="large" />
-
         <Text className="mt-2 text-slate-500">Loading payment options...</Text>
       </View>
     );
@@ -223,7 +221,7 @@ export default function IntellectualPaymentPage() {
 
         <Text className="text-3xl font-black text-primary mb-6">
           ₱
-          {Number(amount).toLocaleString("en-PH", {
+          {amount.toLocaleString("en-PH", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })}
@@ -233,7 +231,7 @@ export default function IntellectualPaymentPage() {
           <TouchableOpacity
             key={i}
             onPress={() => setSelectedOption(opt)}
-            disabled={hasSchedules}
+            disabled={hasSchedules || submitting || isProcessing.current}
             className={`p-4 mb-3 border rounded-2xl flex-row justify-between items-center ${
               selectedOption?.term_months === opt.term_months
                 ? "border-primary bg-blue-50"
@@ -245,7 +243,7 @@ export default function IntellectualPaymentPage() {
 
               <Text className="text-sm text-gray-500">
                 ₱
-                {Number(opt.amount_per_term || 0).toLocaleString("en-PH", {
+                {opt.amount_per_term.toLocaleString("en-PH", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}{" "}
@@ -267,9 +265,17 @@ export default function IntellectualPaymentPage() {
       <View className="p-5 border-t border-gray-100">
         <TouchableOpacity
           onPress={handleSubmit}
-          disabled={!selectedOption || submitting || hasSchedules}
+          disabled={
+            !selectedOption ||
+            submitting ||
+            isProcessing.current ||
+            hasSchedules
+          }
           className={`h-14 rounded-xl justify-center items-center ${
-            !selectedOption || submitting || hasSchedules
+            !selectedOption ||
+            submitting ||
+            isProcessing.current ||
+            hasSchedules
               ? "bg-gray-400"
               : "bg-primary"
           }`}
@@ -283,6 +289,19 @@ export default function IntellectualPaymentPage() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* CUSTOM ALERT COMPONENT */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() =>
+          setAlert({
+            ...alert,
+            visible: false,
+          })
+        }
+      />
     </View>
   );
 }
