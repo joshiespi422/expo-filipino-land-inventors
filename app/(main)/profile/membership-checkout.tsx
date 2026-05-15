@@ -25,16 +25,18 @@ export default function MembershipCheckoutPage() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
     null,
   );
+
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
   const [navigating, setNavigating] = useState(false);
+
   const isProcessing = useRef(false);
 
   const safeScheduleId = Array.isArray(scheduleId) ? scheduleId[0] : scheduleId;
+
   const safeAmount = Array.isArray(amount) ? amount[0] : amount;
 
-  // RESET LOCKS ON FOCUS (If user comes back from QR or WebView)
+  // RESET LOCKS
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
@@ -44,11 +46,13 @@ export default function MembershipCheckoutPage() {
   );
 
   // =========================
-  // FORMATTING & PARSING
+  // FORMATTERS
   // =========================
   const formatAmount = (value: any) => {
     const num = Number(String(value).replace(/,/g, ""));
+
     if (isNaN(num)) return "0.00";
+
     return num.toLocaleString("en-PH", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -59,13 +63,19 @@ export default function MembershipCheckoutPage() {
     const cleaned = String(value)
       .replace(/,/g, "")
       .replace(/[^\d.]/g, "");
+
     const num = Number(cleaned);
+
     return isNaN(num) ? 0 : Number(num.toFixed(2));
   };
 
+  // =========================
+  // LOAD METHODS
+  // =========================
   const loadMethods = async () => {
     try {
       const res = await getPaymentMethods();
+
       const list = Array.isArray(res)
         ? res
         : Array.isArray(res?.data)
@@ -83,7 +93,10 @@ export default function MembershipCheckoutPage() {
       );
 
       setMethods(filtered);
-      setSelectedMethod(filtered[0] || null);
+
+      if (filtered.length > 0) {
+        setSelectedMethod(filtered[0]);
+      }
     } catch (err) {
       console.log("Failed to load payment methods", err);
     }
@@ -93,68 +106,112 @@ export default function MembershipCheckoutPage() {
     loadMethods();
   }, []);
 
+  // =========================
+  // PAYMENT
+  // =========================
   const handleProceed = async () => {
-    if (isProcessing.current || navigating || loading) return;
+    if (isProcessing.current || loading || navigating) return;
 
     if (!selectedMethod) {
       Alert.alert("Error", "Please select a payment method");
       return;
     }
 
-    const parsedAmount = parseAmount(safeAmount);
-    isProcessing.current = true;
-    setLoading(true);
-
     try {
+      isProcessing.current = true;
+
+      setLoading(true);
+
+      const parsedAmount = parseAmount(safeAmount);
+
       const payload = {
         membership_schedule_id: Number(safeScheduleId),
-        payment_method_id: selectedMethod.id,
+        payment_method_id: Number(selectedMethod.id),
         amount: parsedAmount,
         gateway: "paymongo",
       };
 
+      console.log("PAYLOAD:", payload);
+
       const response = await payMembership(String(safeScheduleId), payload);
-      const result = response?.data;
 
-      // 1. EXTRACT ACTIONS
-      const nextAction = result?.next_action;
-      const qr = nextAction?.qr_code_url;
-      const url = nextAction?.redirect_url;
+      console.log("FULL PAYMENT RESPONSE:", JSON.stringify(response, null, 2));
 
-      // 2. FLEXIBLE ID EXTRACTION (The Fix)
-      const intentId = result?.data?.payment?.gateway_payment_intent_id;
+      const result = response?.data || response;
 
-      // 3. VALIDATION
-      if (!intentId && qr) {
-        Alert.alert("Error", "Payment ID not found in response.");
-        return;
-      }
+      // =========================
+      // FLEXIBLE EXTRACTION
+      // =========================
+      const nextAction =
+        result?.next_action ||
+        result?.data?.next_action ||
+        result?.payment?.next_action ||
+        result?.data?.payment?.next_action;
 
-      // 4. ROUTING
-      if (url) {
-        setCheckoutUrl(url);
-      }
+      const qr =
+        nextAction?.qr_code_url || nextAction?.qr_url || result?.qr_code_url;
 
+      const url =
+        nextAction?.redirect_url || nextAction?.url || result?.redirect_url;
+
+      const payment = result?.payment || result?.data?.payment || result?.data;
+
+      const paymentIntentId =
+        payment?.gateway_payment_intent_id ||
+        payment?.payment_intent_id ||
+        payment?.id ||
+        result?.gateway_payment_intent_id;
+
+      const paymentAmount =
+        payment?.amount || result?.amount || parsedAmount * 100;
+
+      console.log("QR:", qr);
+      console.log("URL:", url);
+      console.log("PAYMENT INTENT:", paymentIntentId);
+
+      // =========================
+      // QR FLOW
+      // =========================
       if (qr) {
+        setNavigating(true);
+
         router.push({
           pathname: "/profile/membership-qrph",
           params: {
-            qrUrl: qr,
-            paymentIntentId: String(intentId),
+            qrUrl: String(qr),
+            paymentIntentId: String(paymentIntentId || ""),
+            amount: String(Number(paymentAmount) / 100),
           },
         });
+
+        return;
       }
+
+      // =========================
+      // WEBVIEW FLOW
+      // =========================
+      if (url) {
+        setCheckoutUrl(String(url));
+        return;
+      }
+
+      Alert.alert("Error", "No payment QR or checkout URL found.");
     } catch (error: any) {
-      setLoading(false);
-      isProcessing.current = false;
+      console.log("PAYMENT ERROR:", error);
+
       const message =
-        error?.response?.data?.message || error.message || "Payment failed";
+        error?.response?.data?.message || error?.message || "Payment failed";
+
       Alert.alert("Error", message);
     } finally {
       setLoading(false);
+      isProcessing.current = false;
     }
   };
 
+  // =========================
+  // WEBVIEW
+  // =========================
   if (checkoutUrl) {
     return (
       <WebView
@@ -170,9 +227,18 @@ export default function MembershipCheckoutPage() {
     );
   }
 
+  // =========================
+  // UI
+  // =========================
   return (
     <View className="flex-1 bg-gray-50">
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
+      <ScrollView
+        contentContainerStyle={{
+          padding: 20,
+          paddingBottom: 120,
+        }}
+      >
+        {/* CARD */}
         <View className="bg-white rounded-3xl p-6 mb-6 shadow-sm">
           <Text className="text-slate-400 text-xs font-bold uppercase">
             Membership Payment
@@ -183,6 +249,7 @@ export default function MembershipCheckoutPage() {
           </Text>
         </View>
 
+        {/* METHODS */}
         <Text className="font-semibold text-gray-800 mb-3 px-1">
           Select Payment Method
         </Text>
@@ -193,7 +260,7 @@ export default function MembershipCheckoutPage() {
           return (
             <TouchableOpacity
               key={m.id}
-              disabled={navigating}
+              disabled={loading || navigating}
               onPress={() => setSelectedMethod(m)}
               className={`p-4 mb-3 rounded-xl border ${
                 active
@@ -202,6 +269,7 @@ export default function MembershipCheckoutPage() {
               }`}
             >
               <Text className="font-semibold">{m.name}</Text>
+
               <Text className="text-xs text-gray-500 uppercase">
                 {m.gateway_type}
               </Text>
@@ -210,6 +278,7 @@ export default function MembershipCheckoutPage() {
         })}
       </ScrollView>
 
+      {/* FOOTER */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-gray-100">
         <TouchableOpacity
           onPress={handleProceed}

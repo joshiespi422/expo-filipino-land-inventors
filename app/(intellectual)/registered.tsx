@@ -207,7 +207,9 @@ export default function IndexPage() {
                                     : "text-[#D70127]"
                               }`}
                             >
-                              {attr.status}
+                              {attr.status === "waiting_for_payment"
+                                ? "Waiting For Payment"
+                                : attr.status}
                             </Text>
                           </View>
                         </View>

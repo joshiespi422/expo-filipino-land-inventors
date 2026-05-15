@@ -1,17 +1,19 @@
 import { getPaymentMethods, payLoan } from "@/services/loanService";
 import { PaymentMethod } from "@/types/loan.types";
-import { useFocusEffect } from "@react-navigation/native"; // Added for back-button reset
+import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
+
+// COMPONENTS
+import { CustomAlert } from "@/components/CustomAlert";
 
 export default function LoanCheckoutPage() {
   const { id, scheduleId, amount } = useLocalSearchParams();
@@ -26,13 +28,20 @@ export default function LoanCheckoutPage() {
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
+  // ALERT STATE
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
   // ==========================================
   // 🛡️ NAVIGATION LOCKS (STRICT PREVENT CLICK)
   // ==========================================
   const [navigating, setNavigating] = useState(false);
   const isProcessing = useRef(false);
 
-  // RESET LOCKS ON FOCUS (If user comes back from QR or WebView)
+  // RESET LOCKS ON FOCUS
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
@@ -42,11 +51,23 @@ export default function LoanCheckoutPage() {
   );
 
   // =========================
+  // ALERT HELPER
+  // =========================
+  const showAlert = (title: string, message: string) => {
+    setAlert({
+      visible: true,
+      title,
+      message,
+    });
+  };
+
+  // =========================
   // FORMATTING & PARSING
   // =========================
   const formatAmount = (value: any) => {
     const num = Number(String(value).replace(/,/g, ""));
     if (isNaN(num)) return "0.00";
+
     return num.toLocaleString("en-PH", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -57,7 +78,9 @@ export default function LoanCheckoutPage() {
     const cleaned = String(value)
       .replace(/,/g, "")
       .replace(/[^\d.]/g, "");
+
     const num = Number(cleaned);
+
     return isNaN(num) ? 0 : Number(num.toFixed(2));
   };
 
@@ -67,6 +90,7 @@ export default function LoanCheckoutPage() {
   const loadMethods = async () => {
     try {
       const res = await getPaymentMethods();
+
       const list = Array.isArray(res)
         ? res
         : Array.isArray(res?.data)
@@ -87,6 +111,8 @@ export default function LoanCheckoutPage() {
       setSelectedMethod(filtered[0] || null);
     } catch (err) {
       console.log("❌ Failed to load payment methods", err);
+
+      showAlert("Error", "Failed to load payment methods. Please try again.");
     }
   };
 
@@ -98,21 +124,20 @@ export default function LoanCheckoutPage() {
   // 💰 PAY LOAN (HANDLE PROCEED)
   // =========================
   const handleProceed = async () => {
-    // 1. HARD STOP - Check all locks
+    // HARD STOP
     if (isProcessing.current || navigating || loading) return;
 
     if (!selectedMethod) {
-      Alert.alert("Error", "Please select a payment method");
-      return;
+      return showAlert("Error", "Please select a payment method");
     }
 
     const parsedAmount = parseAmount(amount);
+
     if (parsedAmount <= 0) {
-      Alert.alert("Error", "Invalid payment amount");
-      return;
+      return showAlert("Error", "Invalid payment amount");
     }
 
-    // 2. SET LOCKS IMMEDIATELY
+    // SET LOCKS
     isProcessing.current = true;
     setLoading(true);
     setNavigating(true);
@@ -126,11 +151,14 @@ export default function LoanCheckoutPage() {
       };
 
       const response = await payLoan(id as string, payload);
+
       const result = response?.data;
 
       const nextAction = result?.data?.next_action;
+
       const url = nextAction?.redirect_url;
       const qr = nextAction?.qr_code_url;
+
       const intentId = result?.data?.payment?.gateway_payment_intent_id;
 
       if (!intentId) {
@@ -139,47 +167,39 @@ export default function LoanCheckoutPage() {
 
       setPaymentIntentId(intentId);
 
-      // 🌐 Redirect Web
+      // WEB CHECKOUT
       if (url) {
         setCheckoutUrl(url);
         return;
-        // Note: loading/navigating remains true to keep button disabled while WebView loads
       }
 
-      // 📱 QR Flow
+      // QR FLOW
       if (qr) {
         router.push({
           pathname: "/qrph",
           params: {
             qrUrl: qr,
             paymentIntentId: intentId,
+            amount: String(parsedAmount),
           },
         });
+
         return;
       }
 
       throw new Error("No available payment action");
     } catch (error: any) {
-      console.log("🔥 ERROR:", error?.response?.data);
-
-      // 3. RELEASE LOCKS ONLY ON ERROR
-      setLoading(false);
-      setNavigating(false);
-      isProcessing.current = false;
+      console.log("PAYMENT ERROR:", error);
 
       const message =
-        error?.response?.data?.message ||
-        error.message ||
-        "Failed to create payment session";
+        error?.response?.data?.message || error?.message || "Payment failed";
 
-      if (message.includes("pending")) {
-        Alert.alert(
-          "Payment Pending",
-          "You already have a recent pending payment. Please wait a moment before trying again.",
-        );
-      } else {
-        Alert.alert("Payment Failed", message);
-      }
+      showAlert("Error", message);
+
+      setNavigating(false);
+    } finally {
+      setLoading(false);
+      isProcessing.current = false;
     }
   };
 
@@ -208,6 +228,7 @@ export default function LoanCheckoutPage() {
           <Text className="text-slate-400 text-xs font-bold uppercase">
             Checkout Payment
           </Text>
+
           <Text className="text-primary text-3xl font-black mt-1">
             ₱{formatAmount(amount)}
           </Text>
@@ -219,6 +240,7 @@ export default function LoanCheckoutPage() {
 
         {methods.map((m) => {
           const active = selectedMethod?.id === m.id;
+
           return (
             <TouchableOpacity
               key={m.id}
@@ -231,6 +253,7 @@ export default function LoanCheckoutPage() {
               }`}
             >
               <Text className="font-semibold text-gray-900">{m.name}</Text>
+
               <Text className="text-xs text-gray-500 mt-1 uppercase">
                 {m.gateway_type}
               </Text>
@@ -257,6 +280,19 @@ export default function LoanCheckoutPage() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* CUSTOM ALERT */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() =>
+          setAlert({
+            ...alert,
+            visible: false,
+          })
+        }
+      />
     </View>
   );
 }

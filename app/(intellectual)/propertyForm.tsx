@@ -11,7 +11,6 @@ import {
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -21,6 +20,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { CustomAlert } from "@/components/CustomAlert";
 import "../../global.css";
 
 interface AgreedState {
@@ -48,6 +49,13 @@ export default function PropertyForm() {
 
   const MAX_FILE_SIZE = 8 * 1024 * 1024;
 
+  // ✅ CUSTOM ALERT STATE
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
   // Keyboard Handling Logic
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () => {
@@ -60,10 +68,12 @@ export default function PropertyForm() {
   }, []);
 
   useFocusEffect(
-    useCallback(() => {
-      setLoading(false);
-      isProcessing.current = false;
-    }, []),
+    ...[
+      useCallback(() => {
+        setLoading(false);
+        isProcessing.current = false;
+      }, []),
+    ],
   );
 
   const [creationType, setCreationType] = useState<
@@ -104,23 +114,29 @@ export default function PropertyForm() {
 
       if (result.canceled) return;
 
-      const selectedFiles: Attachment[] = result.assets
-        .filter((asset: any) => {
-          if (asset.size && asset.size > MAX_FILE_SIZE) {
-            Alert.alert("File too large", `${asset.name} exceeds 8MB limit.`);
-            return false;
-          }
-          return true;
-        })
-        .map(
-          (asset: any, index: number): Attachment => ({
-            id: String(Date.now() + index),
-            uri: asset.uri,
-            name: asset.name,
-            type: asset.mimeType || "image/jpeg",
-            size: asset.size,
-          }),
-        );
+      // ✅ 8MB Maximum Size Validation with Custom Alert UI
+      const oversizedFile = result.assets.find(
+        (asset: any) => (asset.size || 0) > MAX_FILE_SIZE,
+      );
+
+      if (oversizedFile) {
+        setAlert({
+          visible: true,
+          title: "File Too Large",
+          message: `The image "${oversizedFile.name}" exceeds the maximum limit of 8MB. Please select a smaller file.`,
+        });
+        return;
+      }
+
+      const selectedFiles: Attachment[] = result.assets.map(
+        (asset: any, index: number): Attachment => ({
+          id: String(Date.now() + index),
+          uri: asset.uri,
+          name: asset.name,
+          type: asset.mimeType || "image/jpeg",
+          size: asset.size,
+        }),
+      );
 
       setAttachments((prev) => [...prev, ...selectedFiles]);
     } catch (error) {
@@ -135,23 +151,39 @@ export default function PropertyForm() {
   const validateStep = () => {
     if (step === 1) {
       if (!creationType) {
-        Alert.alert("Required", "Please select creation type.");
+        setAlert({
+          visible: true,
+          title: "Required",
+          message: "Please select creation type.",
+        });
         return false;
       }
       if (!generalInfo.title.trim() || !generalInfo.description.trim()) {
-        Alert.alert("Required", "Title and Description are mandatory.");
+        setAlert({
+          visible: true,
+          title: "Required",
+          message: "Title and Description are mandatory.",
+        });
         return false;
       }
     }
     if (step === 2) {
       if (!claims.some((c) => c.trim() !== "")) {
-        Alert.alert("Required", "Please enter at least one claim.");
+        setAlert({
+          visible: true,
+          title: "Required",
+          message: "Please enter at least one claim.",
+        });
         return false;
       }
     }
     if (step === 3) {
       if (attachments.length === 0) {
-        Alert.alert("Required", "Please upload at least one image.");
+        setAlert({
+          visible: true,
+          title: "Required",
+          message: "Please upload at least one image.",
+        });
         return false;
       }
     }
@@ -168,7 +200,11 @@ export default function PropertyForm() {
     if (isProcessing.current || loading) return;
 
     if (!agreed.original || !agreed.terms || !agreed.privacy) {
-      Alert.alert("Required", "Please accept all terms and declarations.");
+      setAlert({
+        visible: true,
+        title: "Required",
+        message: "Please accept all terms and declarations.",
+      });
       return;
     }
 
@@ -204,10 +240,11 @@ export default function PropertyForm() {
       await createIntellectualProperty(formData);
       router.replace("/congratulations");
     } catch (error: any) {
-      Alert.alert(
-        "Error",
-        error?.response?.data?.message || "Submission failed.",
-      );
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: error?.response?.data?.message || "Submission failed.",
+      });
     } finally {
       setLoading(false);
       isProcessing.current = false;
@@ -488,6 +525,19 @@ export default function PropertyForm() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* ✅ INTEGRATED CUSTOM ALERT */}
+        <CustomAlert
+          visible={alert.visible}
+          title={alert.title}
+          message={alert.message}
+          onClose={() =>
+            setAlert({
+              ...alert,
+              visible: false,
+            })
+          }
+        />
       </View>
     </KeyboardAvoidingView>
   );

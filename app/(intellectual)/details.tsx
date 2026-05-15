@@ -8,6 +8,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  ChevronRight,
   Eye,
   Layers,
   Plus,
@@ -20,7 +21,6 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Image,
   Keyboard,
@@ -35,12 +35,13 @@ import {
   View,
 } from "react-native";
 
+import { CustomAlert } from "@/components/CustomAlert";
 import "../../global.css";
 
 const { width, height } = Dimensions.get("window");
 
 const STORAGE_URL = `${BASE_URL}/storage/`;
-const TOTAL_MAX_UPLOAD_SIZE = 8 * 1024 * 1024; // 8MB
+const TOTAL_MAX_UPLOAD_SIZE = 8 * 1024 * 1024;
 
 const normalizeFileUrl = (path: string | null) => {
   if (!path) return "";
@@ -76,6 +77,13 @@ export default function DetailsPage() {
   const [data, setData] = useState<any>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
+  // ✅ CUSTOM ALERT STATE (FIXED)
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -86,7 +94,6 @@ export default function DetailsPage() {
     delete_document_ids: [] as number[],
   });
 
-  // Keyboard Handling Logic
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () => {
       scrollRef.current?.scrollTo({
@@ -95,9 +102,7 @@ export default function DetailsPage() {
       });
     });
 
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      // restore smoothly when keyboard closes if needed
-    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {});
 
     return () => {
       show.remove();
@@ -165,7 +170,11 @@ export default function DetailsPage() {
         delete_document_ids: [],
       });
     } catch (error) {
-      Alert.alert("Error", "Failed to load details.");
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "Failed to load details.",
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -187,7 +196,11 @@ export default function DetailsPage() {
     const lastClaim = form.claims[form.claims.length - 1];
 
     if (!lastClaim.description.trim()) {
-      Alert.alert("Required", "Complete current claim first.");
+      setAlert({
+        visible: true,
+        title: "Required",
+        message: "Complete current claim first.",
+      });
       return;
     }
 
@@ -208,7 +221,6 @@ export default function DetailsPage() {
 
   const updateClaim = (text: string, index: number) => {
     const newClaims = [...form.claims];
-
     newClaims[index].description = text;
 
     setForm({
@@ -226,20 +238,37 @@ export default function DetailsPage() {
 
       if (result.canceled) return;
 
-      const validFiles: Attachment[] = result.assets
-        .filter((asset) => (asset.size || 0) <= TOTAL_MAX_UPLOAD_SIZE)
-        .map((asset) => ({
-          id: `new-${Date.now()}-${Math.random()}`,
-          uri: asset.uri,
-          name: asset.name,
-          type: asset.mimeType || "image/jpeg",
-          size: asset.size,
-          isNew: true,
-        }));
+      // Check if any of the picked files exceed 8MB limit
+      const oversizedFile = result.assets.find(
+        (asset) => (asset.size || 0) > TOTAL_MAX_UPLOAD_SIZE,
+      );
+
+      if (oversizedFile) {
+        setAlert({
+          visible: true,
+          title: "File Too Large",
+          message: `The image "${oversizedFile.name}" exceeds the maximum limit of 8MB. Please select a smaller file.`,
+        });
+        return;
+      }
+
+      // If all files pass validation, map them to state
+      const validFiles: Attachment[] = result.assets.map((asset) => ({
+        id: `new-${Date.now()}-${Math.random()}`,
+        uri: asset.uri,
+        name: asset.name,
+        type: asset.mimeType || "image/jpeg",
+        size: asset.size,
+        isNew: true,
+      }));
 
       setAttachments((prev) => [...prev, ...validFiles]);
-    } catch (error) {
-      Alert.alert("Error", "Failed to pick file.");
+    } catch {
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "Failed to pick file.",
+      });
     }
   };
 
@@ -289,12 +318,19 @@ export default function DetailsPage() {
       await updateIntellectualProperty(id as string, formData);
 
       setIsEditing(false);
-
       fetchDetails();
 
-      Alert.alert("Success", "Updated successfully.");
-    } catch (error) {
-      Alert.alert("Error", "Update failed.");
+      setAlert({
+        visible: true,
+        title: "Success",
+        message: "Updated successfully.",
+      });
+    } catch {
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "Update failed.",
+      });
     } finally {
       setUpdating(false);
     }
@@ -314,9 +350,6 @@ export default function DetailsPage() {
   }
 
   const attr = data?.attributes ?? {};
-
-  // PAYMENT CHECK
-  // const schedules = data?.relationships?.schedules?.data || [];
 
   const showPaymentButton =
     attr.form_type === "payment" &&
@@ -343,11 +376,12 @@ export default function DetailsPage() {
         >
           {/* Header Section */}
           <View className="p-6 bg-white border-b border-slate-100 rounded-b-[40px] shadow-sm">
-            <View className="flex-row justify-between items-center">
-              <View className="flex-row flex-wrap gap-2">
+            {/* Combined wrapping container */}
+            <View className="flex-row flex-wrap justify-between items-center gap-3">
+              {/* Left Side Tags - flex-1 allows it to shrink if needed */}
+              <View className="flex-row flex-wrap gap-2 flex-1 min-w-[60%]">
                 <View className="bg-slate-100 px-3 py-1.5 rounded-full flex-row items-center">
                   <Layers size={12} color="#64748b" />
-
                   <Text className="text-slate-600 font-semibold text-[10px] ml-1 uppercase">
                     {form.creation_type}
                   </Text>
@@ -355,13 +389,13 @@ export default function DetailsPage() {
 
                 <View className="bg-slate-100 px-3 py-1.5 rounded-full flex-row items-center">
                   <Smartphone size={12} color="#64748b" />
-
                   <Text className="text-slate-600 font-semibold text-[10px] ml-1 uppercase">
                     {form.form_type}
                   </Text>
                 </View>
               </View>
 
+              {/* Right Side Status */}
               <View
                 className={`px-4 py-2 rounded-2xl ${
                   attr.status === "registered"
@@ -372,7 +406,7 @@ export default function DetailsPage() {
                 }`}
               >
                 <Text
-                  className={`font-bold text-xs ${
+                  className={`font-bold text-xs uppercase ${
                     attr.status === "registered"
                       ? "text-green-700"
                       : attr.status === "pending"
@@ -380,7 +414,9 @@ export default function DetailsPage() {
                         : "text-[#D70127]"
                   }`}
                 >
-                  {attr.status || "Draft"}
+                  {attr.status === "waiting_for_payment"
+                    ? "Waiting For Payment"
+                    : attr.status}
                 </Text>
               </View>
             </View>
@@ -393,27 +429,31 @@ export default function DetailsPage() {
                 onPress={() =>
                   router.push({
                     pathname: "/intellectual-payment",
-                    params: {
-                      id: id as string,
-                    },
+                    params: { id: id as string },
                   })
                 }
-                className="bg-primary rounded-[28px] p-5 mb-6 shadow-lg shadow-primary/20"
+                className="bg-primary rounded-3xl p-5 mb-6 shadow-lg shadow-primary/30 active:opacity-90"
               >
                 <View className="flex-row items-center justify-between">
+                  {/* Text Block */}
                   <View className="flex-1 pr-4">
-                    <Text className="text-white text-lg font-black mb-1">
-                      Payment Required
+                    <Text className="text-white text-xl font-extrabold mb-1 tracking-wide">
+                      Proceed to Payment
                     </Text>
-
-                    <Text className="text-white/80 text-sm leading-5">
-                      Your application has been waiting for payment. Continue to
-                      choose your payment term.
+                    <Text className="text-white/80 text-xs font-medium leading-relaxed">
+                      Your application is approved. Tap here to choose your
+                      payment term and complete the process.
                     </Text>
                   </View>
 
-                  <View className="bg-white/20 p-4 rounded-2xl">
-                    <Wallet size={28} color="white" />
+                  {/* Action Icons */}
+                  <View className="bg-white/15 p-3.5 rounded-2xl flex-row items-center gap-1">
+                    <Wallet size={24} color="white" />
+                    <ChevronRight
+                      size={18}
+                      color="white"
+                      className="opacity-80"
+                    />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -624,7 +664,7 @@ export default function DetailsPage() {
 
                 <TouchableOpacity
                   onPress={handleUpdate}
-                  className="flex-[2] bg-green-500 h-14 rounded-2xl justify-center items-center shadow-lg shadow-green-200"
+                  className="flex-[2] bg-primary h-14 rounded-2xl justify-center items-center shadow-lg shadow-green-200"
                 >
                   {updating ? (
                     <ActivityIndicator color="white" />
@@ -665,6 +705,19 @@ export default function DetailsPage() {
             </View>
           </View>
         </Modal>
+
+        {/* CUSTOM ALERT */}
+        <CustomAlert
+          visible={alert.visible}
+          title={alert.title}
+          message={alert.message}
+          onClose={() =>
+            setAlert({
+              ...alert,
+              visible: false,
+            })
+          }
+        />
       </View>
     </KeyboardAvoidingView>
   );
