@@ -22,19 +22,18 @@ import {
 import { useAuthStore } from "@/store/useAuthStore";
 
 // Assets
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import AlertIcon from "../../assets/images/icon/alert.png"; // New Alert Asset
 // import Ask from "../../assets/images/icon/Ask.png";
 import Businessicon from "../../assets/images/icon/Businessicon.png";
-import Coop from "../../assets/images/icon/coop.png";
-import FISMPC from "../../assets/images/icon/FISMPC.png";
+// import Coop from "../../assets/images/icon/coop.png";
+// import FISMPC from "../../assets/images/icon/FISMPC.png";
 // import Funding from "../../assets/images/icon/Funding.png";
 import Intellectual from "../../assets/images/icon/Intellectual.png";
 // import Licensing from "../../assets/images/icon/Licensing.png";
 import Loan from "../../assets/images/icon/Loan.png";
 // import Lost from "../../assets/images/icon/Lost.png";
-import News from "../../assets/images/icon/News.png";
+// import News from "../../assets/images/icon/News.png";
 // import Product from "../../assets/images/icon/Product.png";
 // import RD from "../../assets/images/icon/RD.png";
 // import Suggest from "../../assets/images/icon/Suggest.png";
@@ -52,7 +51,15 @@ export default function DashboardPage() {
   const [showAlert, setShowAlert] = useState(false);
   const [pendingFeature, setPendingFeature] = useState("");
 
-  const isMember = user?.user_type_id === 3;
+  const userTypeName = user?.user_type?.name?.toUpperCase() || "";
+  const statusName = user?.status?.name?.toLowerCase() || "";
+
+  const isBasic = userTypeName === "BASIC";
+  const isMember = user?.user_type_id === 3 || userTypeName === "MEMBER";
+
+  const isActive = statusName === "active";
+  const isApproved = statusName === "approved";
+  const isForApproval = statusName === "for_approval";
 
   // 1. Create a centralized data fetching function
   const loadData = async (showLoading = false) => {
@@ -128,13 +135,96 @@ export default function DashboardPage() {
     // },
     // { label: "R & D Collaboration", href: "/", source: RD },
     // { label: "Ask an Expert Assistance", href: "/", source: Ask },
-    { label: "FISMPC Online Store", href: "/", source: FISMPC },
+    // { label: "FISMPC Online Store", href: "/", source: FISMPC },
     // { label: "Product Validation Services", href: "/", source: Product },
     // { label: "Lost & Found", href: "/", source: Lost },
     // { label: "Suggest a Service", href: "/", source: Suggest },
-    { label: "Coop Membership", href: "/", source: Coop },
-    { label: "News & Event", href: "/", source: News },
+    // { label: "Coop Membership", href: "/", source: Coop },
+    // { label: "News & Event", href: "/", source: News },
   ];
+
+  const getPopupContent = () => {
+    // --- WARNING SECTION: BASIC & ACTIVE (Needs setup) ---
+    if (isBasic && isActive) {
+      return {
+        title: "Complete Your Profile",
+        message: (
+          <>
+            To access{" "}
+            <Text className="font-bold text-slate-800">{pendingFeature}</Text>,
+            please provide your information, address, and a valid ID to upgrade
+            your account.
+          </>
+        ),
+        buttonText: "Complete Now",
+        buttonColor: "bg-[#C6890F]",
+        iconBg: "bg-[#C6890F]",
+        textColor: "text-[#C6890F]",
+        route: "/profile/setupProfile",
+        icon: <Ionicons name="warning" size={32} color="white" />,
+      };
+    }
+
+    // --- PENDING NOTIFICATION ---
+    if (isBasic && isForApproval) {
+      return {
+        title: "Review in Progress",
+        message: (
+          <>
+            Your account details have already been submitted. Please wait 2-3
+            days for approval before accessing{" "}
+            <Text className="font-bold text-slate-800">{pendingFeature}</Text>.
+          </>
+        ),
+        buttonText: "View Profile",
+        buttonColor: "bg-primary",
+        iconBg: "bg-primary",
+        textColor: "text-primary",
+        route: "/profile",
+        icon: <Ionicons name="time" size={32} color="white" />,
+      };
+    }
+
+    // --- CAPITAL CONTRIBUTION SECTION ---
+    if (isBasic && isApproved) {
+      return {
+        title: "Capital Contribution Required",
+        message: (
+          <>
+            To access{" "}
+            <Text className="font-bold text-slate-800">{pendingFeature}</Text>,
+            you need to complete your initial share capital contribution through
+            installment or full payment.
+          </>
+        ),
+        buttonText: "Pay Contribution",
+        buttonColor: "bg-green-600",
+        iconBg: "bg-green-600",
+        textColor: "text-green-700",
+        route: "/profile/membership",
+        icon: (
+          <MaterialIcons
+            name="account-balance-wallet"
+            size={32}
+            color="white"
+          />
+        ),
+      };
+    }
+
+    return {
+      title: "Account Required",
+      message: "Please complete your account setup.",
+      buttonText: "View Profile",
+      buttonColor: "bg-primary",
+      iconBg: "bg-primary",
+      textColor: "text-primary",
+      route: "/profile",
+      icon: <Ionicons name="person" size={32} color="white" />,
+    };
+  };
+
+  const popupContent = getPopupContent();
 
   return (
     <ScrollView
@@ -254,39 +344,43 @@ export default function DashboardPage() {
         {/* THIS is the important fix */}
         <View className="flex-1 bg-black/20">
           <View className="flex-1 justify-center items-center px-5">
-            <View className="bg-white p-5 rounded-[30px] items-center w-full max-w-[380px] shadow-2xl">
-              <Image source={AlertIcon} className="w-20 h-20 mb-4" />
+            <View className="bg-white p-6 rounded-[30px] items-center w-full max-w-[380px] shadow-2xl">
+              <View
+                className={`w-20 h-20 rounded-full items-center justify-center mb-5 ${popupContent.iconBg}`}
+              >
+                {popupContent.icon}
+              </View>
 
-              <Text className="text-xl font-bold text-primary text-center mb-2">
-                Account Completion Required
+              <Text
+                className={`text-xl font-bold text-center mb-3 ${popupContent.textColor}`}
+              >
+                {popupContent.title}
               </Text>
 
-              <Text className="text-slate-500 text-center mb-6 leading-5 px-2">
-                To access{" "}
-                <Text className="font-bold text-slate-800">
-                  {pendingFeature}
-                </Text>{" "}
-                feature, you must first complete your account information.
-              </Text>
+              <View className="mb-6 px-2">
+                <Text className="text-slate-500 text-center leading-6">
+                  {popupContent.message}
+                </Text>
+              </View>
 
               <View className="w-full gap-y-3">
-                {/* Action Button: Go to Profile */}
+                {/* Action Button */}
                 <TouchableOpacity
                   onPress={() => {
                     setShowAlert(false);
-                    router.push("/profile"); // Directs to Profile
+                    router.push(popupContent.route as any);
                   }}
-                  className="bg-primary w-full py-4 rounded-2xl active:opacity-90 shadow-md shadow-primary/30"
+                  className={`${popupContent.buttonColor} w-full py-4 rounded-2xl active:opacity-90`}
                 >
                   <Text className="text-white text-center font-bold text-lg">
-                    View Profile
+                    {popupContent.buttonText}
                   </Text>
                 </TouchableOpacity>
 
                 {/* Cancel Button */}
                 <TouchableOpacity
                   onPress={() => setShowAlert(false)}
-                  className="w-full py-4 rounded-2xl bg-gray-200 active:opacity-90"
+                  className="w-full py-4 rounded-2xl bg-gray-100 active:opacity-90"
                 >
                   <Text className="text-slate-500 text-center font-bold text-lg">
                     Maybe Later

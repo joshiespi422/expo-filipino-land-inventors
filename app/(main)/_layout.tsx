@@ -40,6 +40,11 @@ export default function MainLayout() {
   const isProfileCongrats = pathname === "/profile/congratulations";
   const isProfileEdit = pathname === "/profile/editProfile";
   const isProfileSetup = pathname === "/profile/setupProfile";
+  const isMembership = pathname === "/profile/membership";
+  const isMembershipFee = pathname === "/profile/membership-breakdown";
+  const isMembershipPay = pathname === "/profile/membership-checkout";
+  const isMembershipQr = pathname === "/profile/membership-qrph";
+
   const isWelcomePage =
     pathname === "/welcomePage" || pathname === "/(main)/welcomePage";
 
@@ -133,7 +138,15 @@ export default function MainLayout() {
                       ? "Edit Profile"
                       : isProfileSetup
                         ? "Setup Profile"
-                        : ""}
+                        : isMembership
+                          ? "Membership"
+                          : isMembershipFee
+                            ? "Membership Fee"
+                            : isMembershipPay
+                              ? "Checkout"
+                              : isMembershipQr
+                                ? "Payment QR"
+                                : ""}
                 </Text>
 
                 <View style={{ width: 28 }} />
@@ -195,6 +208,7 @@ export default function MainLayout() {
                 >
                   <TouchableOpacity
                     activeOpacity={0.9}
+                    onPress={() => router.push("/camera")}
                     style={{
                       position: "absolute",
                       top: -43,
