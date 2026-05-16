@@ -23,7 +23,6 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 // Assets
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
 // import Ask from "../../assets/images/icon/Ask.png";
 import Businessicon from "../../assets/images/icon/Businessicon.png";
 // import Coop from "../../assets/images/icon/coop.png";
@@ -261,7 +260,7 @@ export default function DashboardPage() {
         {/* 2. WALLET SECTION */}
         {isMember && !pageLoading && (
           <View className="bg-primary p-3 rounded-2xl shadow-lg mb-4">
-            <View className="flex-row justify-between items-center">
+            {/* <View className="flex-row justify-between items-center">
               <View className="flex-row items-center gap-3">
                 <Text className="text-white text-2xl font-bold">
                   ₱{" "}
@@ -287,6 +286,26 @@ export default function DashboardPage() {
                   <FontAwesome name="send" size={20} color="#034194" />
                 </TouchableOpacity>
               </View>
+            </View> */}
+
+            <View className="flex-row justify-between p-2 items-center">
+              <View className="flex-row items-center gap-3">
+                <Text className="text-white text-2xl font-bold">
+                  ₱{" "}
+                  {showBalance
+                    ? Number(balance).toLocaleString("en-PH", {
+                        minimumFractionDigits: 2,
+                      })
+                    : "**.**"}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={handleToggleBalance}>
+                <Ionicons
+                  name={showBalance ? "eye-off" : "eye"}
+                  size={24}
+                  color="white"
+                />
+              </TouchableOpacity>
             </View>
           </View>
         )}

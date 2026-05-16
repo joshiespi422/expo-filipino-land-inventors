@@ -1,6 +1,8 @@
+import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Linking from "expo-linking";
-import React, { useEffect, useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,26 +12,35 @@ import {
 } from "react-native";
 
 export default function CameraScreen() {
+  const router = useRouter();
+  const lastScannedRef = useRef<string | null>(null);
+  const cooldownRef = useRef(false);
+
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
 
-  // ✅ FIXED: only request permission if NOT granted AND status is known
+  // 📌 Permission handling
   useEffect(() => {
-    const getPermission = async () => {
-      if (!permission) return;
+    if (!permission) return;
 
-      if (!permission.granted && permission.canAskAgain) {
-        await requestPermission();
-      }
-    };
+    if (!permission.granted && permission.canAskAgain) {
+      requestPermission();
+    }
+  }, [permission?.granted]);
 
-    getPermission();
-  }, [permission]);
-
+  // 📷 AUTO QR SCAN (NO MANUAL BUTTON)
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
-    if (scanned) return;
+    // prevent spam scanning same QR repeatedly
+    if (cooldownRef.current) return;
 
-    setScanned(true);
+    if (lastScannedRef.current === data) return;
+
+    cooldownRef.current = true;
+    lastScannedRef.current = data;
+
+    // short cooldown to avoid duplicate triggers
+    setTimeout(() => {
+      cooldownRef.current = false;
+    }, 1500);
 
     try {
       const isUrl = data.startsWith("http://") || data.startsWith("https://");
@@ -39,42 +50,34 @@ export default function CameraScreen() {
         return;
       }
 
-      Alert.alert("QR Code Result", data, [
-        {
-          text: "Scan Again",
-          onPress: () => setScanned(false),
-        },
-      ]);
+      Alert.alert("QR Code Detected", data);
     } catch (error) {
       Alert.alert("Error", "Unable to process QR Code");
-      setScanned(false);
     }
   };
 
-  // 🔄 LOADING STATE
+  // 🔄 LOADING
   if (!permission) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#034194" />
+      <View className="flex-1 items-center justify-center bg-black">
+        <ActivityIndicator size="large" color="#fff" />
       </View>
     );
   }
 
-  // 🚫 NO PERMISSION STATE
+  // 🚫 NO PERMISSION
   if (!permission.granted) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-5">
-        <Text className="text-lg text-black text-center mb-5">
+      <View className="flex-1 items-center justify-center bg-black px-6">
+        <Text className="text-white text-lg text-center mb-4">
           Camera permission is required
         </Text>
 
         <TouchableOpacity
           onPress={requestPermission}
-          className="bg-primary px-6 py-3 rounded-lg"
+          className="bg-[#C6890F] px-6 py-3 rounded-xl"
         >
-          <Text className="text-white font-bold text-base">
-            Grant Permission
-          </Text>
+          <Text className="text-white font-bold">Grant Permission</Text>
         </TouchableOpacity>
       </View>
     );
@@ -83,27 +86,41 @@ export default function CameraScreen() {
   // 📷 CAMERA VIEW
   return (
     <View className="flex-1 bg-black">
+      {/* CAMERA */}
       <CameraView
-        className="flex-1"
+        style={{ flex: 1 }}
         facing="back"
         barcodeScannerSettings={{
           barcodeTypes: ["qr"],
         }}
-        onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+        onBarcodeScanned={handleBarcodeScanned}
       />
 
-      {/* OVERLAY */}
-      <View className="absolute inset-0 items-center justify-center">
-        <View className="w-[260px] h-[260px] border-2 border-[#C6890F] rounded-2xl" />
-
-        {scanned && (
+      {/* 🌑 UI OVERLAY */}
+      <View className="absolute inset-0 bg-black/40 items-center justify-center">
+        {/* TOP BAR */}
+        <View className="absolute top-12 w-full flex-row justify-between px-5">
+          {/* BACK */}
           <TouchableOpacity
-            onPress={() => setScanned(false)}
-            className="absolute bottom-20 bg-primary px-6 py-3 rounded-xl"
+            onPress={() => router.back()}
+            className="bg-black/60 p-3 rounded-full"
           >
-            <Text className="text-white font-bold text-base">Scan Again</Text>
+            <Ionicons name="arrow-back" size={22} color="white" />
           </TouchableOpacity>
-        )}
+
+          <Text className="text-white text-lg font-semibold">QR Scanner</Text>
+
+          <View style={{ width: 40 }} />
+        </View>
+
+        {/* SCAN FRAME */}
+        <View className="items-center justify-center">
+          <View className="w-[270px] h-[270px] border-2 border-[#C6890F] rounded-3xl bg-black/10" />
+
+          <Text className="text-white mt-4 text-sm opacity-80">
+            Point your camera at QR code
+          </Text>
+        </View>
       </View>
     </View>
   );

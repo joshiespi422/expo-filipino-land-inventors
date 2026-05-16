@@ -1,6 +1,5 @@
 import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons } from "@expo/vector-icons";
-import Entypo from "@expo/vector-icons/Entypo";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Redirect, Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -17,9 +16,7 @@ import {
 // Modern replacement for hiding bars
 import * as NavigationBar from "expo-navigation-bar";
 
-import History from "../../assets/images/icon/History.png";
 import Home from "../../assets/images/icon/Home.png";
-import Status from "../../assets/images/icon/Status.png";
 import Camera from "../../assets/images/icon/camera.png";
 import logo from "../../assets/images/logo.png";
 
@@ -44,6 +41,7 @@ export default function MainLayout() {
   const isMembershipFee = pathname === "/profile/membership-breakdown";
   const isMembershipPay = pathname === "/profile/membership-checkout";
   const isMembershipQr = pathname === "/profile/membership-qrph";
+  const isCameraQr = pathname === "/camera";
 
   const isWelcomePage =
     pathname === "/welcomePage" || pathname === "/(main)/welcomePage";
@@ -89,7 +87,7 @@ export default function MainLayout() {
           {/* --- GLOBAL HEADER --- */}
           {isWelcomePage ? null : isMainIndex ? (
             <View className="bg-primary mb-12 z-10 w-full h-28 items-center justify-between pt-8">
-              <View
+              {/* <View
                 className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full shadow-brand"
                 style={{ elevation: 8 }}
               >
@@ -99,7 +97,7 @@ export default function MainLayout() {
                 >
                   <Ionicons name="call" size={35} color="#034194" />
                 </View>
-              </View>
+              </View> */}
 
               <View
                 className="absolute bottom-[-43px] bg-white rounded-full shadow-brand"
@@ -112,7 +110,7 @@ export default function MainLayout() {
                 />
               </View>
 
-              <View
+              {/* <View
                 className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full shadow-brand"
                 style={{ elevation: 8 }}
               >
@@ -122,9 +120,9 @@ export default function MainLayout() {
                 >
                   <Entypo name="message" size={35} color="#034194" />
                 </View>
-              </View>
+              </View> */}
             </View>
-          ) : (
+          ) : isCameraQr ? null : (
             <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
               <View className="flex-row justify-between items-center w-full px-6">
                 <TouchableOpacity onPress={() => router.back()}>
@@ -193,14 +191,14 @@ export default function MainLayout() {
                   <Text className="text-white text-[10px] mt-1">Home</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity className="items-center pe-2 flex-1">
+                {/* <TouchableOpacity className="items-center pe-2 flex-1">
                   <Image
                     style={{ width: 31, height: 31 }}
                     source={Status}
                     resizeMode="contain"
                   />
                   <Text className="text-white text-[10px] mt-1">Status</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
 
                 <View
                   className="flex-1 items-center justify-center"
@@ -231,17 +229,17 @@ export default function MainLayout() {
                   </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity className="items-center ps-2 flex-1">
+                {/* <TouchableOpacity className="items-center ps-2 flex-1">
                   <Image
                     style={{ width: 31, height: 31 }}
                     source={History}
                     resizeMode="contain"
                   />
                   <Text className="text-white text-[10px] mt-1">History</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
 
                 <TouchableOpacity
-                  className="items-center flex-1"
+                  className="items-center flex-1 pe-1.5"
                   onPress={() => router.push("/profile")}
                 >
                   <View className="w-[31px] h-[31px] items-center justify-center">

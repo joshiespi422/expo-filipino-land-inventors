@@ -57,6 +57,12 @@
       "expo-secure-store",
       "@react-native-community/datetimepicker",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Filipino Land Inventors to access your camera to scan QR codes."
+        }
+      ],
+      [
         "expo-media-library",
         {
           "photosPermission": "Allow Filipino Land Inventors to save QR codes to your gallery.",
