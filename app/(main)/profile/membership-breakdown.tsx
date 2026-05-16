@@ -1,6 +1,7 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { getMembership } from "@/services/membershipService";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -16,13 +17,26 @@ export default function MembershipBreakdown() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [checkingPayment, setCheckingPayment] = useState(false);
+
+  /**
+   * ✅ CUSTOM ALERT
+   */
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    redirectHome: false,
+  });
 
   /**
    * 💰 FORMAT MONEY
    */
   const formatMoney = (value: any) => {
     const num = Number(value || 0);
+
     if (isNaN(num)) return "0.00";
+
     return num.toLocaleString("en-PH", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -34,6 +48,7 @@ export default function MembershipBreakdown() {
    */
   const formatDate = (date: string) => {
     if (!date) return "N/A";
+
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
@@ -42,13 +57,17 @@ export default function MembershipBreakdown() {
   };
 
   /**
-   * FETCH DATA
+   * ✅ FETCH MEMBERSHIP
    */
-  const fetchMembership = async (showLoader = true) => {
+  const fetchMembership = async (showLoader = true, returnData = false) => {
     try {
-      if (showLoader) setLoading(true);
+      if (showLoader) {
+        setLoading(true);
+      }
 
-      const res = await getMembership({ include: "schedules" });
+      const res = await getMembership({
+        include: "schedules",
+      });
 
       let mapped: any[] = [];
 
@@ -59,61 +78,167 @@ export default function MembershipBreakdown() {
             id: String(s.id),
             amount: Number(s.attributes.amount || 0),
             due_date: s.attributes.due_date,
-            status: (s.attributes.status || "unpaid").toLowerCase(),
+            status: String(s.attributes.status || "unpaid").toLowerCase(),
             installment: Number(s.attributes.installment_no || 1),
           }))
           .sort((a: any, b: any) => a.installment - b.installment);
       } else if (res?.data?.attributes?.schedules) {
-        mapped = res.data.attributes.schedules;
+        mapped = res.data.attributes.schedules
+          .map((s: any) => ({
+            ...s,
+            installment: Number(s.installment || 1),
+            amount: Number(s.amount || 0),
+            status: String(s.status || "unpaid").toLowerCase(),
+          }))
+          .sort((a: any, b: any) => a.installment - b.installment);
       }
 
       setSchedules(mapped);
+
+      if (returnData) {
+        return mapped;
+      }
     } catch (e) {
       console.log("Fetch Error:", e);
+      return [];
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchMembership();
-  }, []);
+  /**
+   * ✅ SCREEN FOCUS
+   */
+  useFocusEffect(
+    useCallback(() => {
+      fetchMembership();
 
+      return () => {};
+    }, []),
+  );
+
+  /**
+   * ✅ REFRESH
+   */
   const onRefresh = () => {
     setRefreshing(true);
     fetchMembership(false);
   };
 
   /**
-   * 📌 LOGIC
+   * ✅ SINGLE PAYMENT
    */
   const isSinglePayment = schedules.length === 1;
 
-  const nextToPay = useMemo(
-    () =>
-      schedules.find(
-        (s) =>
-          s.status === "unpaid" ||
-          s.status === "overdue" ||
-          s.status === "approved",
-      ),
-    [schedules],
-  );
+  /**
+   * ✅ GET NEXT INSTALLMENT
+   */
+  const nextToPay = useMemo(() => {
+    return [...schedules]
+      .sort((a, b) => a.installment - b.installment)
+      .find((s) => s.status !== "paid");
+  }, [schedules]);
 
-  const outstanding = useMemo(
-    () =>
-      schedules
-        .filter((s) => s.status !== "paid")
-        .reduce((a, b) => a + (b.amount || 0), 0),
-    [schedules],
-  );
+  /**
+   * ✅ OUTSTANDING
+   */
+  const outstanding = useMemo(() => {
+    return schedules
+      .filter((s) => s.status !== "paid")
+      .reduce((a, b) => a + Number(b.amount || 0), 0);
+  }, [schedules]);
+
+  /**
+   * ✅ FULLY PAID
+   */
+  const isFullyPaid =
+    schedules.length > 0 && schedules.every((s) => s.status === "paid");
+
+  /**
+   * ✅ HANDLE PAYMENT
+   */
+  const handlePay = async () => {
+    try {
+      setCheckingPayment(true);
+
+      /**
+       * 🔥 GET LATEST DATABASE DATA
+       */
+      const updatedSchedules: any = await fetchMembership(false, true);
+
+      /**
+       * 🔥 FIND FIRST UNPAID INSTALLMENT
+       */
+      const latestNextToPay = [...updatedSchedules]
+        ?.sort((a: any, b: any) => a.installment - b.installment)
+        ?.find((s: any) => s.status !== "paid");
+
+      /**
+       * ✅ ALL PAID
+       */
+      if (!latestNextToPay) {
+        setAlert({
+          visible: true,
+          title: "Success",
+          message: "All membership payments are already completed.",
+          redirectHome: true,
+        });
+
+        return;
+      }
+
+      /**
+       * ✅ INSTALLMENT ALREADY PAID
+       */
+      if (latestNextToPay.status === "paid") {
+        setAlert({
+          visible: true,
+          title: "Already Paid",
+          message: `Installment ${latestNextToPay.installment} is already paid.`,
+          redirectHome: false,
+        });
+
+        return;
+      }
+
+      /**
+       * ✅ SHOW REQUIRED INSTALLMENT
+       */
+      setAlert({
+        visible: true,
+        title: "Continue Payment",
+        message: `You need to pay Installment ${latestNextToPay.installment} first.`,
+        redirectHome: false,
+      });
+
+      /**
+       * ✅ CONTINUE TO CHECKOUT
+       */
+      setTimeout(() => {
+        router.push({
+          pathname: "/profile/membership-checkout",
+          params: {
+            scheduleId: latestNextToPay.id,
+            amount: latestNextToPay.amount,
+          },
+        });
+      }, 500);
+    } catch (error) {
+      console.log("Payment Check Error:", error);
+    } finally {
+      setCheckingPayment(false);
+    }
+  };
 
   return (
     <View className="flex-1 bg-[#F8FAFC]">
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingTop: 20, paddingBottom: 140 }}
+        contentContainerStyle={{
+          paddingTop: 20,
+          paddingBottom: 140,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -132,6 +257,7 @@ export default function MembershipBreakdown() {
               <Text className="text-slate-400 text-xs font-bold uppercase">
                 {isSinglePayment ? "Membership Fee" : "Outstanding Balance"}
               </Text>
+
               <Text className="text-primary text-3xl font-black mt-1">
                 ₱{formatMoney(outstanding)}
               </Text>
@@ -153,7 +279,8 @@ export default function MembershipBreakdown() {
         ) : (
           schedules.map((item) => {
             const isPaid = item.status === "paid";
-            const isNext = nextToPay?.id === item.id;
+
+            const isNext = nextToPay?.installment === item.installment;
 
             return (
               <View
@@ -162,7 +289,7 @@ export default function MembershipBreakdown() {
               >
                 <View className="flex-row justify-between items-center">
                   <View className="flex-row items-center flex-1">
-                    {/* STATUS BADGE */}
+                    {/* STATUS */}
                     {isPaid ? (
                       <View className="bg-green-100 px-2 py-1 rounded-full mr-3">
                         <Text className="text-green-600 text-[10px] font-bold">
@@ -172,7 +299,7 @@ export default function MembershipBreakdown() {
                     ) : isNext ? (
                       <View className="bg-yellow-100 px-2 py-1 rounded-full mr-3">
                         <Text className="text-yellow-600 text-[10px] font-bold">
-                          NEXT
+                          NEXT TO PAY
                         </Text>
                       </View>
                     ) : (
@@ -189,6 +316,7 @@ export default function MembershipBreakdown() {
                           ? "Membership Payment"
                           : `Installment ${item.installment}`}
                       </Text>
+
                       <Text className="text-xs text-slate-500">
                         Due {formatDate(item.due_date)}
                       </Text>
@@ -200,7 +328,7 @@ export default function MembershipBreakdown() {
                   </Text>
                 </View>
 
-                {/* PROGRESS BAR (ONLY FOR MULTIPLE) */}
+                {/* PROGRESS */}
                 {!isSinglePayment && (
                   <View className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                     <View
@@ -223,31 +351,46 @@ export default function MembershipBreakdown() {
       {/* FOOTER */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
-          disabled={!nextToPay || loading}
-          onPress={() =>
-            router.push({
-              pathname: "/profile/membership-checkout",
-              params: {
-                scheduleId: nextToPay?.id,
-                amount: nextToPay?.amount,
-              },
-            })
-          }
+          disabled={loading || checkingPayment || schedules.length === 0}
+          onPress={handlePay}
           className={`h-16 rounded-2xl justify-center items-center ${
-            !nextToPay || loading ? "bg-slate-300" : "bg-primary"
+            loading || checkingPayment || schedules.length === 0
+              ? "bg-slate-300"
+              : "bg-primary"
           }`}
         >
-          {loading ? (
+          {loading || checkingPayment ? (
             <ActivityIndicator color="white" />
           ) : (
             <Text className="text-white font-bold text-lg">
-              {nextToPay
-                ? `Pay ₱${formatMoney(nextToPay.amount)}`
-                : "Fully Paid"}
+              {isFullyPaid
+                ? "All Payments Completed"
+                : nextToPay
+                  ? `Pay Installment ${nextToPay.installment}`
+                  : "Fully Paid"}
             </Text>
           )}
         </TouchableOpacity>
       </View>
+
+      {/* CUSTOM ALERT */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => {
+          const shouldRedirect = alert.redirectHome;
+
+          setAlert({
+            ...alert,
+            visible: false,
+          });
+
+          if (shouldRedirect) {
+            router.replace("/(main)");
+          }
+        }}
+      />
     </View>
   );
 }

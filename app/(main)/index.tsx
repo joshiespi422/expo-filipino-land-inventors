@@ -22,7 +22,8 @@ import {
 import { useAuthStore } from "@/store/useAuthStore";
 
 // Assets
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 // import Ask from "../../assets/images/icon/Ask.png";
 import Businessicon from "../../assets/images/icon/Businessicon.png";
 // import Coop from "../../assets/images/icon/coop.png";
@@ -157,10 +158,10 @@ export default function DashboardPage() {
         ),
         buttonText: "Complete Now",
         buttonColor: "bg-[#C6890F]",
-        iconBg: "bg-[#C6890F]",
+        // iconBg: "bg-[#C6890F]",
         textColor: "text-[#C6890F]",
         route: "/profile/setupProfile",
-        icon: <Ionicons name="warning" size={32} color="white" />,
+        // icon: <Ionicons name="warning" size={32} color="white" />,
       };
     }
 
@@ -177,10 +178,10 @@ export default function DashboardPage() {
         ),
         buttonText: "View Profile",
         buttonColor: "bg-primary",
-        iconBg: "bg-primary",
+        // iconBg: "bg-primary",
         textColor: "text-primary",
         route: "/profile",
-        icon: <Ionicons name="time" size={32} color="white" />,
+        // icon: <Ionicons name="time" size={32} color="white" />,
       };
     }
 
@@ -198,16 +199,16 @@ export default function DashboardPage() {
         ),
         buttonText: "Pay Contribution",
         buttonColor: "bg-green-600",
-        iconBg: "bg-green-600",
+        // iconBg: "bg-green-600",
         textColor: "text-green-700",
         route: "/profile/membership",
-        icon: (
-          <MaterialIcons
-            name="account-balance-wallet"
-            size={32}
-            color="white"
-          />
-        ),
+        // icon: (
+        //   <MaterialIcons
+        //     name="account-balance-wallet"
+        //     size={32}
+        //     color="white"
+        //   />
+        // ),
       };
     }
 
@@ -260,7 +261,7 @@ export default function DashboardPage() {
         {/* 2. WALLET SECTION */}
         {isMember && !pageLoading && (
           <View className="bg-primary p-3 rounded-2xl shadow-lg mb-4">
-            {/* <View className="flex-row justify-between items-center">
+            <View className="flex-row justify-between items-center">
               <View className="flex-row items-center gap-3">
                 <Text className="text-white text-2xl font-bold">
                   ₱{" "}
@@ -286,26 +287,6 @@ export default function DashboardPage() {
                   <FontAwesome name="send" size={20} color="#034194" />
                 </TouchableOpacity>
               </View>
-            </View> */}
-
-            <View className="flex-row justify-between p-2 items-center">
-              <View className="flex-row items-center gap-3">
-                <Text className="text-white text-2xl font-bold">
-                  ₱{" "}
-                  {showBalance
-                    ? Number(balance).toLocaleString("en-PH", {
-                        minimumFractionDigits: 2,
-                      })
-                    : "**.**"}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={handleToggleBalance}>
-                <Ionicons
-                  name={showBalance ? "eye-off" : "eye"}
-                  size={24}
-                  color="white"
-                />
-              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -364,11 +345,11 @@ export default function DashboardPage() {
         <View className="flex-1 bg-black/20">
           <View className="flex-1 justify-center items-center px-5">
             <View className="bg-white p-6 rounded-[30px] items-center w-full max-w-[380px] shadow-2xl">
-              <View
+              {/* <View
                 className={`w-20 h-20 rounded-full items-center justify-center mb-5 ${popupContent.iconBg}`}
               >
                 {popupContent.icon}
-              </View>
+              </View> */}
 
               <Text
                 className={`text-xl font-bold text-center mb-3 ${popupContent.textColor}`}

@@ -5,14 +5,12 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import {
-  Image,
   KeyboardAvoidingView,
   Platform,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import loanNotif from "../../assets/images/icon/loanNotif.png";
 
 import "../../global.css";
 
@@ -45,12 +43,9 @@ export default function RootLayout() {
 
   const handleBackPress = () => {
     if (isLoanIndex) {
-      // Direct escape to main app with a fresh state
       router.replace("../(main)/");
       return;
     }
-
-    // Default back behavior for other sub-pages
     router.back();
   };
 
@@ -82,13 +77,15 @@ export default function RootLayout() {
                 </Text>
               </View>
 
-              <View className="w-[31px] items-end">
+              <View></View>
+
+              {/* <View className="w-[31px] items-end">
                 <Image
                   style={{ width: 31, height: 31 }}
                   source={loanNotif}
                   resizeMode="contain"
                 />
-              </View>
+              </View> */}
             </View>
           </View>
 

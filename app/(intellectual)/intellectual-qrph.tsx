@@ -244,14 +244,8 @@ export default function IntellectualQRPaymentPage() {
             visible: false,
           });
 
-          // REDIRECT AFTER SUCCESS
           if (alert.title === "Success") {
-            router.replace({
-              pathname: "/intellectual-breakdown",
-              params: {
-                id: String(intellectualId),
-              },
-            });
+            router.replace("/(main)");
           }
         }}
       />

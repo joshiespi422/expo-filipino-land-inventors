@@ -1,22 +1,25 @@
 import { useAuthStore } from "@/store/useAuthStore";
-import { Ionicons } from "@expo/vector-icons";
+import { Entypo, Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Redirect, Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-// Modern replacement for hiding bars
+
 import * as NavigationBar from "expo-navigation-bar";
 
+import History from "../../assets/images/icon/History.png";
 import Home from "../../assets/images/icon/Home.png";
+import Status from "../../assets/images/icon/Status.png";
 import Camera from "../../assets/images/icon/camera.png";
 import logo from "../../assets/images/logo.png";
 
@@ -28,6 +31,9 @@ export default function MainLayout() {
   const { token, isLoading, user } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+
+  // ✅ NEW: modal state
+  const [comingSoonVisible, setComingSoonVisible] = useState(false);
 
   const isMainIndex =
     pathname === "/" || pathname === "/(main)" || pathname === "/(main)/";
@@ -62,6 +68,10 @@ export default function MainLayout() {
     hideNavBar();
   }, []);
 
+  const handleComingSoon = () => {
+    setComingSoonVisible(true);
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
@@ -70,7 +80,6 @@ export default function MainLayout() {
     );
   }
 
-  // Use the correct path to your auth group
   if (!token) {
     return <Redirect href="/(auth)/login" />;
   }
@@ -78,6 +87,61 @@ export default function MainLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar hidden={true} />
+
+      {/* ✅ MODAL */}
+      <Modal
+        // transparent
+        // visible={comingSoonVisible}
+        // animationType="fade"
+        // onRequestClose={() => setComingSoonVisible(false)}
+
+        animationType="fade"
+        transparent={true}
+        visible={comingSoonVisible}
+        statusBarTranslucent={true}
+        onRequestClose={() => setComingSoonVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              width: "80%",
+              backgroundColor: "white",
+              borderRadius: 16,
+              padding: 20,
+              alignItems: "center",
+            }}
+          >
+            {/* <Ionicons name="time-outline" size={50} color="#034194" /> */}
+
+            <Text className="text-xl font-bold text-center mb-3 text-primary">
+              Coming Soon
+            </Text>
+
+            <View className="mb-6 px-2">
+              <Text className="text-slate-500 text-center leading-6">
+                This feature is not available yet. Please wait for future
+                updates.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => setComingSoonVisible(false)}
+              className="bg-primary w-full py-4 rounded-2xl active:opacity-90"
+            >
+              <Text className="text-white text-center font-bold text-lg">
+                Okay
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <View className="flex-1 bg-white">
         <KeyboardAvoidingView
@@ -87,17 +151,16 @@ export default function MainLayout() {
           {/* --- GLOBAL HEADER --- */}
           {isWelcomePage ? null : isMainIndex ? (
             <View className="bg-primary mb-12 z-10 w-full h-28 items-center justify-between pt-8">
-              {/* <View
+              <View
                 className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full shadow-brand"
                 style={{ elevation: 8 }}
               >
-                <View
-                  className="bg-white rounded-full border border-primary/20 p-2 shadow-brand"
-                  style={{ elevation: 4 }}
-                >
-                  <Ionicons name="call" size={35} color="#034194" />
-                </View>
-              </View> */}
+                <TouchableOpacity onPress={handleComingSoon}>
+                  <View className="bg-white rounded-full border border-primary/20 p-2 shadow-brand">
+                    <Ionicons name="call" size={35} color="#034194" />
+                  </View>
+                </TouchableOpacity>
+              </View>
 
               <View
                 className="absolute bottom-[-43px] bg-white rounded-full shadow-brand"
@@ -110,17 +173,16 @@ export default function MainLayout() {
                 />
               </View>
 
-              {/* <View
+              <View
                 className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full shadow-brand"
                 style={{ elevation: 8 }}
               >
-                <View
-                  className="bg-white rounded-full border border-primary/20 p-2 shadow-brand"
-                  style={{ elevation: 4 }}
-                >
-                  <Entypo name="message" size={35} color="#034194" />
-                </View>
-              </View> */}
+                <TouchableOpacity onPress={handleComingSoon}>
+                  <View className="bg-white rounded-full border border-primary/20 p-2 shadow-brand">
+                    <Entypo name="message" size={35} color="#034194" />
+                  </View>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : isCameraQr ? null : (
             <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
@@ -152,21 +214,15 @@ export default function MainLayout() {
             </View>
           )}
 
-          {/* --- MAIN CONTENT AREA --- */}
+          {/* --- MAIN CONTENT --- */}
           <View className="flex-1">
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                animation: "fade",
-                contentStyle: { backgroundColor: "white" },
-              }}
-            >
+            <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="profile/index" />
             </Stack>
           </View>
 
-          {/* --- GLOBAL FOOTER --- */}
+          {/* --- FOOTER --- */}
           {showFooter && (
             <View
               style={{
@@ -179,33 +235,30 @@ export default function MainLayout() {
               className="justify-center bg-primary items-center"
             >
               <View className="flex-row w-full max-w-[600px] px-4 items-center">
+                {/* Home */}
                 <TouchableOpacity
                   className="items-center flex-1"
                   onPress={() => router.push("/")}
                 >
-                  <Image
-                    style={{ width: 31, height: 31 }}
-                    source={Home}
-                    resizeMode="contain"
-                  />
+                  <Image source={Home} style={{ width: 31, height: 31 }} />
                   <Text className="text-white text-[10px] mt-1">Home</Text>
                 </TouchableOpacity>
 
-                {/* <TouchableOpacity className="items-center pe-2 flex-1">
-                  <Image
-                    style={{ width: 31, height: 31 }}
-                    source={Status}
-                    resizeMode="contain"
-                  />
+                {/* STATUS - COMING SOON */}
+                <TouchableOpacity
+                  className="items-center pe-2 flex-1"
+                  onPress={handleComingSoon}
+                >
+                  <Image source={Status} style={{ width: 31, height: 31 }} />
                   <Text className="text-white text-[10px] mt-1">Status</Text>
-                </TouchableOpacity> */}
+                </TouchableOpacity>
 
+                {/* CAMERA */}
                 <View
                   className="flex-1 items-center justify-center"
                   style={{ height: 50 }}
                 >
                   <TouchableOpacity
-                    activeOpacity={0.9}
                     onPress={() => router.push("/camera")}
                     style={{
                       position: "absolute",
@@ -221,32 +274,29 @@ export default function MainLayout() {
                       elevation: 10,
                     }}
                   >
-                    <Image
-                      source={Camera}
-                      style={{ width: 53, height: 53 }}
-                      resizeMode="contain"
-                    />
+                    <Image source={Camera} style={{ width: 50, height: 50 }} />
                   </TouchableOpacity>
                 </View>
 
-                {/* <TouchableOpacity className="items-center ps-2 flex-1">
-                  <Image
-                    style={{ width: 31, height: 31 }}
-                    source={History}
-                    resizeMode="contain"
-                  />
-                  <Text className="text-white text-[10px] mt-1">History</Text>
-                </TouchableOpacity> */}
-
+                {/* HISTORY - COMING SOON */}
                 <TouchableOpacity
-                  className="items-center flex-1 pe-1.5"
+                  className="items-center ps-2 flex-1"
+                  onPress={handleComingSoon}
+                >
+                  <Image source={History} style={{ width: 31, height: 31 }} />
+                  <Text className="text-white text-[10px] mt-1">History</Text>
+                </TouchableOpacity>
+
+                {/* PROFILE */}
+                <TouchableOpacity
+                  className="items-center flex-1"
                   onPress={() => router.push("/profile")}
                 >
-                  <View className="w-[31px] h-[31px] items-center justify-center">
+                  <View className="w-[31px] h-[31px]">
                     {user?.avatar ? (
                       <Image
                         source={{ uri: user.avatar }}
-                        className="w-full h-full rounded-full border border-white/30"
+                        className="w-full h-full rounded-full"
                       />
                     ) : (
                       <Ionicons name="person-circle" size={33} color="white" />

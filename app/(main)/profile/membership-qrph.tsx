@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { checkMembershipPaymentStatus } from "@/services/membershipService";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
@@ -6,7 +7,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   Text,
@@ -16,14 +16,36 @@ import {
 
 export default function QRPaymentPage() {
   const { qrUrl, paymentIntentId, amount } = useLocalSearchParams();
+
   const router = useRouter();
 
   const pollingInterval = useRef<NodeJS.Timeout | null>(null);
+
   const hasShownSuccess = useRef(false);
 
   const [saving, setSaving] = useState(false);
 
+  // ALERT STATE
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  // =========================
+  // ALERT HELPER
+  // =========================
+  const showAlert = (title: string, message: string) => {
+    setAlert({
+      visible: true,
+      title,
+      message,
+    });
+  };
+
+  // =========================
   // POLLING
+  // =========================
   useEffect(() => {
     if (!paymentIntentId) return;
 
@@ -48,12 +70,7 @@ export default function QRPaymentPage() {
             clearInterval(pollingInterval.current);
           }
 
-          Alert.alert("Success", "Payment successful!", [
-            {
-              text: "OK",
-              onPress: () => router.replace("/(main)"),
-            },
-          ]);
+          showAlert("Success", "Payment successful!");
         }
       } catch (err) {
         console.log("Polling error:", err, paymentIntentId);
@@ -67,7 +84,9 @@ export default function QRPaymentPage() {
     };
   }, [paymentIntentId]);
 
+  // =========================
   // SAVE QR
+  // =========================
   const handleSaveQR = async () => {
     if (!qrUrl) return;
 
@@ -77,14 +96,16 @@ export default function QRPaymentPage() {
       const { status } = await MediaLibrary.requestPermissionsAsync();
 
       if (status !== "granted") {
-        Alert.alert(
+        showAlert(
           "Permission Required",
           "Allow gallery access to save the QR.",
         );
+
         return;
       }
 
       const filename = `QR_${Date.now()}.png`;
+
       const fileUri = FileSystem.documentDirectory + filename;
 
       if ((qrUrl as string).startsWith("data:image")) {
@@ -106,96 +127,120 @@ export default function QRPaymentPage() {
 
       await MediaLibrary.saveToLibraryAsync(fileUri);
 
-      Alert.alert("Saved!", "QR Code has been saved to your gallery.");
+      showAlert("Saved!", "QR Code has been saved to your gallery.");
     } catch (error) {
       console.log("SAVE ERROR:", error);
-      Alert.alert("Error", "Could not save image. Try screenshot instead.");
+
+      showAlert("Error", "Could not save image. Try screenshot instead.");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <ScrollView
-      className="flex-1 bg-white"
-      contentContainerStyle={{
-        alignItems: "center",
-        paddingVertical: 40,
-        paddingHorizontal: 24,
-      }}
-    >
-      {/* TITLE */}
-      <Text className="text-xl font-bold mb-2">Scan to Pay</Text>
+    <View className="flex-1 bg-white">
+      <ScrollView
+        contentContainerStyle={{
+          alignItems: "center",
+          paddingVertical: 40,
+          paddingHorizontal: 24,
+          paddingBottom: 120,
+        }}
+      >
+        {/* TITLE */}
+        <Text className="text-xl font-bold mb-2">Scan to Pay</Text>
 
-      {/* AMOUNT */}
-      <Text className="text-primary text-3xl font-bold mb-6">
-        ₱{" "}
-        {Number(amount || 0).toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-        })}
-      </Text>
+        {/* AMOUNT */}
+        <Text className="text-primary text-3xl font-bold mb-6">
+          ₱{" "}
+          {Number(amount || 0).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+          })}
+        </Text>
 
-      {/* QR */}
-      {qrUrl ? (
-        <View className="items-center">
-          <View className="p-4 border-2 border-gray-100 rounded-[32px] bg-white shadow-sm mb-4">
-            <Image
-              source={{ uri: qrUrl as string }}
-              style={{ width: 260, height: 260 }}
-              resizeMode="contain"
-            />
+        {/* QR */}
+        {qrUrl ? (
+          <View className="items-center">
+            <View className="p-4 border-2 border-gray-100 rounded-[32px] bg-white shadow-sm mb-4">
+              <Image
+                source={{ uri: qrUrl as string }}
+                style={{ width: 260, height: 260 }}
+                resizeMode="contain"
+              />
+            </View>
+
+            {/* SAVE BUTTON */}
+            <TouchableOpacity
+              onPress={handleSaveQR}
+              disabled={saving}
+              className="flex-row items-center bg-primary/10 px-6 py-3 rounded-full mb-6"
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <Ionicons name="download-outline" size={20} color="#000" />
+              )}
+
+              <Text className="text-primary font-bold ml-2">
+                {saving ? "Saving..." : "Save to Gallery"}
+              </Text>
+            </TouchableOpacity>
           </View>
+        ) : (
+          <ActivityIndicator size="large" />
+        )}
 
-          {/* SAVE BUTTON */}
-          <TouchableOpacity
-            onPress={handleSaveQR}
-            disabled={saving}
-            className="flex-row items-center bg-primary/10 px-6 py-3 rounded-full mb-6"
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color="#000" />
-            ) : (
-              <Ionicons name="download-outline" size={20} color="#000" />
-            )}
-
-            <Text className="text-primary font-bold ml-2">
-              {saving ? "Saving..." : "Save to Gallery"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <ActivityIndicator size="large" />
-      )}
-
-      {/* INFO */}
-      <View className="bg-gray-50 p-5 rounded-2xl w-full border border-gray-100 mt-4">
-        <Text className="text-gray-800 font-bold mb-3">
-          Easy Payment Steps:
-        </Text>
-
-        <Text className="text-gray-600 mb-2">
-          1. Save this QR or take a screenshot.
-        </Text>
-
-        <Text className="text-gray-600 mb-2">
-          2. Open GCash, Maya, or your Bank App.
-        </Text>
-
-        <Text className="text-gray-600 mb-2">
-          3. Select Scan QR and upload this image.
-        </Text>
-
-        <View className="mt-2 pt-2 border-t border-gray-200">
-          <Text className="text-xs text-gray-400 italic">
-            Waiting for payment confirmation...
+        {/* INFO */}
+        <View className="bg-gray-50 p-5 rounded-2xl w-full border border-gray-100 mt-4">
+          <Text className="text-gray-800 font-bold mb-3">
+            Easy Payment Steps:
           </Text>
-        </View>
-      </View>
 
-      {/* BACK */}
-      <TouchableOpacity onPress={() => router.back()} className="mt-10">
-        <Text className="text-gray-400 underline">Cancel Payment</Text>
-      </TouchableOpacity>
-    </ScrollView>
+          <Text className="text-gray-600 mb-2">
+            1. Save this QR or take a screenshot.
+          </Text>
+
+          <Text className="text-gray-600 mb-2">
+            2. Open GCash, Maya, or your Bank App.
+          </Text>
+
+          <Text className="text-gray-600 mb-2">
+            3. Select Scan QR and upload this image.
+          </Text>
+
+          <View className="mt-2 pt-2 border-t border-gray-200">
+            <Text className="text-xs text-gray-400 italic">
+              Waiting for payment confirmation...
+            </Text>
+          </View>
+        </View>
+
+        {/* BACK */}
+        <TouchableOpacity onPress={() => router.back()} className="mt-10">
+          <Text className="text-gray-400 underline">Cancel Payment</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* CUSTOM ALERT */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => {
+          const isSuccess =
+            alert.title === "Success" &&
+            alert.message === "Payment successful!";
+
+          setAlert({
+            ...alert,
+            visible: false,
+          });
+
+          if (isSuccess) {
+            router.replace("/(main)");
+          }
+        }}
+      />
+    </View>
   );
 }

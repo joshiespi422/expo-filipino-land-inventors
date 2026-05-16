@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { getIntellectualProperty } from "@/services/intellectualService";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -17,6 +18,17 @@ export default function IntellectualBreakdown() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [checkingPayment, setCheckingPayment] = useState(false);
+
+  /**
+   * ✅ CUSTOM ALERT
+   */
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    redirectHome: false,
+  });
 
   useEffect(() => {
     if (!id) router.replace("/details");
@@ -41,7 +53,7 @@ export default function IntellectualBreakdown() {
     });
   };
 
-  const fetchSchedules = async (showLoader = true) => {
+  const fetchSchedules = async (showLoader = true, returnData = false) => {
     try {
       if (!id || typeof id !== "string") return;
 
@@ -62,12 +74,13 @@ export default function IntellectualBreakdown() {
         }))
         .sort((a: any, b: any) => a.installment - b.installment);
 
-      console.log("MAPPED SCHEDULES:", mapped);
-
       setSchedules(mapped);
+
+      if (returnData) return mapped;
     } catch (e) {
       console.log("Fetch Error:", e);
       setSchedules([]);
+      return [];
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -86,17 +99,14 @@ export default function IntellectualBreakdown() {
   const isSinglePayment = schedules.length === 1;
 
   /**
-   * ✅ FIXED: STRICT NEXT PAYMENT LOGIC
-   * always lowest unpaid installment
+   * ✅ STRICT NEXT PAYMENT LOGIC (like membership style)
    */
   const nextToPay = useMemo(() => {
     const unpaid = schedules.filter((s) => s.status !== "paid");
 
     if (unpaid.length === 0) return null;
 
-    return unpaid.reduce((prev, curr) =>
-      curr.installment < prev.installment ? curr : prev,
-    );
+    return [...unpaid].sort((a, b) => a.installment - b.installment)[0];
   }, [schedules]);
 
   /**
@@ -107,6 +117,72 @@ export default function IntellectualBreakdown() {
       .filter((s) => s.status !== "paid")
       .reduce((a, b) => a + Number(b.amount || 0), 0);
   }, [schedules]);
+
+  const isFullyPaid =
+    schedules.length > 0 && schedules.every((s) => s.status === "paid");
+
+  /**
+   * ✅ HANDLE PAYMENT (same pattern as membership)
+   */
+  const handlePay = async () => {
+    try {
+      setCheckingPayment(true);
+
+      const updatedSchedules: any = await fetchSchedules(false, true);
+
+      const unpaid = updatedSchedules?.filter((s: any) => s.status !== "paid");
+
+      const latestNextToPay =
+        unpaid?.length > 0
+          ? [...unpaid].sort(
+              (a: any, b: any) => a.installment - b.installment,
+            )[0]
+          : null;
+
+      if (!latestNextToPay) {
+        setAlert({
+          visible: true,
+          title: "Success",
+          message: "All intellectual property payments are completed.",
+          redirectHome: true,
+        });
+        return;
+      }
+
+      if (latestNextToPay.status === "paid") {
+        setAlert({
+          visible: true,
+          title: "Already Paid",
+          message: `Installment ${latestNextToPay.installment} is already paid.`,
+          redirectHome: false,
+        });
+        return;
+      }
+
+      setAlert({
+        visible: true,
+        title: "Continue Payment",
+        message: `You need to pay Installment ${latestNextToPay.installment} first.`,
+        redirectHome: false,
+      });
+
+      setTimeout(() => {
+        router.push({
+          pathname: "/intellectual-checkout",
+          params: {
+            scheduleId: latestNextToPay.id,
+            amount: latestNextToPay.amount,
+            mode: isSinglePayment ? "one_time" : "installment",
+            intellectualId: String(id),
+          },
+        });
+      }, 500);
+    } catch (error) {
+      console.log("Payment Error:", error);
+    } finally {
+      setCheckingPayment(false);
+    }
+  };
 
   return (
     <View className="flex-1 bg-[#F8FAFC]">
@@ -122,14 +198,14 @@ export default function IntellectualBreakdown() {
           />
         }
       >
-        {/* SUMMARY */}
+        {/* SUMMARY (MATCHED DESIGN) */}
         <View className="bg-white rounded-3xl p-6 mb-6">
           {loading ? (
             <ActivityIndicator />
           ) : (
             <>
               <Text className="text-slate-400 text-xs font-bold uppercase">
-                Outstanding Balance
+                {isSinglePayment ? "Membership Fee" : "Outstanding Balance"}
               </Text>
 
               <Text className="text-primary text-3xl font-black mt-1">
@@ -151,7 +227,7 @@ export default function IntellectualBreakdown() {
         ) : (
           schedules.map((item) => {
             const isPaid = item.status === "paid";
-            const isNext = nextToPay?.id === item.id;
+            const isNext = nextToPay?.installment === item.installment;
 
             return (
               <View
@@ -169,7 +245,7 @@ export default function IntellectualBreakdown() {
                     ) : isNext ? (
                       <View className="bg-yellow-100 px-2 py-1 rounded-full mr-3">
                         <Text className="text-yellow-600 text-[10px] font-bold">
-                          NEXT
+                          NEXT TO PAY
                         </Text>
                       </View>
                     ) : (
@@ -204,35 +280,46 @@ export default function IntellectualBreakdown() {
       {/* FOOTER */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
-          disabled={!nextToPay || loading}
-          onPress={() => {
-            if (!nextToPay) return;
-
-            router.push({
-              pathname: "/intellectual-checkout",
-              params: {
-                scheduleId: nextToPay.id,
-                amount: nextToPay.amount,
-                mode: isSinglePayment ? "one_time" : "installment",
-                intellectualId: String(id),
-              },
-            });
-          }}
+          disabled={!nextToPay || loading || checkingPayment}
+          onPress={handlePay}
           className={`h-16 rounded-2xl justify-center items-center ${
-            !nextToPay || loading ? "bg-slate-300" : "bg-primary"
+            !nextToPay || loading || checkingPayment
+              ? "bg-slate-300"
+              : "bg-primary"
           }`}
         >
-          {loading ? (
+          {loading || checkingPayment ? (
             <ActivityIndicator color="white" />
           ) : (
             <Text className="text-white font-bold text-lg">
-              {nextToPay
-                ? `Pay ₱${formatMoney(nextToPay.amount)}`
-                : "Fully Paid"}
+              {isFullyPaid
+                ? "All Payments Completed"
+                : nextToPay
+                  ? `Pay ₱${formatMoney(nextToPay.amount)}`
+                  : "Fully Paid"}
             </Text>
           )}
         </TouchableOpacity>
       </View>
+
+      {/* CUSTOM ALERT */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => {
+          const shouldRedirect = alert.redirectHome;
+
+          setAlert({
+            ...alert,
+            visible: false,
+          });
+
+          if (shouldRedirect) {
+            router.replace("/(main)");
+          }
+        }}
+      />
     </View>
   );
 }
