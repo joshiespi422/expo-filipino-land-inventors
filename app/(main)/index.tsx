@@ -294,11 +294,11 @@ export default function DashboardPage() {
         {/* 3. BANNER */}
         <View className="mb-6">
           {pageLoading ? (
-            <Skeleton className="w-full h-36 rounded-2xl" />
+            <Skeleton className="!w-full !h-36 rounded-2xl" />
           ) : (
             <Image
               source={image}
-              className="w-full h-36 rounded-2xl"
+              className="!w-full !h-36 rounded-2xl"
               resizeMode="cover"
             />
           )}
@@ -317,12 +317,12 @@ export default function DashboardPage() {
                 <TouchableOpacity
                   key={index}
                   onPress={() => handleMenuPress(item)}
-                  className="w-[30%] items-center mb-8"
+                  className="!w-[30%] items-center mb-8"
                 >
                   <View className="rounded-3xl mb-3 items-center justify-center">
                     <Image
                       source={item.source}
-                      className="w-12 h-12"
+                      className="!w-12 !h-12"
                       resizeMode="contain"
                     />
                   </View>
