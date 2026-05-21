@@ -216,11 +216,11 @@ export default function LoanPaymentPage() {
                           </View>
                         ) : null}
 
-                        <View className="flex-1">
+                        <View>
                           <Text className="font-bold text-slate-800">
                             Installment {item.month}
                           </Text>
-                          <Text className="text-xs text-slate-500 mt-0.5">
+                          <Text className="text-xs text-slate-500">
                             Due {formatDate(item.dueDate)}
                           </Text>
                         </View>

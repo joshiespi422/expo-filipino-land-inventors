@@ -230,46 +230,66 @@ export default function IntellectualBreakdown() {
             const isNext = nextToPay?.installment === item.installment;
 
             return (
-              <View
-                key={item.id}
-                className="mb-4 bg-white rounded-2xl p-4 border border-slate-100"
-              >
-                <View className="flex-row justify-between items-center">
-                  <View className="flex-row items-center flex-1">
-                    {isPaid ? (
-                      <View className="bg-green-100 px-2 py-1 rounded-full mr-3">
-                        <Text className="text-green-600 text-[10px] font-bold">
-                          PAID
-                        </Text>
-                      </View>
-                    ) : isNext ? (
-                      <View className="bg-yellow-100 px-2 py-1 rounded-full mr-3">
-                        <Text className="text-yellow-600 text-[10px] font-bold">
-                          NEXT TO PAY
-                        </Text>
-                      </View>
-                    ) : (
-                      <View className="bg-slate-100 px-2 py-1 rounded-full mr-3">
-                        <Text className="text-slate-500 text-[10px] font-bold">
-                          PENDING
-                        </Text>
-                      </View>
-                    )}
+              <View key={item.id} className="mb-4">
+                <View
+                  className={`rounded-2xl p-4 border ${
+                    isPaid
+                      ? "bg-slate-100 border-slate-200 opacity-70"
+                      : isNext
+                        ? "bg-white border-yellow-300"
+                        : "bg-white border-slate-100"
+                  }`}
+                >
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-row items-center flex-1">
+                      {isPaid ? (
+                        <View className="bg-green-100 px-2 py-1 rounded-full mr-3">
+                          <Text className="text-green-600 text-[10px] font-bold">
+                            PAID
+                          </Text>
+                        </View>
+                      ) : isNext ? (
+                        <View className="bg-yellow-100 px-2 py-1 rounded-full mr-3">
+                          <Text className="text-yellow-600 text-[10px] font-bold">
+                            NEXT
+                          </Text>
+                        </View>
+                      ) : (
+                        <View className="bg-slate-100 px-2 py-1 rounded-full mr-3">
+                          <Text className="text-slate-500 text-[10px] font-bold">
+                            PENDING
+                          </Text>
+                        </View>
+                      )}
 
-                    <View>
-                      <Text className="font-bold text-slate-800">
-                        Installment {item.installment}
-                      </Text>
+                      <View>
+                        <Text className="font-bold text-slate-800">
+                          Installment {item.installment}
+                        </Text>
 
-                      <Text className="text-xs text-slate-500">
-                        Due {formatDate(item.due_date)}
-                      </Text>
+                        <Text className="text-xs text-slate-500">
+                          Due {formatDate(item.due_date)}
+                        </Text>
+                      </View>
                     </View>
+
+                    <Text className="font-black text-primary text-base">
+                      ₱{formatMoney(item.amount)}
+                    </Text>
                   </View>
 
-                  <Text className="font-black text-primary text-base">
-                    ₱{formatMoney(item.amount)}
-                  </Text>
+                  {/* PROGRESS */}
+                  <View className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <View
+                      className={`h-full ${
+                        isPaid
+                          ? "bg-green-500 w-full"
+                          : isNext
+                            ? "bg-yellow-400 w-2/3"
+                            : "bg-slate-300 w-1/3"
+                      }`}
+                    />
+                  </View>
                 </View>
               </View>
             );
