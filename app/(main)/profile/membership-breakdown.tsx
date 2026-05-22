@@ -19,19 +19,15 @@ export default function MembershipBreakdown() {
   const [refreshing, setRefreshing] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
 
-  /**
-   * ✅ CUSTOM ALERT
-   */
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
     message: "",
     redirectHome: false,
+    isConfirmation: false,
+    onConfirm: () => {},
   });
 
-  /**
-   * 💰 FORMAT MONEY
-   */
   const formatMoney = (value: any) => {
     const num = Number(value || 0);
 
@@ -43,9 +39,6 @@ export default function MembershipBreakdown() {
     });
   };
 
-  /**
-   * 📅 FORMAT DATE
-   */
   const formatDate = (date: string) => {
     if (!date) return "N/A";
 
@@ -56,9 +49,6 @@ export default function MembershipBreakdown() {
     });
   };
 
-  /**
-   * ✅ FETCH MEMBERSHIP
-   */
   const fetchMembership = async (showLoader = true, returnData = false) => {
     try {
       if (showLoader) {
@@ -107,9 +97,6 @@ export default function MembershipBreakdown() {
     }
   };
 
-  /**
-   * ✅ SCREEN FOCUS
-   */
   useFocusEffect(
     useCallback(() => {
       fetchMembership();
@@ -118,112 +105,69 @@ export default function MembershipBreakdown() {
     }, []),
   );
 
-  /**
-   * ✅ REFRESH
-   */
   const onRefresh = () => {
     setRefreshing(true);
     fetchMembership(false);
   };
 
-  /**
-   * ✅ SINGLE PAYMENT
-   */
   const isSinglePayment = schedules.length === 1;
 
-  /**
-   * ✅ GET NEXT INSTALLMENT
-   */
   const nextToPay = useMemo(() => {
     return [...schedules]
       .sort((a, b) => a.installment - b.installment)
       .find((s) => s.status !== "paid");
   }, [schedules]);
 
-  /**
-   * ✅ OUTSTANDING
-   */
   const outstanding = useMemo(() => {
     return schedules
       .filter((s) => s.status !== "paid")
       .reduce((a, b) => a + Number(b.amount || 0), 0);
   }, [schedules]);
 
-  /**
-   * ✅ FULLY PAID
-   */
   const isFullyPaid =
     schedules.length > 0 && schedules.every((s) => s.status === "paid");
 
-  /**
-   * ✅ HANDLE PAYMENT
-   */
   const handlePay = async () => {
     try {
       setCheckingPayment(true);
 
-      /**
-       * 🔥 GET LATEST DATABASE DATA
-       */
       const updatedSchedules: any = await fetchMembership(false, true);
 
-      /**
-       * 🔥 FIND FIRST UNPAID INSTALLMENT
-       */
       const latestNextToPay = [...updatedSchedules]
         ?.sort((a: any, b: any) => a.installment - b.installment)
         ?.find((s: any) => s.status !== "paid");
 
-      /**
-       * ✅ ALL PAID
-       */
       if (!latestNextToPay) {
         setAlert({
           visible: true,
           title: "Success",
           message: "All membership payments are already completed.",
           redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
         });
-
         return;
       }
 
-      /**
-       * ✅ INSTALLMENT ALREADY PAID
-       */
-      if (latestNextToPay.status === "paid") {
-        setAlert({
-          visible: true,
-          title: "Already Paid",
-          message: `Installment ${latestNextToPay.installment} is already paid.`,
-          redirectHome: false,
-        });
-
-        return;
-      }
-
-      /**
-       * ✅ SHOW REQUIRED INSTALLMENT
-       */
       setAlert({
         visible: true,
-        title: "Continue Payment",
-        message: `You need to pay Installment ${latestNextToPay.installment} first.`,
+        title: "Confirm Payment",
+        message: isSinglePayment
+          ? `Proceed to payment for ₱${formatMoney(latestNextToPay.amount)}?`
+          : `Proceed to payment for Installment ${latestNextToPay.installment} (₱${formatMoney(latestNextToPay.amount)})?`,
         redirectHome: false,
+        isConfirmation: true,
+        onConfirm: () => {
+          setAlert((prev) => ({ ...prev, visible: false })); // Safely dismiss before transition
+          router.push({
+            pathname: "/profile/membership-checkout",
+            params: {
+              scheduleId: latestNextToPay.id,
+              amount: latestNextToPay.amount,
+            },
+          });
+        },
       });
-
-      /**
-       * ✅ CONTINUE TO CHECKOUT
-       */
-      setTimeout(() => {
-        router.push({
-          pathname: "/profile/membership-checkout",
-          params: {
-            scheduleId: latestNextToPay.id,
-            amount: latestNextToPay.amount,
-          },
-        });
-      }, 500);
     } catch (error) {
       console.log("Payment Check Error:", error);
     } finally {
@@ -333,21 +277,6 @@ export default function MembershipBreakdown() {
                     </Text>
                   </View>
 
-                  {/* PROGRESS */}
-                  {/* {!isSinglePayment && (
-                    <View className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <View
-                        className={`h-full ${
-                          isPaid
-                            ? "bg-green-500 w-full"
-                            : isNext
-                              ? "bg-yellow-400 w-2/3"
-                              : "bg-slate-300 w-1/3"
-                        }`}
-                      />
-                    </View>
-                  )} */}
-
                   <View className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                     <View
                       className={`h-full ${
@@ -369,10 +298,12 @@ export default function MembershipBreakdown() {
       {/* FOOTER */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
-          disabled={loading || checkingPayment || schedules.length === 0}
+          disabled={
+            loading || checkingPayment || schedules.length === 0 || isFullyPaid
+          }
           onPress={handlePay}
           className={`h-16 rounded-2xl justify-center items-center ${
-            loading || checkingPayment || schedules.length === 0
+            loading || checkingPayment || schedules.length === 0 || isFullyPaid
               ? "bg-slate-300"
               : "bg-primary"
           }`}
@@ -396,13 +327,15 @@ export default function MembershipBreakdown() {
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
+        confirmText={alert.isConfirmation ? "Proceed" : "Okay"}
+        onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
         onClose={() => {
           const shouldRedirect = alert.redirectHome;
 
-          setAlert({
-            ...alert,
+          setAlert((prev) => ({
+            ...prev,
             visible: false,
-          });
+          }));
 
           if (shouldRedirect) {
             router.replace("/(main)");

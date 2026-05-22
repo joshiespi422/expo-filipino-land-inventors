@@ -7,7 +7,8 @@ interface CustomAlertProps {
   title: string;
   message: string;
   onClose: () => void;
-  onConfirm?: () => void; // Added optional confirm prop
+  onConfirm?: () => void;
+  confirmText?: string; // Added optional prop for flexible action button text
 }
 
 export const CustomAlert = ({
@@ -16,6 +17,7 @@ export const CustomAlert = ({
   message,
   onClose,
   onConfirm,
+  confirmText = "Logout", // Defaults to "Logout" so your existing logout flows don't break
 }: CustomAlertProps) => {
   useEffect(() => {
     if (visible && Platform.OS === "android") {
@@ -66,10 +68,10 @@ export const CustomAlert = ({
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={onConfirm}
-                className="flex-1 bg-red-500 p-4 bg-primary rounded-2xl"
+                className="flex-1 p-4 bg-primary rounded-2xl"
               >
                 <Text className="text-white text-center font-bold text-base">
-                  Logout
+                  {confirmText}
                 </Text>
               </TouchableOpacity>
             </View>

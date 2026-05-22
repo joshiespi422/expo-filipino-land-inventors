@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import {
   getPaymentMethods,
   payMembership,
@@ -8,7 +9,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -27,14 +27,22 @@ export default function MembershipCheckoutPage() {
   );
 
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
-
   const [navigating, setNavigating] = useState(false);
 
   const isProcessing = useRef(false);
 
   const safeScheduleId = Array.isArray(scheduleId) ? scheduleId[0] : scheduleId;
-
   const safeAmount = Array.isArray(amount) ? amount[0] : amount;
+
+  // CUSTOM ALERT STATE
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    redirectHome: false,
+    isConfirmation: false,
+    onConfirm: () => {},
+  });
 
   // RESET LOCKS
   useFocusEffect(
@@ -50,7 +58,6 @@ export default function MembershipCheckoutPage() {
   // =========================
   const formatAmount = (value: any) => {
     const num = Number(String(value).replace(/,/g, ""));
-
     if (isNaN(num)) return "0.00";
 
     return num.toLocaleString("en-PH", {
@@ -65,7 +72,6 @@ export default function MembershipCheckoutPage() {
       .replace(/[^\d.]/g, "");
 
     const num = Number(cleaned);
-
     return isNaN(num) ? 0 : Number(num.toFixed(2));
   };
 
@@ -107,34 +113,24 @@ export default function MembershipCheckoutPage() {
   }, []);
 
   // =========================
-  // PAYMENT
+  // ACTUAL TRANSACTION PROCESS
   // =========================
-  const handleProceed = async () => {
-    if (isProcessing.current || loading || navigating) return;
-
-    if (!selectedMethod) {
-      Alert.alert("Error", "Please select a payment method");
-      return;
-    }
-
+  const executePaymentPayload = async () => {
     try {
       isProcessing.current = true;
-
       setLoading(true);
 
       const parsedAmount = parseAmount(safeAmount);
 
       const payload = {
         membership_schedule_id: Number(safeScheduleId),
-        payment_method_id: Number(selectedMethod.id),
+        payment_method_id: Number(selectedMethod!.id),
         amount: parsedAmount,
         gateway: "paymongo",
       };
 
       console.log("PAYLOAD:", payload);
-
       const response = await payMembership(String(safeScheduleId), payload);
-
       console.log("FULL PAYMENT RESPONSE:", JSON.stringify(response, null, 2));
 
       const result = response?.data || response;
@@ -165,16 +161,11 @@ export default function MembershipCheckoutPage() {
       const paymentAmount =
         payment?.amount || result?.amount || parsedAmount * 100;
 
-      console.log("QR:", qr);
-      console.log("URL:", url);
-      console.log("PAYMENT INTENT:", paymentIntentId);
-
       // =========================
       // QR FLOW
       // =========================
       if (qr) {
         setNavigating(true);
-
         router.push({
           pathname: "/profile/membership-qrph",
           params: {
@@ -183,7 +174,6 @@ export default function MembershipCheckoutPage() {
             amount: String(Number(paymentAmount) / 100),
           },
         });
-
         return;
       }
 
@@ -195,18 +185,77 @@ export default function MembershipCheckoutPage() {
         return;
       }
 
-      Alert.alert("Error", "No payment QR or checkout URL found.");
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "No payment QR or checkout URL found.",
+        redirectHome: false,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
     } catch (error: any) {
       console.log("PAYMENT ERROR:", error);
-
       const message =
         error?.response?.data?.message || error?.message || "Payment failed";
 
-      Alert.alert("Error", message);
+      if (
+        message.toLowerCase().includes("already fully paid") ||
+        message.toLowerCase().includes("already paid")
+      ) {
+        setAlert({
+          visible: true,
+          title: "Already Settled",
+          message:
+            "This membership schedule is already fully paid! Redirecting you home.",
+          redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+      } else {
+        setAlert({
+          visible: true,
+          title: "Transaction Error",
+          message: message,
+          redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+      }
     } finally {
       setLoading(false);
       isProcessing.current = false;
     }
+  };
+
+  // =========================
+  // CONFIRMATION POPUP SYSTEM
+  // =========================
+  const handleProceed = () => {
+    if (isProcessing.current || loading || navigating) return;
+
+    if (!selectedMethod) {
+      setAlert({
+        visible: true,
+        title: "Selection Required",
+        message: "Please select a payment method to continue.",
+        redirectHome: false,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    setAlert({
+      visible: true,
+      title: "Confirm Payment",
+      message: `Proceed with payment of ₱${formatAmount(safeAmount)} using ${selectedMethod.name}?`,
+      redirectHome: false,
+      isConfirmation: true,
+      onConfirm: () => {
+        setAlert((prev) => ({ ...prev, visible: false }));
+        executePaymentPayload();
+      },
+    });
   };
 
   // =========================
@@ -296,6 +345,27 @@ export default function MembershipCheckoutPage() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* CUSTOM ALERT */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        confirmText={alert.isConfirmation ? "Proceed" : "Okay"}
+        onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
+        onClose={() => {
+          const shouldRedirect = alert.redirectHome;
+
+          setAlert((prev) => ({
+            ...prev,
+            visible: false,
+          }));
+
+          if (shouldRedirect) {
+            router.replace("/(main)");
+          }
+        }}
+      />
     </View>
   );
 }

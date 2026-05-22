@@ -1,10 +1,11 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import {
   applyMembership,
   getMembership,
   getMembershipSettings,
 } from "@/services/membershipService";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -24,7 +25,16 @@ export default function MembershipPage() {
   const [selectedOption, setSelectedOption] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const isProcessing = useRef(false);
+  /**
+   * ✅ CUSTOM ALERT STATE
+   */
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    isConfirmation: false,
+    onConfirm: () => {},
+  });
 
   // Fix: Use a single useEffect to handle logic sequentially
   useEffect(() => {
@@ -76,9 +86,10 @@ export default function MembershipPage() {
     };
   }, []);
 
-  // Inside membership.tsx -> handleSubmit
-
-  const handleSubmit = async () => {
+  /**
+   * ✅ ACTUAL API SUBMISSION FUNCTION
+   */
+  const processSubmit = async () => {
     if (!selectedOption || submitting) return;
     setSubmitting(true);
 
@@ -114,6 +125,24 @@ export default function MembershipPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /**
+   * ✅ TRIGGER CONFIRMATION MODAL FIRST
+   */
+  const handleSubmit = () => {
+    if (!selectedOption || submitting) return;
+
+    setAlert({
+      visible: true,
+      title: "Confirm Membership",
+      message: `Are you sure you want to select the "${selectedOption.label}" option?`,
+      isConfirmation: true,
+      onConfirm: () => {
+        setAlert((prev) => ({ ...prev, visible: false })); // Close alert safely before submission
+        processSubmit();
+      },
+    });
   };
 
   // CRITICAL: If checking or loading, don't show the form!
@@ -179,6 +208,21 @@ export default function MembershipPage() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* CUSTOM ALERT COMPONENT */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        confirmText={alert.isConfirmation ? "Proceed" : "Okay"}
+        onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
+        onClose={() => {
+          setAlert((prev) => ({
+            ...prev,
+            visible: false,
+          }));
+        }}
+      />
     </View>
   );
 }
