@@ -28,11 +28,16 @@ export default function LoanCheckoutPage() {
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
-  // ALERT STATE
+  // =========================
+  // CUSTOM ALERT STATE
+  // =========================
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
     message: "",
+    redirectHome: false,
+    isConfirmation: false,
+    onConfirm: () => {},
   });
 
   // ==========================================
@@ -51,21 +56,10 @@ export default function LoanCheckoutPage() {
   );
 
   // =========================
-  // ALERT HELPER
-  // =========================
-  const showAlert = (title: string, message: string) => {
-    setAlert({
-      visible: true,
-      title,
-      message,
-    });
-  };
-
-  // =========================
   // FORMATTING & PARSING
   // =========================
   const formatAmount = (value: any) => {
-    const num = Number(String(value).replace(/,/g, ""));
+    const num = Number(String(value || "0").replace(/,/g, ""));
     if (isNaN(num)) return "0.00";
 
     return num.toLocaleString("en-PH", {
@@ -108,11 +102,21 @@ export default function LoanCheckoutPage() {
       );
 
       setMethods(filtered);
-      setSelectedMethod(filtered[0] || null);
+
+      if (filtered.length > 0) {
+        setSelectedMethod(filtered[0]);
+      }
     } catch (err) {
       console.log("❌ Failed to load payment methods", err);
 
-      showAlert("Error", "Failed to load payment methods. Please try again.");
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "Failed to load payment methods. Please try again.",
+        redirectHome: false,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
     }
   };
 
@@ -121,44 +125,29 @@ export default function LoanCheckoutPage() {
   }, []);
 
   // =========================
-  // 💰 PAY LOAN (HANDLE PROCEED)
+  // ACTUAL PAYMENT PROCESS
   // =========================
-  const handleProceed = async () => {
-    // HARD STOP
-    if (isProcessing.current || navigating || loading) return;
-
-    if (!selectedMethod) {
-      return showAlert("Error", "Please select a payment method");
-    }
-
-    const parsedAmount = parseAmount(amount);
-
-    if (parsedAmount <= 0) {
-      return showAlert("Error", "Invalid payment amount");
-    }
-
-    // SET LOCKS
-    isProcessing.current = true;
-    setLoading(true);
-    setNavigating(true);
-
+  const executePaymentPayload = async () => {
     try {
+      isProcessing.current = true;
+      setLoading(true);
+      setNavigating(true);
+
+      const parsedAmount = parseAmount(amount);
+
       const payload = {
         loan_schedule_id: Number(scheduleId),
-        payment_method_id: selectedMethod.id,
+        payment_method_id: selectedMethod!.id,
         amount: parsedAmount,
         gateway: "paymongo",
       };
 
       const response = await payLoan(id as string, payload);
-
       const result = response?.data;
-
       const nextAction = result?.data?.next_action;
 
       const url = nextAction?.redirect_url;
       const qr = nextAction?.qr_code_url;
-
       const intentId = result?.data?.payment?.gateway_payment_intent_id;
 
       if (!intentId) {
@@ -183,7 +172,6 @@ export default function LoanCheckoutPage() {
             amount: String(parsedAmount),
           },
         });
-
         return;
       }
 
@@ -194,13 +182,85 @@ export default function LoanCheckoutPage() {
       const message =
         error?.response?.data?.message || error?.message || "Payment failed";
 
-      showAlert("Error", message);
+      if (
+        message.toLowerCase().includes("already paid") ||
+        message.toLowerCase().includes("already paid")
+      ) {
+        setAlert({
+          visible: true,
+          title: "Already Settled",
+          message: "This loan payment is already paid! Redirecting you home.",
+          redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+      } else {
+        setAlert({
+          visible: true,
+          title: "Transaction Error",
+          message: message,
+          redirectHome: false,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+      }
 
       setNavigating(false);
-    } finally {
+    }
+    {
       setLoading(false);
       isProcessing.current = false;
     }
+  };
+
+  // =========================
+  // CONFIRMATION POPUP SYSTEM
+  // =========================
+  const handleProceed = () => {
+    if (isProcessing.current || loading || navigating) return;
+
+    if (!selectedMethod) {
+      setAlert({
+        visible: true,
+        title: "Selection Required",
+        message: "Please select a payment method to continue.",
+        redirectHome: false,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    const parsedAmount = parseAmount(amount);
+    if (parsedAmount <= 0) {
+      setAlert({
+        visible: true,
+        title: "Invalid Amount",
+        message: "The calculated payment amount is invalid.",
+        redirectHome: false,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    setAlert({
+      visible: true,
+      title: "Confirm Payment",
+      message: `Proceed with payment of ₱${formatAmount(
+        amount,
+      )} using ${selectedMethod.name}?`,
+      redirectHome: false,
+      isConfirmation: true,
+      onConfirm: () => {
+        setAlert((prev) => ({
+          ...prev,
+          visible: false,
+        }));
+
+        executePaymentPayload();
+      },
+    });
   };
 
   // =========================
@@ -245,7 +305,7 @@ export default function LoanCheckoutPage() {
             <TouchableOpacity
               key={m.id}
               onPress={() => !navigating && setSelectedMethod(m)}
-              disabled={navigating}
+              disabled={navigating || loading}
               className={`p-4 mb-3 rounded-xl border ${
                 active
                   ? "border-primary bg-blue-50"
@@ -275,7 +335,7 @@ export default function LoanCheckoutPage() {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text className="text-white text-center font-bold text-lg">
-              Pay Now
+              Pay ₱{formatAmount(amount)}
             </Text>
           )}
         </TouchableOpacity>
@@ -286,12 +346,20 @@ export default function LoanCheckoutPage() {
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
-        onClose={() =>
-          setAlert({
-            ...alert,
+        confirmText={alert.isConfirmation ? "Proceed" : "Okay"}
+        onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
+        onClose={() => {
+          const shouldRedirect = alert.redirectHome;
+
+          setAlert((prev) => ({
+            ...prev,
             visible: false,
-          })
-        }
+          }));
+
+          if (shouldRedirect) {
+            router.replace("/(main)");
+          }
+        }}
       />
     </View>
   );

@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -26,6 +27,15 @@ export default function LoanPaymentPage() {
 
   const [navigating, setNavigating] = useState(false);
   const isProcessing = useRef(false);
+
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    redirectHome: false,
+    isConfirmation: false,
+    onConfirm: () => {},
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -80,8 +90,8 @@ export default function LoanPaymentPage() {
     });
   };
 
-  const fetchLoan = async (showSkeleton = true) => {
-    if (!id || typeof id !== "string") return;
+  const fetchLoan = async (showSkeleton = true, returnData = false) => {
+    if (!id || typeof id !== "string") return [];
     try {
       if (showSkeleton) setPageLoading(true);
 
@@ -90,9 +100,15 @@ export default function LoanPaymentPage() {
       });
 
       setLoanData(response?.data);
-      setSchedule(formatBackendSchedule(response));
+      const mappedSchedule = formatBackendSchedule(response);
+      setSchedule(mappedSchedule);
+
+      if (returnData) {
+        return mappedSchedule;
+      }
     } catch (error) {
       console.error("FETCH ERROR:", error);
+      return [];
     } finally {
       setPageLoading(false);
       setRefreshing(false);
@@ -119,25 +135,57 @@ export default function LoanPaymentPage() {
   /**
    * 🚀 HANDLE PAYMENT
    */
-  const handlePayment = () => {
+  const handlePayment = async () => {
     if (!isPayable) return;
-
     if (isProcessing.current || navigating) return;
 
-    const firstUnpaid = schedule.find((i) => i.status === "unpaid");
-    if (!firstUnpaid || !loanData?.id) return;
+    try {
+      isProcessing.current = true;
+      setNavigating(true);
 
-    isProcessing.current = true;
-    setNavigating(true);
+      // Re-fetch current remote records to safeguard against multi-device race conditions
+      const updatedSchedule: any[] = await fetchLoan(false, true);
 
-    router.push({
-      pathname: "/checkout",
-      params: {
-        id: loanData.id,
-        scheduleId: firstUnpaid.id,
-        amount: firstUnpaid.total_payment.toFixed(2),
-      },
-    });
+      const latestNextToPay = [...updatedSchedule]
+        ?.sort((a: any, b: any) => a.month - b.month)
+        ?.find((s: any) => s.status !== "paid");
+
+      if (!latestNextToPay) {
+        setAlert({
+          visible: true,
+          title: "Success",
+          message: "All installments on this loan are already completed.",
+          redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+        return;
+      }
+
+      setAlert({
+        visible: true,
+        title: "Confirm Payment",
+        message: `Proceed to payment for Installment ${latestNextToPay.month} (₱${formatMoney(latestNextToPay.total_payment)})?`,
+        redirectHome: false,
+        isConfirmation: true,
+        onConfirm: () => {
+          setAlert((prev) => ({ ...prev, visible: false }));
+          router.push({
+            pathname: "/checkout",
+            params: {
+              id: loanData.id,
+              scheduleId: latestNextToPay.id,
+              amount: latestNextToPay.total_payment.toFixed(2),
+            },
+          });
+        },
+      });
+    } catch (error) {
+      console.log("Payment Check Error:", error);
+    } finally {
+      isProcessing.current = false;
+      setNavigating(false);
+    }
   };
 
   return (
@@ -306,6 +354,27 @@ export default function LoanPaymentPage() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* CUSTOM ALERT */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        confirmText={alert.isConfirmation ? "Proceed" : "Okay"}
+        onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
+        onClose={() => {
+          const shouldRedirect = alert.redirectHome;
+
+          setAlert((prev) => ({
+            ...prev,
+            visible: false,
+          }));
+
+          if (shouldRedirect) {
+            router.replace("/(main)");
+          }
+        }}
+      />
     </View>
   );
 }
