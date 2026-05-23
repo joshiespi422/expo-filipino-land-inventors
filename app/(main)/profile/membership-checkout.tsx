@@ -199,14 +199,14 @@ export default function MembershipCheckoutPage() {
         error?.response?.data?.message || error?.message || "Payment failed";
 
       if (
-        message.toLowerCase().includes("already fully paid") ||
+        message.toLowerCase().includes("already paid") ||
         message.toLowerCase().includes("already paid")
       ) {
         setAlert({
           visible: true,
           title: "Already Settled",
           message:
-            "This membership schedule is already fully paid! Redirecting you home.",
+            "This membership schedule is already paid! Redirecting you home.",
           redirectHome: true,
           isConfirmation: false,
           onConfirm: () => {},
