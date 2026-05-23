@@ -31,10 +31,15 @@ export default function IntellectualPaymentPage() {
 
   const [hasSchedules, setHasSchedules] = useState(false);
 
+  /**
+   * ✅ UPDATE: Configured state to explicitly support confirmation behavior
+   */
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
     message: "",
+    isConfirmation: false,
+    onConfirm: () => {},
   });
 
   const showAlert = (title: string, message: string) => {
@@ -42,6 +47,8 @@ export default function IntellectualPaymentPage() {
       visible: true,
       title,
       message,
+      isConfirmation: false,
+      onConfirm: () => {},
     });
   };
 
@@ -59,9 +66,7 @@ export default function IntellectualPaymentPage() {
         const relationships = ip?.relationships || {};
 
         const status = String(attr?.status || "").toLowerCase();
-
         const schedules = relationships?.schedules?.data || [];
-
         const alreadyHasSchedules = schedules.length > 0;
 
         setHasSchedules(alreadyHasSchedules);
@@ -73,7 +78,6 @@ export default function IntellectualPaymentPage() {
               id: String(id),
             },
           });
-
           return;
         }
 
@@ -143,21 +147,11 @@ export default function IntellectualPaymentPage() {
     };
   }, [id]);
 
-  const handleSubmit = async () => {
-    if (!selectedOption || submitting || isProcessing.current) {
-      return;
-    }
-
-    if (hasSchedules) {
-      router.replace({
-        pathname: "/intellectual-breakdown",
-        params: {
-          id: String(id),
-        },
-      });
-
-      return;
-    }
+  /**
+   * ✅ SUBMISSION EXECUTION HANDLER
+   */
+  const processSubmit = async () => {
+    if (!selectedOption || submitting || isProcessing.current) return;
 
     try {
       isProcessing.current = true;
@@ -176,7 +170,6 @@ export default function IntellectualPaymentPage() {
             id: String(id),
           },
         });
-
         return;
       }
 
@@ -199,6 +192,36 @@ export default function IntellectualPaymentPage() {
       setSubmitting(false);
       isProcessing.current = false;
     }
+  };
+
+  /**
+   * ✅ INTERCEPT HANDLER FOR THE CONFIRMATION WINDOW
+   */
+  const handleSubmit = () => {
+    if (!selectedOption || submitting || isProcessing.current) {
+      return;
+    }
+
+    if (hasSchedules) {
+      router.replace({
+        pathname: "/intellectual-breakdown",
+        params: {
+          id: String(id),
+        },
+      });
+      return;
+    }
+
+    setAlert({
+      visible: true,
+      title: "Confirm Payment Option",
+      message: `Are you sure you want to select the "${selectedOption.label}" option?`,
+      isConfirmation: true,
+      onConfirm: () => {
+        setAlert((prev) => ({ ...prev, visible: false }));
+        processSubmit();
+      },
+    });
   };
 
   if (checking || loading) {
@@ -283,9 +306,7 @@ export default function IntellectualPaymentPage() {
           {submitting ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text className="text-white font-bold">
-              {hasSchedules ? "Schedules Already Created" : "Continue"}
-            </Text>
+            <Text className="text-white font-bold">Continue</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -295,12 +316,14 @@ export default function IntellectualPaymentPage() {
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
-        onClose={() =>
-          setAlert({
-            ...alert,
+        confirmText={alert.isConfirmation ? "Proceed" : "Okay"}
+        onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
+        onClose={() => {
+          setAlert((prev) => ({
+            ...prev,
             visible: false,
-          })
-        }
+          }));
+        }}
       />
     </View>
   );

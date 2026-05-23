@@ -1,7 +1,7 @@
 import { CustomAlert } from "@/components/CustomAlert";
 import { getIntellectualProperty } from "@/services/intellectualService";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -20,22 +20,18 @@ export default function IntellectualBreakdown() {
   const [refreshing, setRefreshing] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
 
-  /**
-   * ✅ CUSTOM ALERT
-   */
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
     message: "",
     redirectHome: false,
+    isConfirmation: false,
+    onConfirm: () => {},
   });
-
-  useEffect(() => {
-    if (!id) router.replace("/details");
-  }, [id]);
 
   const formatMoney = (value: any) => {
     const num = Number(String(value || "0").replace(/,/g, ""));
+
     if (isNaN(num)) return "0.00";
 
     return num.toLocaleString("en-PH", {
@@ -46,6 +42,7 @@ export default function IntellectualBreakdown() {
 
   const formatDate = (date: string) => {
     if (!date) return "N/A";
+
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
@@ -55,9 +52,11 @@ export default function IntellectualBreakdown() {
 
   const fetchSchedules = async (showLoader = true, returnData = false) => {
     try {
-      if (!id || typeof id !== "string") return;
+      if (!id || typeof id !== "string") return [];
 
-      if (showLoader) setLoading(true);
+      if (showLoader) {
+        setLoading(true);
+      }
 
       const res = await getIntellectualProperty(id);
 
@@ -76,7 +75,11 @@ export default function IntellectualBreakdown() {
 
       setSchedules(mapped);
 
-      if (returnData) return mapped;
+      if (returnData) {
+        return mapped;
+      }
+
+      return mapped;
     } catch (e) {
       console.log("Fetch Error:", e);
       setSchedules([]);
@@ -87,9 +90,18 @@ export default function IntellectualBreakdown() {
     }
   };
 
-  useEffect(() => {
-    fetchSchedules();
-  }, [id]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) {
+        router.replace("/details");
+        return;
+      }
+
+      fetchSchedules();
+
+      return () => {};
+    }, [id]),
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -99,18 +111,17 @@ export default function IntellectualBreakdown() {
   const isSinglePayment = schedules.length === 1;
 
   /**
-   * ✅ STRICT NEXT PAYMENT LOGIC (like membership style)
+   * ✅ STRICT NEXT INSTALLMENT
+   * ALWAYS PRIORITIZE LOWEST UNPAID INSTALLMENT
    */
   const nextToPay = useMemo(() => {
-    const unpaid = schedules.filter((s) => s.status !== "paid");
-
-    if (unpaid.length === 0) return null;
-
-    return [...unpaid].sort((a, b) => a.installment - b.installment)[0];
+    return [...schedules]
+      .sort((a, b) => a.installment - b.installment)
+      .find((s) => s.status !== "paid");
   }, [schedules]);
 
   /**
-   * TOTAL OUTSTANDING
+   * ✅ OUTSTANDING TOTAL
    */
   const outstanding = useMemo(() => {
     return schedules
@@ -118,65 +129,102 @@ export default function IntellectualBreakdown() {
       .reduce((a, b) => a + Number(b.amount || 0), 0);
   }, [schedules]);
 
+  /**
+   * ✅ FULLY PAID CHECK
+   */
   const isFullyPaid =
     schedules.length > 0 && schedules.every((s) => s.status === "paid");
 
   /**
-   * ✅ HANDLE PAYMENT (same pattern as membership)
+   * ✅ HANDLE PAYMENT
+   * RECHECK FROM SERVER BEFORE CONTINUE
    */
   const handlePay = async () => {
     try {
       setCheckingPayment(true);
 
+      /**
+       * ✅ ALWAYS REFRESH LATEST DATA
+       */
       const updatedSchedules: any = await fetchSchedules(false, true);
 
-      const unpaid = updatedSchedules?.filter((s: any) => s.status !== "paid");
+      /**
+       * ✅ GET LOWEST UNPAID INSTALLMENT
+       */
+      const latestNextToPay = [...updatedSchedules]
+        ?.sort((a: any, b: any) => a.installment - b.installment)
+        ?.find((s: any) => s.status !== "paid");
 
-      const latestNextToPay =
-        unpaid?.length > 0
-          ? [...unpaid].sort(
-              (a: any, b: any) => a.installment - b.installment,
-            )[0]
-          : null;
-
+      /**
+       * ✅ ALL PAID
+       */
       if (!latestNextToPay) {
         setAlert({
           visible: true,
           title: "Success",
-          message: "All intellectual property payments are completed.",
+          message: "All intellectual property payments are already completed.",
           redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
         });
+
         return;
       }
 
-      if (latestNextToPay.status === "paid") {
+      /**
+       * ✅ CHECK IF ALREADY PAID
+       * EXAMPLE:
+       * INSTALLMENT 1 = PAID
+       * THEN IT AUTO MOVE TO INSTALLMENT 2
+       */
+      const alreadyPaid = updatedSchedules.find(
+        (s: any) =>
+          s.installment === latestNextToPay.installment && s.status === "paid",
+      );
+
+      if (alreadyPaid) {
         setAlert({
           visible: true,
           title: "Already Paid",
-          message: `Installment ${latestNextToPay.installment} is already paid.`,
+          message: `Installment ${alreadyPaid.installment} is already paid.`,
           redirectHome: false,
+          isConfirmation: false,
+          onConfirm: () => {},
         });
+
         return;
       }
 
+      /**
+       * ✅ CONFIRM PAYMENT
+       */
       setAlert({
         visible: true,
-        title: "Continue Payment",
-        message: `You need to pay Installment ${latestNextToPay.installment} first.`,
+        title: "Confirm Payment",
+        message: isSinglePayment
+          ? `Proceed to payment for ₱${formatMoney(latestNextToPay.amount)}?`
+          : `Proceed to payment for Installment ${
+              latestNextToPay.installment
+            } (₱${formatMoney(latestNextToPay.amount)})?`,
         redirectHome: false,
-      });
+        isConfirmation: true,
+        onConfirm: () => {
+          setAlert((prev) => ({
+            ...prev,
+            visible: false,
+          }));
 
-      setTimeout(() => {
-        router.push({
-          pathname: "/intellectual-checkout",
-          params: {
-            scheduleId: latestNextToPay.id,
-            amount: latestNextToPay.amount,
-            mode: isSinglePayment ? "one_time" : "installment",
-            intellectualId: String(id),
-          },
-        });
-      }, 500);
+          router.push({
+            pathname: "/intellectual-checkout",
+            params: {
+              scheduleId: latestNextToPay.id,
+              amount: latestNextToPay.amount,
+              mode: isSinglePayment ? "one_time" : "installment",
+              intellectualId: String(id),
+            },
+          });
+        },
+      });
     } catch (error) {
       console.log("Payment Error:", error);
     } finally {
@@ -188,7 +236,10 @@ export default function IntellectualBreakdown() {
     <View className="flex-1 bg-[#F8FAFC]">
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingTop: 20, paddingBottom: 140 }}
+        contentContainerStyle={{
+          paddingTop: 20,
+          paddingBottom: 140,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -198,14 +249,14 @@ export default function IntellectualBreakdown() {
           />
         }
       >
-        {/* SUMMARY (MATCHED DESIGN) */}
+        {/* SUMMARY */}
         <View className="bg-white rounded-3xl p-6 mb-6">
           {loading ? (
             <ActivityIndicator />
           ) : (
             <>
               <Text className="text-slate-400 text-xs font-bold uppercase">
-                {isSinglePayment ? "Membership Fee" : "Outstanding Balance"}
+                {isSinglePayment ? "Intellectual Fee" : "Outstanding Balance"}
               </Text>
 
               <Text className="text-primary text-3xl font-black mt-1">
@@ -215,7 +266,9 @@ export default function IntellectualBreakdown() {
           )}
         </View>
 
-        <Text className="font-black text-lg mb-4 px-2">Payment Schedule</Text>
+        <Text className="font-black text-lg mb-4 px-2">
+          {isSinglePayment ? "Payment Details" : "Payment Schedule"}
+        </Text>
 
         {/* LIST */}
         {loading ? (
@@ -227,6 +280,7 @@ export default function IntellectualBreakdown() {
         ) : (
           schedules.map((item) => {
             const isPaid = item.status === "paid";
+
             const isNext = nextToPay?.installment === item.installment;
 
             return (
@@ -264,7 +318,9 @@ export default function IntellectualBreakdown() {
 
                       <View>
                         <Text className="font-bold text-slate-800">
-                          Installment {item.installment}
+                          {isSinglePayment
+                            ? "Intellectual Payment"
+                            : `Installment ${item.installment}`}
                         </Text>
 
                         <Text className="text-xs text-slate-500">
@@ -300,10 +356,12 @@ export default function IntellectualBreakdown() {
       {/* FOOTER */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
-          disabled={!nextToPay || loading || checkingPayment}
+          disabled={
+            loading || checkingPayment || schedules.length === 0 || isFullyPaid
+          }
           onPress={handlePay}
           className={`h-16 rounded-2xl justify-center items-center ${
-            !nextToPay || loading || checkingPayment
+            loading || checkingPayment || schedules.length === 0 || isFullyPaid
               ? "bg-slate-300"
               : "bg-primary"
           }`}
@@ -327,13 +385,15 @@ export default function IntellectualBreakdown() {
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
+        confirmText={alert.isConfirmation ? "Proceed" : "Okay"}
+        onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
         onClose={() => {
           const shouldRedirect = alert.redirectHome;
 
-          setAlert({
-            ...alert,
+          setAlert((prev) => ({
+            ...prev,
             visible: false,
-          });
+          }));
 
           if (shouldRedirect) {
             router.replace("/(main)");

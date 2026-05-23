@@ -1,10 +1,9 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import {
   getPaymentMethods,
   payIntellectual,
   PaymentMethod,
 } from "@/services/intellectualService";
-
-import { CustomAlert } from "@/components/CustomAlert";
 
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -33,18 +32,9 @@ export default function IntellectualCheckoutPage() {
 
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
-
   const [navigating, setNavigating] = useState(false);
 
   const isProcessing = useRef(false);
-
-  // ALERT STATE
-  const [alert, setAlert] = useState({
-    visible: false,
-    title: "",
-    message: "",
-  });
 
   const safeScheduleId = Array.isArray(scheduleId) ? scheduleId[0] : scheduleId;
 
@@ -55,17 +45,20 @@ export default function IntellectualCheckoutPage() {
     : intellectualId;
 
   // =========================
-  // ALERT HELPER
+  // CUSTOM ALERT STATE
   // =========================
-  const showAlert = (title: string, message: string) => {
-    setAlert({
-      visible: true,
-      title,
-      message,
-    });
-  };
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    redirectHome: false,
+    isConfirmation: false,
+    onConfirm: () => {},
+  });
 
-  // RESET LOCKS ON PAGE FOCUS
+  // =========================
+  // RESET LOCKS
+  // =========================
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
@@ -75,21 +68,31 @@ export default function IntellectualCheckoutPage() {
   );
 
   // =========================
-  // FORMAT AMOUNT
+  // FORMATTERS
   // =========================
   const formatAmount = (value: any) => {
     const num = Number(String(value || "0").replace(/,/g, ""));
 
-    return isNaN(num)
-      ? "0.00"
-      : num.toLocaleString("en-PH", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
+    if (isNaN(num)) return "0.00";
+
+    return num.toLocaleString("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const parseAmount = (value: any) => {
+    const cleaned = String(value)
+      .replace(/,/g, "")
+      .replace(/[^\d.]/g, "");
+
+    const num = Number(cleaned);
+
+    return isNaN(num) ? 0 : Number(num.toFixed(2));
   };
 
   // =========================
-  // LOAD PAYMENT METHODS
+  // LOAD METHODS
   // =========================
   const loadMethods = async () => {
     try {
@@ -114,11 +117,21 @@ export default function IntellectualCheckoutPage() {
       );
 
       setMethods(filtered);
-      setSelectedMethod(filtered[0] || null);
+
+      if (filtered.length > 0) {
+        setSelectedMethod(filtered[0]);
+      }
     } catch (err) {
       console.log("Failed to load payment methods", err);
 
-      showAlert("Error", "Failed to load payment methods. Please try again.");
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "Failed to load payment methods. Please try again.",
+        redirectHome: false,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
     }
   };
 
@@ -127,104 +140,165 @@ export default function IntellectualCheckoutPage() {
   }, []);
 
   // =========================
-  // HANDLE PAYMENT
+  // ACTUAL PAYMENT PROCESS
   // =========================
-  const handleProceed = async () => {
-    // 1. Strict upfront check on the mutable ref lock
-    if (isProcessing.current || navigating || loading) return;
-
-    if (!selectedMethod) {
-      return showAlert("Error", "Please select a payment method");
-    }
-
-    // 2. Lock it down immediately across both state and ref
-    isProcessing.current = true;
-    setLoading(true);
-    setNavigating(true);
-
+  const executePaymentPayload = async () => {
     try {
+      isProcessing.current = true;
+      setLoading(true);
+
+      const parsedAmount = parseAmount(safeAmount);
+
       const payload = {
-        payment_method_id: Number(selectedMethod.id),
+        payment_method_id: Number(selectedMethod!.id),
+        amount: parsedAmount,
       };
 
-      const response = await payIntellectual(String(safeScheduleId), payload);
-      const result = response?.data || response;
+      console.log("PAYLOAD:", payload);
 
-      console.log("FULL PAYMONGO RESPONSE:", JSON.stringify(result, null, 2));
+      const response = await payIntellectual(String(safeScheduleId), payload);
+
+      console.log("FULL PAYMENT RESPONSE:", JSON.stringify(response, null, 2));
+
+      const result = response?.data || response;
 
       // =========================
       // FLEXIBLE EXTRACTION
       // =========================
-      const payment = result?.payment;
+      const payment = result?.payment || result?.data?.payment || result?.data;
+
       const gatewayResponse =
         payment?.gateway_response?.data || payment?.gateway_response;
+
       const gatewayAttributes = gatewayResponse?.attributes;
 
-      const intentId =
-        payment?.gateway_payment_intent_id || result?.gateway_payment_intent_id;
-      const qr = gatewayAttributes?.next_action?.code?.image_url;
-      const redirectUrl = gatewayAttributes?.next_action?.redirect?.url;
-      const paymentAmount = payment?.amount;
+      const nextAction = gatewayAttributes?.next_action || result?.next_action;
+
+      const qr =
+        nextAction?.code?.image_url ||
+        nextAction?.qr_code_url ||
+        nextAction?.qr_url;
+
+      const redirectUrl =
+        nextAction?.redirect?.url ||
+        nextAction?.redirect_url ||
+        nextAction?.url;
+
+      const paymentIntentId =
+        payment?.gateway_payment_intent_id ||
+        payment?.payment_intent_id ||
+        payment?.id ||
+        result?.gateway_payment_intent_id;
+
+      const paymentAmount =
+        payment?.amount || result?.amount || parsedAmount * 100;
 
       // =========================
-      // VALIDATION
-      // =========================
-      if (!intentId && qr) {
-        showAlert("Error", "Payment ID not found in response.");
-        setNavigating(false);
-        setLoading(false);
-        isProcessing.current = false; // Safely release lock since transaction aborted
-        return;
-      }
-
-      setPaymentIntentId(String(intentId));
-
-      // =========================
-      // REDIRECT URL (Webview Flow)
-      // =========================
-      if (redirectUrl) {
-        setCheckoutUrl(redirectUrl);
-        // We DO NOT set isProcessing to false here because we want the screen locked
-        // until the WebView element takes over the viewport.
-        return;
-      }
-
-      // =========================
-      // QR FLOW (Push Route)
+      // QR FLOW
       // =========================
       if (qr) {
+        setNavigating(true);
+
         router.push({
           pathname: "/intellectual-qrph",
           params: {
-            qrUrl: qr,
-            paymentIntentId: String(intentId),
+            qrUrl: String(qr),
+            paymentIntentId: String(paymentIntentId || ""),
             intellectualId: String(safeIntellectualId),
-            amount: String((paymentAmount || 0) / 100),
+            amount: String(Number(paymentAmount) / 100),
           },
         });
-        // Keeping locks active since app is changing views
+
         return;
       }
 
       // =========================
-      // NO QR / NO REDIRECT
+      // WEBVIEW FLOW
       // =========================
-      showAlert("Error", "Could not generate payment session.");
-      setNavigating(false);
-      setLoading(false);
-      isProcessing.current = false;
+      if (redirectUrl) {
+        setCheckoutUrl(String(redirectUrl));
+        return;
+      }
+
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "No payment QR or checkout URL found.",
+        redirectHome: false,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
     } catch (error: any) {
-      console.log("CHECKOUT ERROR:", error);
+      console.log("PAYMENT ERROR:", error);
 
       const message =
         error?.response?.data?.message || error?.message || "Payment failed";
-      showAlert("Error", message);
 
-      // Reset everything on actual API failure strings so they can try again
-      setNavigating(false);
+      if (
+        message.toLowerCase().includes("already fully paid") ||
+        message.toLowerCase().includes("already paid")
+      ) {
+        setAlert({
+          visible: true,
+          title: "Already Settled",
+          message:
+            "This intellectual payment is already fully paid! Redirecting you home.",
+          redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+      } else {
+        setAlert({
+          visible: true,
+          title: "Transaction Error",
+          message: message,
+          redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+      }
+    } finally {
       setLoading(false);
       isProcessing.current = false;
     }
+  };
+
+  // =========================
+  // CONFIRMATION POPUP SYSTEM
+  // =========================
+  const handleProceed = () => {
+    if (isProcessing.current || loading || navigating) return;
+
+    if (!selectedMethod) {
+      setAlert({
+        visible: true,
+        title: "Selection Required",
+        message: "Please select a payment method to continue.",
+        redirectHome: false,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
+
+      return;
+    }
+
+    setAlert({
+      visible: true,
+      title: "Confirm Payment",
+      message: `Proceed with payment of ₱${formatAmount(
+        safeAmount,
+      )} using ${selectedMethod.name}?`,
+      redirectHome: false,
+      isConfirmation: true,
+      onConfirm: () => {
+        setAlert((prev) => ({
+          ...prev,
+          visible: false,
+        }));
+
+        executePaymentPayload();
+      },
+    });
   };
 
   // =========================
@@ -245,6 +319,9 @@ export default function IntellectualCheckoutPage() {
     );
   }
 
+  // =========================
+  // UI
+  // =========================
   return (
     <View className="flex-1 bg-gray-50">
       <ScrollView
@@ -253,6 +330,7 @@ export default function IntellectualCheckoutPage() {
           paddingBottom: 120,
         }}
       >
+        {/* CARD */}
         <View className="bg-white rounded-3xl p-6 mb-6 shadow-sm">
           <Text className="text-slate-400 text-xs font-bold uppercase">
             Intellectual Property Payment
@@ -263,6 +341,7 @@ export default function IntellectualCheckoutPage() {
           </Text>
         </View>
 
+        {/* METHODS */}
         <Text className="font-semibold text-gray-800 mb-3 px-1">
           Select Payment Method
         </Text>
@@ -274,7 +353,7 @@ export default function IntellectualCheckoutPage() {
             <TouchableOpacity
               key={m.id}
               disabled={loading || navigating}
-              onPress={() => !(loading || navigating) && setSelectedMethod(m)}
+              onPress={() => setSelectedMethod(m)}
               className={`p-4 mb-3 rounded-xl border ${
                 active
                   ? "border-primary bg-blue-50"
@@ -292,17 +371,15 @@ export default function IntellectualCheckoutPage() {
       </ScrollView>
 
       {/* FOOTER */}
-      <View className="w-full p-5 bg-white border-t border-slate-200">
+      <View className="absolute bottom-0 w-full p-5 bg-white border-t border-gray-100">
         <TouchableOpacity
           onPress={handleProceed}
-          disabled={loading || navigating || isProcessing.current}
+          disabled={loading || navigating}
           className={`h-16 rounded-2xl justify-center items-center ${
-            loading || navigating || isProcessing.current
-              ? "bg-gray-300"
-              : "bg-primary"
+            loading || navigating ? "bg-slate-300" : "bg-primary"
           }`}
         >
-          {loading || navigating || isProcessing.current ? (
+          {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <Text className="text-white font-bold text-lg">
@@ -317,12 +394,20 @@ export default function IntellectualCheckoutPage() {
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
-        onClose={() =>
-          setAlert({
-            ...alert,
+        confirmText={alert.isConfirmation ? "Proceed" : "Okay"}
+        onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
+        onClose={() => {
+          const shouldRedirect = alert.redirectHome;
+
+          setAlert((prev) => ({
+            ...prev,
             visible: false,
-          })
-        }
+          }));
+
+          if (shouldRedirect) {
+            router.replace("/(main)");
+          }
+        }}
       />
     </View>
   );
