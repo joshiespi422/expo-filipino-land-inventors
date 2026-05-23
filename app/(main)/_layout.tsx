@@ -281,7 +281,7 @@ export default function MainLayout() {
                 {/* HISTORY - COMING SOON */}
                 <TouchableOpacity
                   className="items-center ps-2 flex-1"
-                  onPress={handleComingSoon}
+                  onPress={() => router.push("/history")}
                 >
                   <Image source={History} style={{ width: 31, height: 31 }} />
                   <Text className="text-white text-[10px] mt-1">History</Text>
