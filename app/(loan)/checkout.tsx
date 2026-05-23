@@ -41,7 +41,7 @@ export default function LoanCheckoutPage() {
   });
 
   // ==========================================
-  // 🛡️ NAVIGATION LOCKS (STRICT PREVENT CLICK)
+  // 🛡️ NAVIGATION LOCKS
   // ==========================================
   const [navigating, setNavigating] = useState(false);
   const isProcessing = useRef(false);
@@ -60,6 +60,7 @@ export default function LoanCheckoutPage() {
   // =========================
   const formatAmount = (value: any) => {
     const num = Number(String(value || "0").replace(/,/g, ""));
+
     if (isNaN(num)) return "0.00";
 
     return num.toLocaleString("en-PH", {
@@ -97,8 +98,11 @@ export default function LoanCheckoutPage() {
         gateway_type: (item?.attributes?.gateway_type || "").toLowerCase(),
       }));
 
+      // ✅ INCLUDE WALLET
       const filtered = formatted.filter((m) =>
-        ["qrph", "paymaya", "billease", "grab_pay"].includes(m.gateway_type),
+        ["qrph", "paymaya", "billease", "grab_pay", "wallet"].includes(
+          m.gateway_type,
+        ),
       );
 
       setMethods(filtered);
@@ -125,7 +129,7 @@ export default function LoanCheckoutPage() {
   }, []);
 
   // =========================
-  // ACTUAL PAYMENT PROCESS
+  // PAYMENT PROCESS
   // =========================
   const executePaymentPayload = async () => {
     try {
@@ -135,16 +139,37 @@ export default function LoanCheckoutPage() {
 
       const parsedAmount = parseAmount(amount);
 
+      // ✅ DETECT GATEWAY
+      const gateway =
+        selectedMethod?.gateway_type === "wallet" ? "wallet" : "paymongo";
+
       const payload = {
         loan_schedule_id: Number(scheduleId),
         payment_method_id: selectedMethod!.id,
         amount: parsedAmount,
-        gateway: "paymongo",
+        gateway,
       };
 
       const response = await payLoan(id as string, payload);
+
       const result = response?.data;
       const nextAction = result?.data?.next_action;
+
+      // =========================
+      // ✅ WALLET SUCCESS
+      // =========================
+      if (gateway === "wallet") {
+        setAlert({
+          visible: true,
+          title: "Payment Successful",
+          message: "Loan payment successfully paid using wallet.",
+          redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+
+        return;
+      }
 
       const url = nextAction?.redirect_url;
       const qr = nextAction?.qr_code_url;
@@ -172,6 +197,7 @@ export default function LoanCheckoutPage() {
             amount: String(parsedAmount),
           },
         });
+
         return;
       }
 
@@ -182,10 +208,19 @@ export default function LoanCheckoutPage() {
       const message =
         error?.response?.data?.message || error?.message || "Payment failed";
 
-      if (
-        message.toLowerCase().includes("already paid") ||
-        message.toLowerCase().includes("already paid")
-      ) {
+      // ✅ INSUFFICIENT WALLET
+      if (message.toLowerCase().includes("insufficient wallet")) {
+        setAlert({
+          visible: true,
+          title: "Insufficient Balance",
+          message: "Your wallet balance is insufficient.",
+          redirectHome: false,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+      }
+      // ALREADY PAID
+      else if (message.toLowerCase().includes("already paid")) {
         setAlert({
           visible: true,
           title: "Already Settled",
@@ -206,15 +241,14 @@ export default function LoanCheckoutPage() {
       }
 
       setNavigating(false);
-    }
-    {
+    } finally {
       setLoading(false);
       isProcessing.current = false;
     }
   };
 
   // =========================
-  // CONFIRMATION POPUP SYSTEM
+  // CONFIRMATION
   // =========================
   const handleProceed = () => {
     if (isProcessing.current || loading || navigating) return;
@@ -228,10 +262,12 @@ export default function LoanCheckoutPage() {
         isConfirmation: false,
         onConfirm: () => {},
       });
+
       return;
     }
 
     const parsedAmount = parseAmount(amount);
+
     if (parsedAmount <= 0) {
       setAlert({
         visible: true,
@@ -241,6 +277,7 @@ export default function LoanCheckoutPage() {
         isConfirmation: false,
         onConfirm: () => {},
       });
+
       return;
     }
 
@@ -264,7 +301,7 @@ export default function LoanCheckoutPage() {
   };
 
   // =========================
-  // WEBVIEW RENDER
+  // WEBVIEW
   // =========================
   if (checkoutUrl) {
     return (
@@ -322,7 +359,7 @@ export default function LoanCheckoutPage() {
         })}
       </ScrollView>
 
-      {/* FOOTER ACTION */}
+      {/* FOOTER */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
           onPress={handleProceed}
@@ -341,7 +378,7 @@ export default function LoanCheckoutPage() {
         </TouchableOpacity>
       </View>
 
-      {/* CUSTOM ALERT */}
+      {/* ALERT */}
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
