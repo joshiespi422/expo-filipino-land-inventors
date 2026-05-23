@@ -235,14 +235,14 @@ export default function IntellectualCheckoutPage() {
         error?.response?.data?.message || error?.message || "Payment failed";
 
       if (
-        message.toLowerCase().includes("already fully paid") ||
+        message.toLowerCase().includes("already paid") ||
         message.toLowerCase().includes("already paid")
       ) {
         setAlert({
           visible: true,
           title: "Already Settled",
           message:
-            "This intellectual payment is already fully paid! Redirecting you home.",
+            "This intellectual payment is already paid! Redirecting you home.",
           redirectHome: true,
           isConfirmation: false,
           onConfirm: () => {},
