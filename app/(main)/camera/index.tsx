@@ -18,7 +18,7 @@ export default function CameraScreen() {
 
   const [permission, requestPermission] = useCameraPermissions();
 
-  // 📌 Permission handling
+  // Permission handling
   useEffect(() => {
     if (!permission) return;
 
@@ -27,7 +27,7 @@ export default function CameraScreen() {
     }
   }, [permission?.granted]);
 
-  // 📷 AUTO QR SCAN (NO MANUAL BUTTON)
+  // AUTO QR SCAN (NO MANUAL BUTTON)
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
     // prevent spam scanning same QR repeatedly
     if (cooldownRef.current) return;
@@ -56,7 +56,7 @@ export default function CameraScreen() {
     }
   };
 
-  // 🔄 LOADING
+  // LOADING
   if (!permission) {
     return (
       <View className="flex-1 items-center justify-center bg-black">
@@ -65,7 +65,7 @@ export default function CameraScreen() {
     );
   }
 
-  // 🚫 NO PERMISSION
+  // NO PERMISSION
   if (!permission.granted) {
     return (
       <View className="flex-1 items-center justify-center bg-black px-6">
@@ -83,7 +83,7 @@ export default function CameraScreen() {
     );
   }
 
-  // 📷 CAMERA VIEW
+  // CAMERA VIEW
   return (
     <View className="flex-1 bg-black">
       {/* CAMERA */}
@@ -96,7 +96,7 @@ export default function CameraScreen() {
         onBarcodeScanned={handleBarcodeScanned}
       />
 
-      {/* 🌑 UI OVERLAY */}
+      {/* UI OVERLAY */}
       <View className="absolute inset-0 bg-black/40 items-center justify-center">
         {/* TOP BAR */}
         <View className="absolute top-12 w-full flex-row justify-between px-5">
