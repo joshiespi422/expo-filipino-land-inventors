@@ -47,6 +47,9 @@ export default function MainLayout() {
   const isMembershipFee = pathname === "/profile/membership-breakdown";
   const isMembershipPay = pathname === "/profile/membership-checkout";
   const isMembershipQr = pathname === "/profile/membership-qrph";
+  const isChangePassword = pathname === "/profile/changePassword";
+
+  const isHistory = pathname === "/history";
   const isCameraQr = pathname === "/camera";
 
   const isWelcomePage =
@@ -206,10 +209,15 @@ export default function MainLayout() {
                               ? "Checkout"
                               : isMembershipQr
                                 ? "Payment QR"
-                                : ""}
+                                : isHistory
+                                  ? "Transaction History"
+                                  : isChangePassword
+                                    ? "Security & Password"
+                                    : ""}
                 </Text>
 
-                <View style={{ width: 28 }} />
+                {/* <View style={{ width: 28 }} /> */}
+                <View></View>
               </View>
             </View>
           )}
@@ -218,7 +226,10 @@ export default function MainLayout() {
           <View className="flex-1">
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
-              <Stack.Screen name="profile/index" />
+              <Stack.Screen
+                name="profile/index"
+                options={{ animation: "fade" }}
+              />
             </Stack>
           </View>
 
