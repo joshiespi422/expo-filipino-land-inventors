@@ -35,7 +35,7 @@ const PasswordInput = ({
       {label}
     </Text>
     <View
-      className={`flex-row items-center border ${errors[errorField] ? "border-red-500" : "border-gray-200"} rounded-2xl bg-gray-50 pr-4`}
+      className={`flex-row items-center border ${errors[errorField] ? "border-[#D70127]" : "border-gray-200"} rounded-2xl bg-gray-50 pr-4`}
     >
       <TextInput
         secureTextEntry={!isVisible}
@@ -54,7 +54,7 @@ const PasswordInput = ({
       </TouchableOpacity>
     </View>
     {errors[errorField] && (
-      <Text className="text-red-500 text-xs mt-1 ml-1">
+      <Text className="text-[#D70127] text-xs mt-1 ml-1">
         {errors[errorField][0]}
       </Text>
     )}
