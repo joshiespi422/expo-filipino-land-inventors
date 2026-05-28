@@ -33,7 +33,7 @@ import Intellectual from "../../assets/images/icon/Intellectual.png";
 // import Licensing from "../../assets/images/icon/Licensing.png";
 import Loan from "../../assets/images/icon/Loan.png";
 // import Lost from "../../assets/images/icon/Lost.png";
-// import News from "../../assets/images/icon/News.png";
+import News from "../../assets/images/icon/News.png";
 // import Product from "../../assets/images/icon/Product.png";
 // import RD from "../../assets/images/icon/RD.png";
 // import Suggest from "../../assets/images/icon/Suggest.png";
@@ -140,7 +140,7 @@ export default function DashboardPage() {
     // { label: "Lost & Found", href: "/", source: Lost },
     // { label: "Suggest a Service", href: "/", source: Suggest },
     // { label: "Coop Membership", href: "/", source: Coop },
-    // { label: "News & Event", href: "/", source: News },
+    { label: "News & Event", href: "/news", source: News },
   ];
 
   const getPopupContent = () => {

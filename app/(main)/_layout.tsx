@@ -48,6 +48,9 @@ export default function MainLayout() {
   const isMembershipPay = pathname === "/profile/membership-checkout";
   const isMembershipQr = pathname === "/profile/membership-qrph";
   const isChangePassword = pathname === "/profile/changePassword";
+  const isNewsIndex = pathname === "/news";
+  const isNewsDetails = pathname === "/news/details";
+  const isNewsSearch = pathname === "/news/search";
 
   const isHistory = pathname === "/history";
   const isCameraQr = pathname === "/camera";
@@ -213,7 +216,13 @@ export default function MainLayout() {
                                   ? "Transaction History"
                                   : isChangePassword
                                     ? "Security & Password"
-                                    : ""}
+                                    : isNewsIndex
+                                      ? "News & Events"
+                                      : isNewsDetails
+                                        ? "News Details"
+                                        : isNewsSearch
+                                          ? "Search News"
+                                          : ""}
                 </Text>
 
                 {/* <View style={{ width: 28 }} /> */}
@@ -228,6 +237,15 @@ export default function MainLayout() {
               <Stack.Screen name="index" />
               <Stack.Screen
                 name="profile/index"
+                options={{ animation: "fade" }}
+              />
+              <Stack.Screen name="news/index" options={{ animation: "fade" }} />
+              <Stack.Screen
+                name="news/search"
+                options={{ animation: "fade" }}
+              />
+              <Stack.Screen
+                name="news/details"
                 options={{ animation: "fade" }}
               />
             </Stack>
