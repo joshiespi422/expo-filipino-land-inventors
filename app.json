@@ -1,61 +1,60 @@
 {
   "expo": {
-    "name": "expo-filipino-land-inventors",
-    "slug": "expo-filipino-land-inventors",
+    "name": "FISMPC",
+    "slug": "fismpc",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "expofilipinolandinventors",
+
+    "icon": "./assets/images/logo.png",
+
+    "splash": {
+      "image": "./assets/images/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+
+    "scheme": "fismpc",
     "userInterfaceStyle": "light",
+
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jospay.expofilipinolandinventors",
+      "bundleIdentifier": "com.jospay.fismpc",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
+
     "android": {
+      "package": "com.jospay.fismpc",
+
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#FFFFFF"
       },
+
       "predictiveBackGestureEnabled": false,
-      "permissions": ["WRITE_EXTERNAL_STORAGE", "READ_EXTERNAL_STORAGE"],
-      "package": "com.jospay.expofilipinolandinventors"
+      "permissions": ["WRITE_EXTERNAL_STORAGE", "READ_EXTERNAL_STORAGE"]
     },
+
     "androidStatusBar": {
       "hidden": true,
       "translucent": true
     },
+
     "androidNavigationBar": {
       "visible": "immersive"
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
+
     "plugins": [
       "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
-        }
-      ],
+
       "expo-font",
       "expo-image",
       "expo-web-browser",
       "expo-navigation-bar",
       "expo-secure-store",
       "@react-native-community/datetimepicker",
+
       [
         "expo-camera",
         {
@@ -70,11 +69,13 @@
         }
       ]
     ],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true,
       "tsconfigPaths": true
     },
+
     "extra": {
       "eas": {
         "projectId": "ef4a234f-3fe7-42e5-995a-7ca344dad038"
