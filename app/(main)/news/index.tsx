@@ -21,27 +21,18 @@ const CARD_WIDTH = width - 48;
 const SPACING = 12;
 const SNAP_INTERVAL = CARD_WIDTH + SPACING;
 
-const MASTER_CATEGORIES = [
-  "All",
-  "News",
-  "Business",
-  "Lifestyle",
-  "Technology",
-  "Sports",
-  "International",
-  "AGRI-NEWS",
-  "OPINION",
-];
-
 export default function NewsIndex() {
   const router = useRouter();
 
   const [news, setNews] = useState<NewsItem[]>([]);
   const [latestNews, setLatestNews] = useState<NewsItem[]>([]);
+  const [categories, setCategories] = useState<string[]>(["All"]);
+
   const [page, setPage] = useState(1);
 
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+
   const [category, setCategory] = useState("All");
   const [activeSlide, setActiveSlide] = useState(0);
 
@@ -62,20 +53,41 @@ export default function NewsIndex() {
         category: customCategory === "All" ? "" : customCategory,
       });
 
+      // ================= DYNAMIC CATEGORIES =================
+
+      const fetchedCategories = data
+        .map((item) => item.CategoryName)
+        .filter(Boolean);
+
+      const uniqueCategories = [...new Set(fetchedCategories)];
+
+      setCategories((prev) => {
+        const merged = [...prev, ...uniqueCategories];
+
+        return [...new Set(merged)];
+      });
+
+      // ================= LATEST NEWS =================
+
       let latestItems: NewsItem[] = [];
 
       if (pageNumber === 1) {
         latestItems = data.slice(0, 5);
+
         setLatestNews(latestItems);
       } else {
         latestItems = latestNews;
       }
 
       const latestIds = latestItems.map((item) => item.id);
+
       const filteredNews = data.filter((item) => !latestIds.includes(item.id));
 
-      if (append) setNews((prev) => [...prev, ...filteredNews]);
-      else setNews(filteredNews);
+      if (append) {
+        setNews((prev) => [...prev, ...filteredNews]);
+      } else {
+        setNews(filteredNews);
+      }
     } catch (err) {
       console.log("News error:", err);
     } finally {
@@ -90,20 +102,27 @@ export default function NewsIndex() {
 
   const handleCategory = (selectedCategory: string) => {
     setCategory(selectedCategory);
+
     setPage(1);
+
     loadNews(1, false, selectedCategory);
   };
 
   const loadMore = () => {
     if (loadingMore || loading || news.length === 0) return;
+
     const nextPage = page + 1;
+
     setPage(nextPage);
+
     loadNews(nextPage, true);
   };
 
   const onScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = event.nativeEvent.contentOffset.x;
+
     const index = Math.round(offsetX / SNAP_INTERVAL);
+
     setActiveSlide(index);
   };
 
@@ -112,13 +131,13 @@ export default function NewsIndex() {
       offset: index * SNAP_INTERVAL,
       animated: true,
     });
+
     setActiveSlide(index);
   };
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
 
-    // Convert MySQL format to valid Date
     const date = new Date(dateString.replace(" ", "T"));
 
     return new Intl.DateTimeFormat("en-US", {
@@ -156,6 +175,7 @@ export default function NewsIndex() {
           </View>
 
           {/* ================= CAROUSEL TITLE ================= */}
+
           {latestNews.length > 0 && (
             <View className="px-4 mb-3">
               <Text className="text-lg font-bold text-primary">
@@ -165,6 +185,7 @@ export default function NewsIndex() {
           )}
 
           {/* ================= SLIDER ================= */}
+
           <FlatList
             ref={sliderRef}
             data={latestNews}
@@ -177,7 +198,10 @@ export default function NewsIndex() {
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.id.toString()}
             onMomentumScrollEnd={onScrollEnd}
-            contentContainerStyle={{ paddingLeft: 16, paddingRight: 4 }}
+            contentContainerStyle={{
+              paddingLeft: 16,
+              paddingRight: 4,
+            }}
             renderItem={({ item, index }) => (
               <TouchableOpacity
                 activeOpacity={0.9}
@@ -229,6 +253,7 @@ export default function NewsIndex() {
                     >
                       {item.PostTitle}
                     </Text>
+
                     <Text className="text-white/80 text-xs mt-2">
                       Posted on {formatDate(item.PostingDate)}
                     </Text>
@@ -239,6 +264,7 @@ export default function NewsIndex() {
           />
 
           {/* ================= DOTS ================= */}
+
           <View className="flex-row justify-center items-center mt-4 mb-5">
             {latestNews.map((_, index) => (
               <TouchableOpacity
@@ -255,10 +281,11 @@ export default function NewsIndex() {
           </View>
 
           {/* ================= CATEGORY FILTER ================= */}
+
           <View className="px-4 mb-4">
             <FlatList
               horizontal
-              data={MASTER_CATEGORIES}
+              data={categories}
               keyExtractor={(item) => item}
               showsHorizontalScrollIndicator={false}
               renderItem={({ item }) => (
@@ -309,6 +336,7 @@ export default function NewsIndex() {
             >
               {item.PostTitle}
             </Text>
+
             <Text className="text-xs text-slate-400 mt-2">
               {item.CategoryName}
             </Text>
@@ -324,6 +352,7 @@ export default function NewsIndex() {
                 className="mb-4 border border-slate-200 rounded-3xl overflow-hidden"
               >
                 <Skeleton className="w-full h-52" />
+
                 <View className="p-4">
                   <Skeleton className="h-5 w-full rounded mb-2" />
                   <Skeleton className="h-5 w-3/4 rounded mb-3" />
@@ -347,6 +376,7 @@ export default function NewsIndex() {
                 className="mb-4 border border-slate-200 rounded-3xl overflow-hidden"
               >
                 <Skeleton className="w-full h-52" />
+
                 <View className="p-4">
                   <Skeleton className="h-5 w-full rounded mb-2" />
                   <Skeleton className="h-5 w-3/4 rounded mb-3" />

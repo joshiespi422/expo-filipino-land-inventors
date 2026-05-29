@@ -1,9 +1,9 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { getNews, NewsItem } from "@/services/newsService";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   Keyboard,
@@ -50,7 +50,12 @@ export default function SearchScreen() {
           search: query,
         });
 
-        setRecommendations(data);
+        // ================= FIX EMPTY ITEMS =================
+        const filteredData = data.filter(
+          (item: NewsItem) => item?.PostTitle && item.PostTitle.trim() !== "",
+        );
+
+        setRecommendations(filteredData);
       } catch (err) {
         console.log("Suggestions Error:", err);
       } finally {
@@ -115,7 +120,6 @@ export default function SearchScreen() {
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
 
-    // Convert MySQL format to valid Date
     const date = new Date(dateString.replace(" ", "T"));
 
     return new Intl.DateTimeFormat("en-US", {
@@ -140,7 +144,7 @@ export default function SearchScreen() {
           className="flex-1"
         >
           {/* ================= HEADER ================= */}
-          <View className="px-4  bg-white">
+          <View className="px-4 bg-white">
             <View className="flex-row items-center h-14 px-4 rounded-2xl bg-slate-100 border border-slate-200">
               <TextInput
                 ref={inputRef}
@@ -165,18 +169,14 @@ export default function SearchScreen() {
                 className="flex-1 text-[15px] text-slate-800"
               />
 
-              {loadingSuggestions ? (
-                <ActivityIndicator size="small" color="#94a3b8" />
-              ) : (
-                query.length > 0 && (
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={clearSearch}
-                    className="ml-2 w-6 h-6 rounded-full bg-slate-300 items-center justify-center"
-                  >
-                    <Text className="text-white text-[11px] font-bold">✕</Text>
-                  </TouchableOpacity>
-                )
+              {query.length > 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={clearSearch}
+                  className="ml-2 w-6 h-6 rounded-full bg-slate-300 items-center justify-center"
+                >
+                  <Text className="text-white text-[11px] font-bold">✕</Text>
+                </TouchableOpacity>
               )}
             </View>
           </View>
@@ -187,7 +187,24 @@ export default function SearchScreen() {
             {isSearching && query.length >= 2 && (
               <View className="px-4 pb-5">
                 <View className="bg-white rounded-3xl overflow-hidden">
-                  {recommendations.length > 0 ? (
+                  {loadingSuggestions ? (
+                    <View>
+                      <View className="px-4 py-3 border-b border-slate-100">
+                        <Skeleton className="h-3 w-24 rounded-full" />
+                      </View>
+
+                      {[1, 2, 3, 4, 5].map((item) => (
+                        <View
+                          key={item}
+                          className="px-4 py-4 border-b border-slate-100"
+                        >
+                          <Skeleton className="h-4 w-full rounded-full" />
+
+                          <Skeleton className="h-3 w-20 rounded-full mt-3" />
+                        </View>
+                      ))}
+                    </View>
+                  ) : recommendations.length > 0 ? (
                     <>
                       <View className="px-4 py-3 border-b border-slate-100">
                         <Text className="text-[11px] font-bold tracking-widest text-slate-400">
@@ -197,11 +214,17 @@ export default function SearchScreen() {
 
                       <FlatList
                         data={recommendations}
-                        keyExtractor={(item) => `rec-${item.id}`}
+                        keyExtractor={(item, index) =>
+                          `rec-${item.id}-${index}`
+                        }
                         keyboardShouldPersistTaps="handled"
                         keyboardDismissMode="on-drag"
                         showsVerticalScrollIndicator={false}
                         onScrollBeginDrag={() => Keyboard.dismiss()}
+                        removeClippedSubviews={true}
+                        initialNumToRender={8}
+                        maxToRenderPerBatch={8}
+                        windowSize={5}
                         renderItem={({ item, index }) => (
                           <TouchableOpacity
                             activeOpacity={0.7}
@@ -229,13 +252,11 @@ export default function SearchScreen() {
                       />
                     </>
                   ) : (
-                    !loadingSuggestions && (
-                      <View className="py-10 items-center">
-                        <Text className="text-slate-400 text-sm">
-                          No suggestions found
-                        </Text>
-                      </View>
-                    )
+                    <View className="py-10 items-center">
+                      <Text className="text-slate-400 text-sm">
+                        No suggestions found
+                      </Text>
+                    </View>
                   )}
                 </View>
               </View>
@@ -243,58 +264,84 @@ export default function SearchScreen() {
 
             {/* ================= RESULTS ================= */}
             {!isSearching && (
-              <FlatList
-                data={loading ? [] : results}
-                keyExtractor={(item) => item.id.toString()}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
-                showsVerticalScrollIndicator={false}
-                onScrollBeginDrag={() => Keyboard.dismiss()}
-                contentContainerStyle={{
-                  paddingTop: 12,
-                  paddingBottom: 40,
-                }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/news/details",
-                        params: { id: item.id.toString() },
-                      })
-                    }
-                    className="mx-4 mb-4 bg-white border border-slate-100 rounded-2xl overflow-hidden flex-row h-32"
-                  >
-                    <View className="relative">
-                      <Image
-                        source={{
-                          uri: `https://newsphilippinesonline.com/editortextadminpanel/postimages/${item.PostImage}`,
-                        }}
-                        className="w-32 h-full bg-slate-100"
-                        resizeMode="cover"
-                      />
-                      <View className="bg-white px-3 py-1 absolute top-1.5 left-1.5 rounded-full">
-                        <Text className="text-[10px] font-bold text-primary">
-                          {item.CategoryName}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View className="flex-1 p-4 justify-between">
-                      <Text
-                        numberOfLines={3}
-                        className="text-[15px] font-bold text-slate-800 leading-6"
+              <>
+                {loading ? (
+                  <View className="px-4 pt-4">
+                    {[1, 2, 3, 4].map((item) => (
+                      <View
+                        key={item}
+                        className="mb-4 bg-white border border-slate-100 rounded-2xl overflow-hidden flex-row h-32"
                       >
-                        {item.PostTitle}
-                      </Text>
+                        <Skeleton className="w-32 h-full" />
 
-                      <Text className="text-[11px] text-slate-400">
-                        Posted on {formatDate(item.PostingDate)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
+                        <View className="flex-1 p-4 justify-between">
+                          <View>
+                            <Skeleton className="h-4 w-full rounded-full mb-3" />
+                            <Skeleton className="h-4 w-11/12 rounded-full mb-3" />
+                            <Skeleton className="h-4 w-9/12 rounded-full" />
+                          </View>
+
+                          <Skeleton className="h-3 w-32 rounded-full" />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <FlatList
+                    data={results}
+                    keyExtractor={(item, index) => `result-${item.id}-${index}`}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
+                    showsVerticalScrollIndicator={false}
+                    onScrollBeginDrag={() => Keyboard.dismiss()}
+                    contentContainerStyle={{
+                      paddingTop: 12,
+                      paddingBottom: 40,
+                    }}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/news/details",
+                            params: { id: item.id.toString() },
+                          })
+                        }
+                        className="mx-4 mb-4 bg-white border border-slate-100 rounded-2xl overflow-hidden flex-row h-32"
+                      >
+                        <View className="relative">
+                          <Image
+                            source={{
+                              uri: `https://newsphilippinesonline.com/editortextadminpanel/postimages/${item.PostImage}`,
+                            }}
+                            className="w-32 h-full bg-slate-100"
+                            resizeMode="cover"
+                          />
+
+                          <View className="bg-white px-3 py-1 absolute top-1.5 left-1.5 rounded-full">
+                            <Text className="text-[10px] font-bold text-primary">
+                              {item.CategoryName}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View className="flex-1 p-4 justify-between">
+                          <Text
+                            numberOfLines={3}
+                            className="text-[15px] font-bold text-slate-800 leading-6"
+                          >
+                            {item.PostTitle}
+                          </Text>
+
+                          <Text className="text-[11px] text-slate-400">
+                            Posted on {formatDate(item.PostingDate)}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
                 )}
-              />
+              </>
             )}
           </View>
         </KeyboardAvoidingView>

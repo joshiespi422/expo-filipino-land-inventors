@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { getNewsById, NewsDetail } from "@/services/newsService";
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -15,6 +16,7 @@ import RenderHTML from "react-native-render-html";
 
 export default function NewsDetails() {
   const { id } = useLocalSearchParams();
+
   const [news, setNews] = useState<NewsDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,6 +26,7 @@ export default function NewsDetails() {
 
   useEffect(() => {
     if (!id) return;
+
     loadNews();
   }, [id]);
 
@@ -32,6 +35,7 @@ export default function NewsDetails() {
       setLoading(true);
 
       const newsId = Array.isArray(id) ? id[0] : id;
+
       const data = await getNewsById(Number(newsId));
 
       setNews(data);
@@ -41,24 +45,6 @@ export default function NewsDetails() {
       setLoading(false);
     }
   };
-
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center">
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
-
-  if (!news) {
-    return (
-      <View className="flex-1 items-center justify-center">
-        <Text>No news found</Text>
-      </View>
-    );
-  }
-
-  const imageUrl = `https://newsphilippinesonline.com/editortextadminpanel/postimages/${news.PostImage}`;
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
@@ -76,9 +62,64 @@ export default function NewsDetails() {
     }).format(date);
   };
 
+  // ================= LOADING SKELETON =================
+  if (loading) {
+    return (
+      <View className="flex-1 bg-white">
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* TITLE */}
+          <View className="p-4 pt-9">
+            <Skeleton className="h-8 w-full rounded-full mb-4" />
+
+            <Skeleton className="h-8 w-11/12 rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-52 rounded-full" />
+          </View>
+
+          {/* IMAGE */}
+          <Skeleton className="w-full h-60 rounded-none mt-2" />
+
+          {/* CONTENT */}
+          <View className="p-4 mt-5">
+            <Skeleton className="h-4 w-full rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-full rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-10/12 rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-full rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-11/12 rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-9/12 rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-full rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-8/12 rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-full rounded-full mb-4" />
+
+            <Skeleton className="h-4 w-10/12 rounded-full mb-4" />
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ================= NO DATA =================
+  if (!news) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <Text className="text-slate-400">No news found</Text>
+      </View>
+    );
+  }
+
+  const imageUrl = `https://newsphilippinesonline.com/editortextadminpanel/postimages/${news.PostImage}`;
+
   return (
     <View className="flex-1 bg-white">
-      <ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false}>
         {/* TITLE */}
         <View className="p-4">
           <Text className="text-2xl font-bold pt-5 text-slate-800">
@@ -98,7 +139,7 @@ export default function NewsDetails() {
         >
           <Image
             source={{ uri: imageUrl }}
-            className="w-full h-60"
+            className="w-full h-60 bg-slate-100"
             resizeMode="cover"
           />
         </TouchableOpacity>
@@ -116,15 +157,28 @@ export default function NewsDetails() {
                 color: "#334155",
                 marginBottom: 10,
               },
-              b: { fontWeight: "700" },
-              strong: { fontWeight: "700" },
-              i: { fontStyle: "italic" },
-              span: { fontSize: 15 },
+
+              b: {
+                fontWeight: "700",
+              },
+
+              strong: {
+                fontWeight: "700",
+              },
+
+              i: {
+                fontStyle: "italic",
+              },
+
+              span: {
+                fontSize: 15,
+              },
             }}
           />
         </View>
       </ScrollView>
 
+      {/* ================= IMAGE VIEWER ================= */}
       <Modal
         visible={imageVisible}
         transparent
@@ -152,7 +206,11 @@ export default function NewsDetails() {
               }}
             >
               <Text
-                style={{ color: "white", fontSize: 18, fontWeight: "bold" }}
+                style={{
+                  color: "white",
+                  fontSize: 18,
+                  fontWeight: "bold",
+                }}
               >
                 ✕
               </Text>
