@@ -245,6 +245,10 @@ export default function MainLayout() {
                 options={{ animation: "fade" }}
               />
               <Stack.Screen
+                name="history/index"
+                options={{ animation: "fade" }}
+              />
+              <Stack.Screen
                 name="news/details"
                 options={{ animation: "fade" }}
               />
