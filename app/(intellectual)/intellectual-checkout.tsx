@@ -23,29 +23,23 @@ export default function IntellectualCheckoutPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
-
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
-
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
     null,
   );
-
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
-
   const [navigating, setNavigating] = useState(false);
 
   const isProcessing = useRef(false);
 
   const safeScheduleId = Array.isArray(scheduleId) ? scheduleId[0] : scheduleId;
-
   const safeAmount = Array.isArray(amount) ? amount[0] : amount;
-
   const safeIntellectualId = Array.isArray(intellectualId)
     ? intellectualId[0]
     : intellectualId;
 
   // =========================
-  // CUSTOM ALERT STATE
+  // ALERT STATE
   // =========================
   const [alert, setAlert] = useState({
     visible: false,
@@ -56,9 +50,7 @@ export default function IntellectualCheckoutPage() {
     onConfirm: () => {},
   });
 
-  // =========================
-  // RESET LOCKS
-  // =========================
+  // RESET
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
@@ -72,7 +64,6 @@ export default function IntellectualCheckoutPage() {
   // =========================
   const formatAmount = (value: any) => {
     const num = Number(String(value || "0").replace(/,/g, ""));
-
     if (isNaN(num)) return "0.00";
 
     return num.toLocaleString("en-PH", {
@@ -87,12 +78,11 @@ export default function IntellectualCheckoutPage() {
       .replace(/[^\d.]/g, "");
 
     const num = Number(cleaned);
-
     return isNaN(num) ? 0 : Number(num.toFixed(2));
   };
 
   // =========================
-  // LOAD METHODS
+  // LOAD PAYMENT METHODS
   // =========================
   const loadMethods = async () => {
     try {
@@ -112,8 +102,11 @@ export default function IntellectualCheckoutPage() {
         ).toLowerCase(),
       }));
 
+      // ✅ WALLET ADDED
       const filtered = formatted.filter((m) =>
-        ["qrph", "paymaya", "billease", "grab_pay"].includes(m.gateway_type),
+        ["qrph", "paymaya", "billease", "grab_pay", "wallet"].includes(
+          m.gateway_type,
+        ),
       );
 
       setMethods(filtered);
@@ -140,7 +133,7 @@ export default function IntellectualCheckoutPage() {
   }, []);
 
   // =========================
-  // ACTUAL PAYMENT PROCESS
+  // PAYMENT PROCESS
   // =========================
   const executePaymentPayload = async () => {
     try {
@@ -149,22 +142,22 @@ export default function IntellectualCheckoutPage() {
 
       const parsedAmount = parseAmount(safeAmount);
 
+      // ✅ WALLET DETECTION
+      const gateway =
+        selectedMethod?.gateway_type === "wallet" ? "wallet" : "paymongo";
+
       const payload = {
         payment_method_id: Number(selectedMethod!.id),
         amount: parsedAmount,
+        gateway,
       };
 
       console.log("PAYLOAD:", payload);
 
       const response = await payIntellectual(String(safeScheduleId), payload);
 
-      console.log("FULL PAYMENT RESPONSE:", JSON.stringify(response, null, 2));
-
       const result = response?.data || response;
 
-      // =========================
-      // FLEXIBLE EXTRACTION
-      // =========================
       const payment = result?.payment || result?.data?.payment || result?.data;
 
       const gatewayResponse =
@@ -192,6 +185,22 @@ export default function IntellectualCheckoutPage() {
 
       const paymentAmount =
         payment?.amount || result?.amount || parsedAmount * 100;
+
+      // =========================
+      // WALLET SUCCESS (NEW)
+      // =========================
+      if (gateway === "wallet") {
+        setAlert({
+          visible: true,
+          title: "Payment Successful",
+          message: "Intellectual property payment paid using wallet.",
+          redirectHome: true,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+
+        return;
+      }
 
       // =========================
       // QR FLOW
@@ -234,15 +243,11 @@ export default function IntellectualCheckoutPage() {
       const message =
         error?.response?.data?.message || error?.message || "Payment failed";
 
-      if (
-        message.toLowerCase().includes("already paid") ||
-        message.toLowerCase().includes("already paid")
-      ) {
+      if (message.toLowerCase().includes("already paid")) {
         setAlert({
           visible: true,
           title: "Already Settled",
-          message:
-            "This intellectual payment is already paid! Redirecting you home.",
+          message: "This intellectual payment is already paid!",
           redirectHome: true,
           isConfirmation: false,
           onConfirm: () => {},
@@ -251,7 +256,7 @@ export default function IntellectualCheckoutPage() {
         setAlert({
           visible: true,
           title: "Transaction Error",
-          message: message,
+          message,
           redirectHome: true,
           isConfirmation: false,
           onConfirm: () => {},
@@ -264,7 +269,7 @@ export default function IntellectualCheckoutPage() {
   };
 
   // =========================
-  // CONFIRMATION POPUP SYSTEM
+  // CONFIRM
   // =========================
   const handleProceed = () => {
     if (isProcessing.current || loading || navigating) return;
@@ -273,29 +278,24 @@ export default function IntellectualCheckoutPage() {
       setAlert({
         visible: true,
         title: "Selection Required",
-        message: "Please select a payment method to continue.",
+        message: "Please select a payment method.",
         redirectHome: false,
         isConfirmation: false,
         onConfirm: () => {},
       });
-
       return;
     }
 
     setAlert({
       visible: true,
       title: "Confirm Payment",
-      message: `Proceed with payment of ₱${formatAmount(
+      message: `Proceed with ₱${formatAmount(
         safeAmount,
       )} using ${selectedMethod.name}?`,
       redirectHome: false,
       isConfirmation: true,
       onConfirm: () => {
-        setAlert((prev) => ({
-          ...prev,
-          visible: false,
-        }));
-
+        setAlert((p) => ({ ...p, visible: false }));
         executePaymentPayload();
       },
     });
@@ -319,19 +319,10 @@ export default function IntellectualCheckoutPage() {
     );
   }
 
-  // =========================
-  // UI
-  // =========================
   return (
     <View className="flex-1 bg-gray-50">
-      <ScrollView
-        contentContainerStyle={{
-          padding: 20,
-          paddingBottom: 120,
-        }}
-      >
-        {/* CARD */}
-        <View className="bg-white rounded-3xl p-6 mb-6 shadow-sm">
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
+        <View className="bg-white rounded-3xl p-6 mb-6">
           <Text className="text-slate-400 text-xs font-bold uppercase">
             Intellectual Property Payment
           </Text>
@@ -341,7 +332,6 @@ export default function IntellectualCheckoutPage() {
           </Text>
         </View>
 
-        {/* METHODS */}
         <Text className="font-semibold text-gray-800 mb-3 px-1">
           Select Payment Method
         </Text>
@@ -352,8 +342,8 @@ export default function IntellectualCheckoutPage() {
           return (
             <TouchableOpacity
               key={m.id}
-              disabled={loading || navigating}
               onPress={() => setSelectedMethod(m)}
+              disabled={loading || navigating}
               className={`p-4 mb-3 rounded-xl border ${
                 active
                   ? "border-primary bg-blue-50"
@@ -361,7 +351,6 @@ export default function IntellectualCheckoutPage() {
               }`}
             >
               <Text className="font-semibold">{m.name}</Text>
-
               <Text className="text-xs text-gray-500 uppercase">
                 {m.gateway_type}
               </Text>
@@ -370,7 +359,6 @@ export default function IntellectualCheckoutPage() {
         })}
       </ScrollView>
 
-      {/* FOOTER */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-gray-100">
         <TouchableOpacity
           onPress={handleProceed}
@@ -389,7 +377,6 @@ export default function IntellectualCheckoutPage() {
         </TouchableOpacity>
       </View>
 
-      {/* CUSTOM ALERT */}
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
@@ -399,10 +386,7 @@ export default function IntellectualCheckoutPage() {
         onClose={() => {
           const shouldRedirect = alert.redirectHome;
 
-          setAlert((prev) => ({
-            ...prev,
-            visible: false,
-          }));
+          setAlert((p) => ({ ...p, visible: false }));
 
           if (shouldRedirect) {
             router.replace("/(main)");
