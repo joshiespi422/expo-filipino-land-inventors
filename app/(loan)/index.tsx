@@ -15,7 +15,11 @@ import {
 import loanAds from "../../assets/images/loanAssets.png";
 import "../../global.css";
 
-import { getLoanableAmount, getLoans } from "@/services/loanService";
+import {
+  getLoanableAmount,
+  getLoans,
+  getShareCapital,
+} from "@/services/loanService";
 import { Loan } from "@/types/loan.types";
 
 export default function IndexPage() {
@@ -28,6 +32,9 @@ export default function IndexPage() {
 
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanableAmount, setLoanableAmount] = useState("0.00");
+  const [shareCapitalPaid, setShareCapitalPaid] = useState<boolean>(false);
+  const [hasShareCapitalRecord, setHasShareCapitalRecord] =
+    useState<boolean>(false);
 
   const [settings, setSettings] = useState<{
     default_term_months: number;
@@ -54,22 +61,31 @@ export default function IndexPage() {
   );
 
   // =========================
-  // FETCH LOANS FROM API
+  // FETCH LOANS & SHARE CAPITAL FROM API
   // =========================
   const fetchLoans = async (isRefresh = false) => {
     try {
       if (!isRefresh) setPageLoading(true);
 
-      const [res, amount] = await Promise.all([
+      const [res, amount, shareCapitalRes] = await Promise.all([
         getLoans(),
         getLoanableAmount(),
+        getShareCapital(),
       ]);
 
       setLoans(res.data);
       setLoanableAmount(amount);
       setSettings(res.meta?.settings ?? null);
+
+      if (shareCapitalRes && shareCapitalRes.data) {
+        setHasShareCapitalRecord(true);
+        setShareCapitalPaid(!!shareCapitalRes.data.is_fully_paid);
+      } else {
+        setHasShareCapitalRecord(false);
+        setShareCapitalPaid(false);
+      }
     } catch (error) {
-      console.log("Failed to fetch loans:", error);
+      console.log("Failed to fetch dashboard data:", error);
     } finally {
       setPageLoading(false);
       setRefreshing(false);
@@ -110,7 +126,10 @@ export default function IndexPage() {
     );
   };
 
-  const handleLoanForm = () => {
+  // =========================
+  // ROUTING GATED DISPATCHER
+  // =========================
+  const handleMainAction = () => {
     if (isProcessing.current || isLoading || navigating) return;
 
     isProcessing.current = true;
@@ -118,7 +137,11 @@ export default function IndexPage() {
     setNavigating(true);
 
     setTimeout(() => {
-      router.push("/loanForm");
+      if (!shareCapitalPaid) {
+        router.push("/shared-payment");
+      } else {
+        router.push("/loanForm");
+      }
     }, 300);
   };
 
@@ -183,6 +206,20 @@ export default function IndexPage() {
                 )}
               </View>
 
+              {/* SHARE CAPITAL CONDITIONAL NOTE NOTICE */}
+              {!pageLoading && !shareCapitalPaid && (
+                <View className="mt-4 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+                  <Text className="text-amber-800 text-xs font-bold uppercase tracking-wider">
+                    Notice: Share Capital Incomplete
+                  </Text>
+                  <Text className="text-amber-700 text-[11px] mt-1 leading-4">
+                    Before initializing credit line requests, members must
+                    complete the mandatory Share Capital framework requirement.
+                    Click below to view terms.
+                  </Text>
+                </View>
+              )}
+
               {/* LOAN DETAILS SECTION */}
               <View
                 style={{
@@ -191,7 +228,7 @@ export default function IndexPage() {
                   shadowOffset: { width: 0, height: 5 },
                   shadowOpacity: 0.15,
                   shadowRadius: 10,
-                  marginTop: 20,
+                  marginTop: !shareCapitalPaid ? 14 : 20,
                 }}
                 className="bg-white rounded-2xl border border-primary/20 overflow-hidden"
               >
@@ -422,22 +459,32 @@ export default function IndexPage() {
         </View>
       </ScrollView>
 
-      {/* FOOTER BUTTON */}
+      {/* DYNAMIC ACTION FOOTER BUTTON */}
       <View className="w-full p-5 bg-white border-t border-slate-200">
         {pageLoading ? (
           <Skeleton className="h-[60px] w-full rounded-2xl" />
         ) : (
           <TouchableOpacity
-            onPress={handleLoanForm}
+            onPress={handleMainAction}
             disabled={isLoading || navigating}
             className={`h-16 rounded-2xl justify-center items-center ${
-              isLoading || navigating ? "bg-slate-400" : "bg-primary"
+              isLoading || navigating
+                ? "bg-slate-400"
+                : !shareCapitalPaid
+                  ? "bg-amber-600"
+                  : "bg-primary"
             }`}
           >
             {isLoading || navigating ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text className="text-white font-bold text-lg">Get Started</Text>
+              <Text className="text-white font-bold text-lg">
+                {!shareCapitalPaid
+                  ? hasShareCapitalRecord
+                    ? "Pay Share Capital"
+                    : "Initialize Share Capital"
+                  : "Get Started"}
+              </Text>
             )}
           </TouchableOpacity>
         )}
