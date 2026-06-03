@@ -15,7 +15,6 @@ export default function SharedBreakdownPage() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  // Normalize checking for ID
   const id = useMemo(() => {
     if (!params?.id) return "";
     return Array.isArray(params.id) ? params.id[0] : params.id;
@@ -46,11 +45,9 @@ export default function SharedBreakdownPage() {
 
   const formatDate = (date: string | null, indexOffsetMonths = 0) => {
     let targetDate = date ? new Date(date) : new Date();
-
     if (!date && indexOffsetMonths > 0) {
       targetDate.setMonth(targetDate.getMonth() + indexOffsetMonths);
     }
-
     return targetDate.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
@@ -60,20 +57,17 @@ export default function SharedBreakdownPage() {
 
   const fetchSchedules = async (showLoader = true, returnData = false) => {
     try {
-      if (showLoader) {
-        setLoading(true);
-      }
+      if (showLoader) setLoading(true);
 
       const res = await getShareCapital({
         include: "schedules,schedules.payments",
       });
 
-      const shareCapital = res?.data;
+      const shareCapital = res?.data || res;
       const attributes = shareCapital?.attributes || {};
       const relationships = shareCapital?.relationships || {};
       const fallbackId = String(shareCapital?.id || "");
 
-      // If there's completely no valid share capital profile data matching, route back home
       if (!shareCapital && !id) {
         router.replace("/(main)");
         return [];
@@ -81,23 +75,17 @@ export default function SharedBreakdownPage() {
 
       let rawSchedulesList: any[] = [];
 
+      // Extract raw schedule items cleanly
       if (Array.isArray(res?.included)) {
         rawSchedulesList = res.included.filter(
           (item: any) =>
-            item?.type?.toLowerCase().includes("schedule") ||
-            item?.type?.toLowerCase().includes("share_capital"),
+            item?.type === "share-capital-schedules" ||
+            item?.type?.toLowerCase().includes("schedule"),
         );
+      } else if (Array.isArray(relationships?.schedules?.data)) {
+        rawSchedulesList = relationships.schedules.data;
       } else if (Array.isArray(shareCapital?.schedules)) {
         rawSchedulesList = shareCapital.schedules;
-      } else if (
-        Array.isArray(relationships?.schedules?.data) &&
-        relationships.schedules.data.some(
-          (item: any) => item.attributes || item.amount,
-        )
-      ) {
-        rawSchedulesList = relationships.schedules.data;
-      } else if (Array.isArray(relationships?.schedules)) {
-        rawSchedulesList = relationships.schedules;
       }
 
       let mapped: any[] = [];
@@ -106,7 +94,8 @@ export default function SharedBreakdownPage() {
         if (attributes?.term_months) {
           const totalAmount = Number(attributes.amount || 0);
           const totalTerms = Number(attributes.term_months || 1);
-          const installmentAmount = totalAmount / totalTerms;
+          const installmentAmount =
+            Math.round((totalAmount / totalTerms) * 100) / 100;
 
           for (let i = 1; i <= totalTerms; i++) {
             mapped.push({
@@ -120,29 +109,46 @@ export default function SharedBreakdownPage() {
           }
         }
       } else {
-        mapped = rawSchedulesList
-          .map((s: any) => {
-            const attr = s.attributes || s;
-            return {
-              id: String(s.id || attr.id || ""),
-              amount: Number(attr.amount || 0),
-              due_date: attr.due_date || null,
-              status: String(attr.status || "unpaid").toLowerCase(),
-              installment: Number(attr.installment_no || attr.installment || 1),
-              isMocked: false,
-            };
-          })
-          .sort((a: any, b: any) => a.installment - b.installment);
+        const uniqueMap = new Map();
+
+        rawSchedulesList.forEach((s: any, idx: number) => {
+          const attr = s.attributes || s;
+
+          // CRITICAL FRONTLINE GUARD: Determine exact logical layout numbers
+          const installmentNo = Number(
+            attr.installment_no ||
+              attr.installment ||
+              s.installment_no ||
+              idx + 1,
+          );
+          const scheduleId = String(
+            s.id || attr.id || `sched-${installmentNo}`,
+          );
+
+          const itemStatus = String(attr.status || "unpaid").toLowerCase();
+          const itemAmount = Number(attr.amount || 0);
+
+          // deduplicate rows based on their actual structural positions
+          uniqueMap.set(installmentNo, {
+            id: scheduleId,
+            amount: itemAmount,
+            due_date: attr.due_date || null,
+            status: itemStatus,
+            installment: installmentNo,
+            isMocked: false,
+          });
+        });
+
+        mapped = Array.from(uniqueMap.values()).sort(
+          (a: any, b: any) => a.installment - b.installment,
+        );
       }
 
       setSchedules(mapped);
-
-      if (returnData) return mapped;
       return mapped;
     } catch (e) {
+      console.log("PARSING EXCEPTION:", e);
       setSchedules([]);
-      // Secure layout escape if api completely rejects the verification route context
-      if (!id) router.replace("/(main)");
       return [];
     } finally {
       setLoading(false);
@@ -153,7 +159,6 @@ export default function SharedBreakdownPage() {
   useFocusEffect(
     useCallback(() => {
       fetchSchedules();
-      return () => {};
     }, [id]),
   );
 
@@ -167,26 +172,29 @@ export default function SharedBreakdownPage() {
   const nextToPay = useMemo(() => {
     return [...schedules]
       .sort((a, b) => a.installment - b.installment)
-      .find((s) => s.status !== "paid");
+      .find((s) => s.status !== "paid" && s.status !== "success");
   }, [schedules]);
 
   const outstanding = useMemo(() => {
-    return schedules
-      .filter((s) => s.status !== "paid")
+    const rawSum = schedules
+      .filter((s) => s.status !== "paid" && s.status !== "success")
       .reduce((a, b) => a + Number(b.amount || 0), 0);
+    // Fix JS precision issues (like 16000.01 floating variations)
+    return Math.round(rawSum * 100) / 100;
   }, [schedules]);
 
   const isFullyPaid =
-    schedules.length > 0 && schedules.every((s) => s.status === "paid");
+    schedules.length > 0 &&
+    schedules.every((s) => s.status === "paid" || s.status === "success");
 
   const handlePay = async () => {
     try {
       setCheckingPayment(true);
-      const updatedSchedules: any = await fetchSchedules(false, true);
+      const updatedSchedules: any = await fetchSchedules(false);
 
       const latestNextToPay = [...updatedSchedules]
         ?.sort((a: any, b: any) => a.installment - b.installment)
-        ?.find((s: any) => s.status !== "paid");
+        ?.find((s: any) => s.status !== "paid" && s.status !== "success");
 
       if (!latestNextToPay) {
         setAlert({
@@ -206,14 +214,11 @@ export default function SharedBreakdownPage() {
         title: "Confirm Payment",
         message: isSinglePayment
           ? `Proceed to pay full share capital deployment total of ₱${formatMoney(latestNextToPay.amount)}?`
-          : `Proceed to pay framework for Installment ${
-              latestNextToPay.installment
-            } (₱${formatMoney(latestNextToPay.amount)})?`,
+          : `Proceed to pay framework for Installment ${latestNextToPay.installment} (₱${formatMoney(latestNextToPay.amount)})?`,
         redirectHome: false,
         isConfirmation: true,
         onConfirm: () => {
           setAlert((prev) => ({ ...prev, visible: false }));
-
           router.push({
             pathname: "/shared-checkout",
             params: {
@@ -227,7 +232,7 @@ export default function SharedBreakdownPage() {
         },
       });
     } catch (error) {
-      // Gracefully capture execution interruption exceptions
+      console.log(error);
     } finally {
       setCheckingPayment(false);
     }
@@ -237,10 +242,7 @@ export default function SharedBreakdownPage() {
     <View className="flex-1 bg-[#F8FAFC]">
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{
-          paddingTop: 20,
-          paddingBottom: 140,
-        }}
+        contentContainerStyle={{ paddingTop: 20, paddingBottom: 140 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -250,7 +252,6 @@ export default function SharedBreakdownPage() {
           />
         }
       >
-        {/* SUMMARY LAYER */}
         <View className="bg-white rounded-3xl p-6 mb-6">
           {loading ? (
             <ActivityIndicator color="#034194" />
@@ -261,7 +262,6 @@ export default function SharedBreakdownPage() {
                   ? "Total Outstanding Deposit"
                   : "Outstanding Capital Balance"}
               </Text>
-
               <Text className="text-primary text-3xl font-black mt-1">
                 ₱{formatMoney(outstanding)}
               </Text>
@@ -273,7 +273,6 @@ export default function SharedBreakdownPage() {
           {isSinglePayment ? "Payment Details" : "Payment Schedule"}
         </Text>
 
-        {/* CONTAINER POPULATION */}
         {loading ? (
           <ActivityIndicator className="mt-10" color="#034194" />
         ) : schedules.length === 0 ? (
@@ -284,7 +283,7 @@ export default function SharedBreakdownPage() {
           </View>
         ) : (
           schedules.map((item, index) => {
-            const isPaid = item.status === "paid";
+            const isPaid = item.status === "paid" || item.status === "success";
             const isNext = nextToPay?.installment === item.installment;
 
             return (
@@ -300,25 +299,15 @@ export default function SharedBreakdownPage() {
                 >
                   <View className="flex-row items-center justify-between">
                     <View className="flex-row items-center flex-1">
-                      {isPaid ? (
-                        <View className="bg-green-100 px-2 py-1 rounded-full mr-3">
-                          <Text className="text-green-600 text-[10px] font-bold">
-                            PAID
-                          </Text>
-                        </View>
-                      ) : isNext ? (
-                        <View className="bg-yellow-100 px-2 py-1 rounded-full mr-3">
-                          <Text className="text-yellow-600 text-[10px] font-bold">
-                            NEXT
-                          </Text>
-                        </View>
-                      ) : (
-                        <View className="bg-slate-100 px-2 py-1 rounded-full mr-3">
-                          <Text className="text-slate-500 text-[10px] font-bold">
-                            PENDING
-                          </Text>
-                        </View>
-                      )}
+                      <View
+                        className={`px-2 py-1 rounded-full mr-3 ${isPaid ? "bg-green-100" : isNext ? "bg-yellow-100" : "bg-slate-100"}`}
+                      >
+                        <Text
+                          className={`text-[10px] font-bold ${isPaid ? "text-green-600" : isNext ? "text-yellow-600" : "text-slate-500"}`}
+                        >
+                          {isPaid ? "PAID" : isNext ? "NEXT" : "PENDING"}
+                        </Text>
+                      </View>
 
                       <View className="flex-1 pr-2">
                         <Text className="font-bold text-slate-800">
@@ -326,7 +315,6 @@ export default function SharedBreakdownPage() {
                             ? "Share Capital Payment"
                             : `Installment ${item.installment}`}
                         </Text>
-
                         <Text className="text-xs text-slate-500 mt-0.5">
                           Due {formatDate(item.due_date, index)}
                         </Text>
@@ -337,18 +325,6 @@ export default function SharedBreakdownPage() {
                       ₱{formatMoney(item.amount)}
                     </Text>
                   </View>
-
-                  <View className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <View
-                      className={`h-full ${
-                        isPaid
-                          ? "bg-green-500 w-full"
-                          : isNext
-                            ? "bg-yellow-400 w-2/3"
-                            : "bg-slate-300 w-1/3"
-                      }`}
-                    />
-                  </View>
                 </View>
               </View>
             );
@@ -356,18 +332,13 @@ export default function SharedBreakdownPage() {
         )}
       </ScrollView>
 
-      {/* FOOTER ACTIONS LAYER */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
           disabled={
             loading || checkingPayment || schedules.length === 0 || isFullyPaid
           }
           onPress={handlePay}
-          className={`h-16 rounded-2xl justify-center items-center ${
-            loading || checkingPayment || schedules.length === 0 || isFullyPaid
-              ? "bg-slate-300"
-              : "bg-primary"
-          }`}
+          className={`h-16 rounded-2xl justify-center items-center ${loading || checkingPayment || schedules.length === 0 || isFullyPaid ? "bg-slate-300" : "bg-primary"}`}
         >
           {loading || checkingPayment ? (
             <ActivityIndicator color="white" />
@@ -392,9 +363,7 @@ export default function SharedBreakdownPage() {
         onClose={() => {
           const shouldRedirect = alert.redirectHome;
           setAlert((prev) => ({ ...prev, visible: false }));
-          if (shouldRedirect) {
-            router.replace("/(main)");
-          }
+          if (shouldRedirect) router.replace("/(main)");
         }}
       />
     </View>
