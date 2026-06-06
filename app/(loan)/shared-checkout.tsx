@@ -1,5 +1,9 @@
 import { CustomAlert } from "@/components/CustomAlert";
-import { getPaymentMethods, payShareCapital } from "@/services/loanService"; // Bound to loanService as provided
+import {
+  getPaymentMethods,
+  PaymentMethod,
+  payShareCapital,
+} from "@/services/loanService";
 
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -13,15 +17,9 @@ import {
 } from "react-native";
 import { WebView } from "react-native-webview";
 
-// Core definition for payment method models
-interface PaymentMethod {
-  id: string | number;
-  name: string;
-  gateway_type: string;
-}
+export default function SharedCapitalCheckoutPage() {
+  const { scheduleId, amount, mode, shareCapitalId } = useLocalSearchParams();
 
-export default function SharedCheckoutPage() {
-  const { scheduleId, amount } = useLocalSearchParams();
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
@@ -36,6 +34,9 @@ export default function SharedCheckoutPage() {
 
   const safeScheduleId = Array.isArray(scheduleId) ? scheduleId[0] : scheduleId;
   const safeAmount = Array.isArray(amount) ? amount[0] : amount;
+  const safeShareCapitalId = Array.isArray(shareCapitalId)
+    ? shareCapitalId[0]
+    : shareCapitalId;
 
   // =========================
   // ALERT STATE
@@ -49,7 +50,7 @@ export default function SharedCheckoutPage() {
     onConfirm: () => {},
   });
 
-  // RESET FLAGS ON PAGE FOCUS
+  // RESET
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
@@ -101,7 +102,7 @@ export default function SharedCheckoutPage() {
         ).toLowerCase(),
       }));
 
-      // Filter verified payment modes accepted by gateway integrations
+      // ✅ WALLET ADDED
       const filtered = formatted.filter((m) =>
         ["qrph", "paymaya", "billease", "grab_pay", "wallet"].includes(
           m.gateway_type,
@@ -141,24 +142,30 @@ export default function SharedCheckoutPage() {
 
       const parsedAmount = parseAmount(safeAmount);
 
-      // WALLET DETECTION
+      // ✅ WALLET DETECTION
       const gateway =
         selectedMethod?.gateway_type === "wallet" ? "wallet" : "paymongo";
 
-      // Payload strictly follows PayShareCapitalRequest validation rules
       const payload = {
-        schedule_id: Number(safeScheduleId),
         payment_method_id: Number(selectedMethod!.id),
         amount: parsedAmount,
         gateway,
       };
 
-      console.log("SHARE CAPITAL PAYLOAD:", payload);
+      console.log("PAYLOAD:", payload);
 
-      const response = await payShareCapital(payload);
+      const response = await payShareCapital(String(safeScheduleId), payload);
 
-      // Accessing next_action directly from root as defined in Laravel Controller return array
-      const nextAction = response?.next_action;
+      const result = response?.data || response;
+
+      const payment = result?.payment || result?.data?.payment || result?.data;
+
+      const gatewayResponse =
+        payment?.gateway_response?.data || payment?.gateway_response;
+
+      const gatewayAttributes = gatewayResponse?.attributes;
+
+      const nextAction = gatewayAttributes?.next_action || result?.next_action;
 
       const qr =
         nextAction?.code?.image_url ||
@@ -170,27 +177,33 @@ export default function SharedCheckoutPage() {
         nextAction?.redirect_url ||
         nextAction?.url;
 
-      // Extract details needed for routing fallback if required
-      const paymentIntentId = nextAction?.payment_intent_id || "";
+      const paymentIntentId =
+        payment?.gateway_payment_intent_id ||
+        payment?.payment_intent_id ||
+        payment?.id ||
+        result?.gateway_payment_intent_id;
+
+      const paymentAmount =
+        payment?.amount || result?.amount || parsedAmount * 100;
 
       // =========================
-      // WALLET SUCCESS FLOW
+      // WALLET SUCCESS (NEW)
       // =========================
       if (gateway === "wallet") {
         setAlert({
           visible: true,
           title: "Payment Successful",
-          message:
-            "Share capital contribution settled successfully using wallet.",
+          message: "Share capital payment paid using wallet.",
           redirectHome: true,
           isConfirmation: false,
           onConfirm: () => {},
         });
+
         return;
       }
 
       // =========================
-      // QR CODE FLOW
+      // QR FLOW
       // =========================
       if (qr) {
         setNavigating(true);
@@ -199,10 +212,12 @@ export default function SharedCheckoutPage() {
           pathname: "/shared-qrph",
           params: {
             qrUrl: String(qr),
-            paymentIntentId: String(paymentIntentId),
-            amount: String(parsedAmount),
+            paymentIntentId: String(paymentIntentId || ""),
+            shareCapitalId: String(safeShareCapitalId),
+            amount: String(Number(paymentAmount) / 100),
           },
         });
+
         return;
       }
 
@@ -217,24 +232,22 @@ export default function SharedCheckoutPage() {
       setAlert({
         visible: true,
         title: "Error",
-        message: "No valid QR target or redirection window was generated.",
+        message: "No payment QR or checkout URL found.",
         redirectHome: false,
         isConfirmation: false,
         onConfirm: () => {},
       });
     } catch (error: any) {
-      console.log("SHARE CAPITAL PAYMENT ERROR:", error);
+      console.log("PAYMENT ERROR:", error);
 
       const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Payment processing failed";
+        error?.response?.data?.message || error?.message || "Payment failed";
 
       if (message.toLowerCase().includes("already paid")) {
         setAlert({
           visible: true,
           title: "Already Settled",
-          message: "This share capital schedule item is already paid!",
+          message: "This share capital payment is already paid!",
           redirectHome: true,
           isConfirmation: false,
           onConfirm: () => {},
@@ -256,7 +269,7 @@ export default function SharedCheckoutPage() {
   };
 
   // =========================
-  // CONFIRM DIALOG TRIGGER
+  // CONFIRM
   // =========================
   const handleProceed = () => {
     if (isProcessing.current || loading || navigating) return;
@@ -265,7 +278,7 @@ export default function SharedCheckoutPage() {
       setAlert({
         visible: true,
         title: "Selection Required",
-        message: "Please select a preferred payment option to proceed.",
+        message: "Please select a payment method.",
         redirectHome: false,
         isConfirmation: false,
         onConfirm: () => {},
@@ -276,7 +289,7 @@ export default function SharedCheckoutPage() {
     setAlert({
       visible: true,
       title: "Confirm Payment",
-      message: `Proceed with payment of ₱${formatAmount(
+      message: `Proceed with ₱${formatAmount(
         safeAmount,
       )} using ${selectedMethod.name}?`,
       redirectHome: false,
@@ -289,7 +302,7 @@ export default function SharedCheckoutPage() {
   };
 
   // =========================
-  // CONDITIONAL RENDER: WEBVIEW
+  // WEBVIEW
   // =========================
   if (checkoutUrl) {
     return (
@@ -346,7 +359,6 @@ export default function SharedCheckoutPage() {
         })}
       </ScrollView>
 
-      {/* Action Footer Button Bar */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-gray-100">
         <TouchableOpacity
           onPress={handleProceed}
@@ -373,6 +385,7 @@ export default function SharedCheckoutPage() {
         onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
         onClose={() => {
           const shouldRedirect = alert.redirectHome;
+
           setAlert((p) => ({ ...p, visible: false }));
 
           if (shouldRedirect) {
