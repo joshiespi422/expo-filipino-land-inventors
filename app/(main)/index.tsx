@@ -244,7 +244,10 @@ export default function DashboardPage() {
         {/* 1. WELCOME TEXT */}
         <View className="items-center mb-4">
           {pageLoading ? (
-            <Skeleton className="h-8 w-40 rounded-md" />
+            <>
+              <Skeleton className="h-8 w-40 rounded-md" />
+              <Skeleton className="h-8 w-40 mt-2 rounded-md" />
+            </>
           ) : (
             <>
               <Text className="text-2xl text-slate-800 text-center">
@@ -280,7 +283,10 @@ export default function DashboardPage() {
                 </TouchableOpacity>
               </View>
               <View className="flex-row gap-3">
-                <TouchableOpacity className="bg-white h-10 w-10 flex justify-center items-center rounded-lg">
+                <TouchableOpacity
+                  onPress={() => router.push("/load")}
+                  className="bg-white h-10 w-10 flex justify-center items-center rounded-lg"
+                >
                   <FontAwesome name="plus" size={22} color="#034194" />
                 </TouchableOpacity>
                 <TouchableOpacity className="bg-white h-10 w-10 flex justify-center items-center rounded-lg">
