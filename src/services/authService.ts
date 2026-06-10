@@ -16,10 +16,6 @@ export const authService = {
     }
   },
 
-  /**
-   * Revoke the current token and log out.
-   * Uses auth:sanctum middleware on the backend.
-   */
   logout: async (token: string) => {
     try {
       const response = await api.post(
