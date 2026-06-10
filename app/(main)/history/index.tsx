@@ -9,8 +9,10 @@ import {
   FlatList,
   Modal,
   RefreshControl,
+  StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 
@@ -260,106 +262,117 @@ export default function HistoryPage() {
         visible={!!selectedTransaction}
         transparent
         animationType="slide"
+        statusBarTranslucent
         onRequestClose={() => setSelectedTransaction(null)}
       >
-        <View className="flex-1 bg-black/40 justify-end">
-          <View className="bg-white rounded-t-[30px] p-5 pb-8">
-            {selectedTransaction && (
-              <>
-                <View className="items-center mb-5">
-                  <View className="w-14 h-1.5 rounded-full bg-slate-200 mb-5" />
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.modalOverlay}
+          onPress={() => setSelectedTransaction(null)}
+        >
+          <TouchableWithoutFeedback>
+            <View className="bg-white rounded-t-[30px] p-5 pb-8 w-full">
+              {selectedTransaction && (
+                <>
+                  <View className="items-center mb-5">
+                    <View className="w-14 h-1.5 rounded-full bg-slate-200 mb-5" />
 
-                  <Text className="text-xl font-bold text-slate-800">
-                    Transaction Details
-                  </Text>
-                </View>
+                    <Text className="text-xl font-bold text-slate-800">
+                      Transaction Details
+                    </Text>
+                  </View>
 
-                {(() => {
-                  const style = getStyle(selectedTransaction.type);
+                  {(() => {
+                    const style = getStyle(selectedTransaction.type);
 
-                  return (
-                    <>
-                      <View className="items-center mb-6">
-                        <View
-                          style={{ backgroundColor: style.bg }}
-                          className="w-20 h-20 rounded-full items-center justify-center"
+                    return (
+                      <>
+                        <View className="items-center mb-6">
+                          <View
+                            style={{ backgroundColor: style.bg }}
+                            className="w-20 h-20 rounded-full items-center justify-center"
+                          >
+                            <Ionicons
+                              name={style.icon as any}
+                              size={38}
+                              color={style.color}
+                            />
+                          </View>
+
+                          <Text
+                            style={{ color: style.color }}
+                            className="text-3xl font-bold mt-4"
+                          >
+                            {style.sign}₱
+                            {Number(selectedTransaction.amount).toLocaleString(
+                              "en-PH",
+                              { minimumFractionDigits: 2 },
+                            )}
+                          </Text>
+
+                          <Text className="text-slate-500 mt-1">
+                            {style.label}
+                          </Text>
+                        </View>
+
+                        <View className="bg-slate-50 rounded-2xl p-4">
+                          <View className="flex-row justify-between py-3 border-b border-slate-200">
+                            <Text className="text-slate-400">Description</Text>
+                            <Text className="font-medium text-slate-700 max-w-[60%] text-right">
+                              {selectedTransaction.description ||
+                                "Wallet Transaction"}
+                            </Text>
+                          </View>
+
+                          <View className="flex-row justify-between py-3 border-b border-slate-200">
+                            <Text className="text-slate-400">Type</Text>
+                            <Text className="font-medium text-slate-700 capitalize">
+                              {selectedTransaction.type}
+                            </Text>
+                          </View>
+
+                          <View className="flex-row justify-between py-3 border-b border-slate-200">
+                            <Text className="text-slate-400">Reference ID</Text>
+                            <Text className="font-medium text-slate-700">
+                              {selectedTransaction.reference_id || "N/A"}
+                            </Text>
+                          </View>
+
+                          <View className="flex-row justify-between py-3">
+                            <Text className="text-slate-400">Date</Text>
+                            <Text className="font-medium text-slate-700 max-w-[60%] text-right">
+                              {formatDate(selectedTransaction.created_at)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <TouchableOpacity
+                          onPress={() => setSelectedTransaction(null)}
+                          className="bg-[#034194] rounded-2xl py-4 mt-6"
                         >
-                          <Ionicons
-                            name={style.icon as any}
-                            size={38}
-                            color={style.color}
-                          />
-                        </View>
-
-                        <Text
-                          style={{ color: style.color }}
-                          className="text-3xl font-bold mt-4"
-                        >
-                          {style.sign}₱
-                          {Number(selectedTransaction.amount).toLocaleString(
-                            "en-PH",
-                            {
-                              minimumFractionDigits: 2,
-                            },
-                          )}
-                        </Text>
-
-                        <Text className="text-slate-500 mt-1">
-                          {style.label}
-                        </Text>
-                      </View>
-
-                      <View className="bg-slate-50 rounded-2xl p-4">
-                        <View className="flex-row justify-between py-3 border-b border-slate-200">
-                          <Text className="text-slate-400">Description</Text>
-
-                          <Text className="font-medium text-slate-700 max-w-[60%] text-right">
-                            {selectedTransaction.description ||
-                              "Wallet Transaction"}
+                          <Text className="text-white text-center font-semibold">
+                            Close
                           </Text>
-                        </View>
-
-                        <View className="flex-row justify-between py-3 border-b border-slate-200">
-                          <Text className="text-slate-400">Type</Text>
-
-                          <Text className="font-medium text-slate-700 capitalize">
-                            {selectedTransaction.type}
-                          </Text>
-                        </View>
-
-                        <View className="flex-row justify-between py-3 border-b border-slate-200">
-                          <Text className="text-slate-400">Reference ID</Text>
-
-                          <Text className="font-medium text-slate-700">
-                            {selectedTransaction.reference_id || "N/A"}
-                          </Text>
-                        </View>
-
-                        <View className="flex-row justify-between py-3">
-                          <Text className="text-slate-400">Date</Text>
-
-                          <Text className="font-medium text-slate-700 max-w-[60%] text-right">
-                            {formatDate(selectedTransaction.created_at)}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <TouchableOpacity
-                        onPress={() => setSelectedTransaction(null)}
-                        className="bg-[#034194] rounded-2xl py-4 mt-6"
-                      >
-                        <Text className="text-white text-center font-semibold">
-                          Close
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  );
-                })()}
-              </>
-            )}
-          </View>
-        </View>
+                        </TouchableOpacity>
+                      </>
+                    );
+                  })()}
+                </>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
 }
+
+// Fixed standard style object for the overlay backdrop
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+});
