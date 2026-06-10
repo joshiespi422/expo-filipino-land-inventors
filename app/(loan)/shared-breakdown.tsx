@@ -213,8 +213,8 @@ export default function SharedBreakdownPage() {
         visible: true,
         title: "Confirm Payment",
         message: isSinglePayment
-          ? `Proceed to pay full share capital deployment total of ₱${formatMoney(latestNextToPay.amount)}?`
-          : `Proceed to pay framework for Installment ${latestNextToPay.installment} (₱${formatMoney(latestNextToPay.amount)})?`,
+          ? `Proceed to payment for ₱${formatMoney(latestNextToPay.amount)}?`
+          : `Proceed to payment for Installment ${latestNextToPay.installment} (₱${formatMoney(latestNextToPay.amount)})?`,
         redirectHome: false,
         isConfirmation: true,
         onConfirm: () => {
