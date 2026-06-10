@@ -28,7 +28,6 @@ export default function LoginPage() {
   const setAuth = useAuthStore((state) => state.setAuth);
 
   const scrollRef = useRef<ScrollView>(null);
-
   const scrollPosition = useRef(0);
 
   const [form, setForm] = useState({ number: "", password: "" });
@@ -119,6 +118,11 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPassword = () => {
+    if (isDisabled) return;
+    router.push("/forgetPassword");
+  };
+
   const isDisabled = loadingState.action || loadingState.nav;
 
   return (
@@ -166,6 +170,7 @@ export default function LoginPage() {
                       editable={!isDisabled}
                     />
 
+                    {/* 🔥 PASSED PROPS TO TRIGGER THE INTEGRATED FORGOT PASSWORD LINK */}
                     <AuthInput
                       label="Password"
                       placeholder="••••••••"
@@ -177,13 +182,15 @@ export default function LoginPage() {
                       isPassword={true}
                       showPassword={showPassword}
                       onTogglePassword={() => setShowPassword(!showPassword)}
+                      hasForgotPassword={true}
+                      onForgotPassword={handleForgotPassword}
                     />
 
                     <TouchableOpacity
                       onPress={handleLogin}
                       disabled={isDisabled}
                       activeOpacity={0.8}
-                      className={`mt-5 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                      className={`mt-3 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
                         isDisabled ? "bg-slate-400" : "bg-primary"
                       }`}
                     >
