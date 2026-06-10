@@ -8,21 +8,25 @@ import {
   View,
 } from "react-native";
 
-// 1. ADD 'prefix' TO THE INTERFACE
+// 1. ADDED 'hasForgotPassword' AND 'onForgotPassword' TO THE INTERFACE
 interface AuthInputProps extends TextInputProps {
   label: string;
   prefix?: string; // Optional prefix (like "09")
   isPassword?: boolean;
   showPassword?: boolean;
   onTogglePassword?: () => void;
+  hasForgotPassword?: boolean;
+  onForgotPassword?: () => void;
 }
 
 export const AuthInput = ({
   label,
-  prefix, // 2. DESTRUCTURE PREFIX HERE
+  prefix,
   isPassword,
   showPassword,
   onTogglePassword,
+  hasForgotPassword,
+  onForgotPassword,
   ...props
 }: AuthInputProps) => (
   <View className="mb-5">
@@ -33,7 +37,7 @@ export const AuthInput = ({
     <View
       className={`flex-row items-center bg-white rounded-2xl border border-slate-200 overflow-hidden ${!props.editable ? "bg-slate-50" : ""}`}
     >
-      {/* 3. RENDER THE PREFIX IF IT EXISTS */}
+      {/* RENDER THE PREFIX IF IT EXISTS */}
       {prefix && (
         <View className="pl-4 pr-1 justify-center">
           <Text className="text-slate-800 text-base font-medium">{prefix}</Text>
@@ -62,5 +66,21 @@ export const AuthInput = ({
         </TouchableOpacity>
       )}
     </View>
+
+    {/* 🔥 FORGOT PASSWORD LINK CLEANLY ANCHORED BELOW INPUT CONTAINER */}
+    {hasForgotPassword && (
+      <View className="pe-2 mt-2">
+        <TouchableOpacity
+          onPress={onForgotPassword}
+          disabled={!props.editable}
+          activeOpacity={0.7}
+          className="align-self-end items-end"
+        >
+          <Text className="text-primary font-semibold underline text-sm">
+            Forgot Password?
+          </Text>
+        </TouchableOpacity>
+      </View>
+    )}
   </View>
 );
