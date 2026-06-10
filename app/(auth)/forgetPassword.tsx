@@ -33,9 +33,12 @@ export default function ForgotPasswordPage() {
   const [verificationToken, setVerificationToken] = useState("");
   const [cooldown, setCooldown] = useState(0);
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   // Form Management States
   const [form, setForm] = useState({
-    number: "", // display value: 09XXXXXXXXX
+    number: "",
     otpCode: "",
     password: "",
     passwordConfirmation: "",
@@ -268,22 +271,16 @@ export default function ForgotPasswordPage() {
       verifyOtpMutation.mutate();
     } else if (step === "RESET") {
       if (!form.password || !form.passwordConfirmation) {
-        return showAlert(
-          "Validation Error",
-          "Please fill out security update inputs.",
-        );
+        return showAlert("Required", "Please fill in both password fields.");
       }
       if (form.password.length < 8) {
         return showAlert(
-          "Validation Error",
-          "Security password must reach at least 8 characters.",
+          "Security",
+          "Password must be at least 8 characters long.",
         );
       }
       if (form.password !== form.passwordConfirmation) {
-        return showAlert(
-          "Validation Error",
-          "Password parameters do not align accurately.",
-        );
+        return showAlert("Mismatch", "Passwords do not match.");
       }
       resetPasswordMutation.mutate();
     }
@@ -410,6 +407,7 @@ export default function ForgotPasswordPage() {
                             containerClass="mb-8 mt-2"
                             description="Please configure a fresh password update context configuration secure credentials."
                           />
+
                           <AuthInput
                             label="New Password"
                             placeholder="Minimum 8 characters"
@@ -417,18 +415,30 @@ export default function ForgotPasswordPage() {
                             onChangeText={(val) =>
                               setForm({ ...form, password: val })
                             }
-                            secureTextEntry={true}
                             editable={!isBusy}
+                            isPassword
+                            showPassword={showPassword}
+                            onTogglePassword={() =>
+                              setShowPassword(!showPassword)
+                            }
                           />
+
                           <AuthInput
                             label="Confirm New Password"
                             placeholder="Repeat your password"
                             value={form.passwordConfirmation}
                             onChangeText={(val) =>
-                              setForm({ ...form, passwordConfirmation: val })
+                              setForm({
+                                ...form,
+                                passwordConfirmation: val,
+                              })
                             }
-                            secureTextEntry={true}
                             editable={!isBusy}
+                            isPassword
+                            showPassword={showConfirmPassword}
+                            onTogglePassword={() =>
+                              setShowConfirmPassword(!showConfirmPassword)
+                            }
                           />
                         </>
                       )}
