@@ -218,7 +218,7 @@ export default function CreatePasswordPage() {
 
                     <AuthInput
                       label="Password"
-                      placeholder="••••••••"
+                      placeholder="Minimum 8 characters"
                       value={password}
                       onChangeText={setPassword}
                       editable={!mutation.isPending}
@@ -229,7 +229,7 @@ export default function CreatePasswordPage() {
 
                     <AuthInput
                       label="Retype Password"
-                      placeholder="••••••••"
+                      placeholder="Repeat your password"
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
                       editable={!mutation.isPending}

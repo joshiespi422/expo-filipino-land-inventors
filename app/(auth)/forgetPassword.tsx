@@ -153,7 +153,7 @@ export default function ForgotPasswordPage() {
       if (data.retry_after) setCooldown(data.retry_after);
       setTimeout(() => {
         showAlert(
-          data.status === "pending" ? "Note" : "Success",
+          data.status === "pending" ? "Request Pending" : "Success",
           data.message || "An OTP validation code was sent.",
           () => setStep("OTP"),
         );
@@ -164,7 +164,7 @@ export default function ForgotPasswordPage() {
         error,
         "Failed to initiate recovery context.",
       );
-      setTimeout(() => showAlert("Error", msg), 150);
+      setTimeout(() => showAlert("Request Failed", msg), 150);
     },
   });
 
@@ -174,7 +174,7 @@ export default function ForgotPasswordPage() {
     onSuccess: (data) => {
       if (data.retry_after) setCooldown(data.retry_after);
       setTimeout(() => {
-        showAlert("OTP Sent", data.message || "A fresh code was dispatched.");
+        showAlert("Success", data.message || "A fresh code was dispatched.");
       }, 150);
     },
     onError: (error: any) => {
@@ -182,7 +182,7 @@ export default function ForgotPasswordPage() {
         error,
         "Could not re-route dynamic verification code.",
       );
-      setTimeout(() => showAlert("Error", msg), 150);
+      setTimeout(() => showAlert("OTP Resend Failed", msg), 150);
     },
   });
 
@@ -198,7 +198,7 @@ export default function ForgotPasswordPage() {
         setVerificationToken(data.verification_token);
         setTimeout(() => {
           showAlert(
-            "Verified",
+            "Success",
             "Identity verified. Please set your new password.",
             () => {
               setStep("RESET");
@@ -212,7 +212,7 @@ export default function ForgotPasswordPage() {
         error,
         "Invalid validation credentials.",
       );
-      setTimeout(() => showAlert("Verification Error", msg), 150);
+      setTimeout(() => showAlert("Verification Failed", msg), 150);
     },
   });
 
@@ -228,7 +228,7 @@ export default function ForgotPasswordPage() {
     onSuccess: (data) => {
       setTimeout(() => {
         showAlert(
-          "Success",
+          "Password Updated",
           data.message || "Password updated completely.",
           () => {
             setStatus((prev) => ({ ...prev, navigating: true }));
@@ -242,7 +242,7 @@ export default function ForgotPasswordPage() {
         error,
         "Could not update credentials data.",
       );
-      setTimeout(() => showAlert("Reset Error", msg), 150);
+      setTimeout(() => showAlert("Password Update Failed", msg), 150);
     },
   });
 
@@ -253,7 +253,7 @@ export default function ForgotPasswordPage() {
     if (step === "PHONE") {
       if (form.number.length !== 11) {
         return showAlert(
-          "App Validation",
+          "Validation Error",
           "Mobile number must be exactly 11 digits.",
         );
       }
@@ -261,7 +261,7 @@ export default function ForgotPasswordPage() {
     } else if (step === "OTP") {
       if (!form.otpCode.trim()) {
         return showAlert(
-          "App Validation",
+          "Validation Error",
           "Please provide the active OTP token code.",
         );
       }
@@ -269,19 +269,19 @@ export default function ForgotPasswordPage() {
     } else if (step === "RESET") {
       if (!form.password || !form.passwordConfirmation) {
         return showAlert(
-          "App Validation",
+          "Validation Error",
           "Please fill out security update inputs.",
         );
       }
       if (form.password.length < 8) {
         return showAlert(
-          "App Validation",
+          "Validation Error",
           "Security password must reach at least 8 characters.",
         );
       }
       if (form.password !== form.passwordConfirmation) {
         return showAlert(
-          "App Validation",
+          "Validation Error",
           "Password parameters do not align accurately.",
         );
       }
@@ -364,9 +364,9 @@ export default function ForgotPasswordPage() {
                       {step === "OTP" && (
                         <>
                           <TitleAuth
-                            title="Verify Code"
+                            title="OTP Verification"
                             containerClass="mb-8 mt-2"
-                            description={`Enter the OTP verification code sent to ${form.number}`}
+                            description={`Enter OTP sent to ${form.number}`}
                           />
                           <AuthInput
                             label="OTP Verification Code"
@@ -422,7 +422,7 @@ export default function ForgotPasswordPage() {
                           />
                           <AuthInput
                             label="Confirm New Password"
-                            placeholder="Repeat security entry value"
+                            placeholder="Repeat your password"
                             value={form.passwordConfirmation}
                             onChangeText={(val) =>
                               setForm({ ...form, passwordConfirmation: val })
