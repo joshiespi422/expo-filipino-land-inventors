@@ -43,7 +43,7 @@ export default function RootLayout() {
         >
           {/* --- GLOBAL HEADER --- */}
           <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
-            <View className="flex-row gap-8 w-full px-6">
+            <View className="flex-row justify-between w-full px-6">
               <View>
                 <TouchableOpacity onPress={() => router.back()}>
                   <Ionicons name="chevron-back" size={28} color="white" />
@@ -57,6 +57,7 @@ export default function RootLayout() {
                   Assistance
                 </Text>
               </View>
+              <View></View>
             </View>
           </View>
 

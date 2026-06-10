@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, usePathname, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import {
@@ -18,9 +18,15 @@ const queryClient = new QueryClient();
 
 export default function RootLayout() {
   const router = useRouter();
+  const pathname = usePathname();
   const segments = useSegments() as string[];
 
   const isCongratulationsPage = segments.some((s) => s === "congratulations");
+  const isSharedCapital =
+    pathname === "/shared-breakdown" ||
+    pathname === "/shared-checkout" ||
+    pathname === "/shared-payment" ||
+    pathname === "/shared-qrph";
 
   const isLoanIndex =
     segments.length === 0 ||
@@ -73,11 +79,11 @@ export default function RootLayout() {
 
               <View>
                 <Text className="text-white text-2xl font-bold">
-                  Loan Assistance
+                  {isSharedCapital ? "Shared Capital" : "Loan Assistance"}
                 </Text>
               </View>
 
-              <View></View>
+              <View className="w-[31px]"></View>
 
               {/* <View className="w-[31px] items-end">
                 <Image
