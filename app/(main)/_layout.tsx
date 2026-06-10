@@ -51,6 +51,7 @@ export default function MainLayout() {
   const isNewsIndex = pathname === "/news";
   const isNewsDetails = pathname === "/news/details";
   const isNewsSearch = pathname === "/news/search";
+  const isLoadWallet = pathname === "/load";
 
   const isHistory = pathname === "/history";
   const isCameraQr = pathname === "/camera";
@@ -193,7 +194,10 @@ export default function MainLayout() {
           ) : isCameraQr ? null : (
             <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
               <View className="flex-row justify-between items-center w-full px-6">
-                <TouchableOpacity onPress={() => router.back()}>
+                <TouchableOpacity
+                  onPress={() => router.back()}
+                  className="w-[31px]"
+                >
                   <Ionicons name="chevron-back" size={28} color="white" />
                 </TouchableOpacity>
 
@@ -222,11 +226,13 @@ export default function MainLayout() {
                                         ? "News Details"
                                         : isNewsSearch
                                           ? "Search News"
-                                          : ""}
+                                          : isLoadWallet
+                                            ? "Load Wallet"
+                                            : ""}
                 </Text>
 
                 {/* <View style={{ width: 28 }} /> */}
-                <View></View>
+                <View className="w-[31px]"></View>
               </View>
             </View>
           )}
@@ -252,6 +258,7 @@ export default function MainLayout() {
                 name="news/details"
                 options={{ animation: "fade" }}
               />
+              <Stack.Screen name="load/index" options={{ animation: "fade" }} />
             </Stack>
           </View>
 
