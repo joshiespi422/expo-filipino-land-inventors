@@ -210,7 +210,7 @@ export default function EditProfileScreen() {
   const card = "bg-white p-5 rounded-3xl mb-4 shadow-sm border border-gray-100";
   const label = "text-primary mb-1 ps-2 text-sm";
   const inputStyle =
-    "border border-gray-200 bg-white p-4 rounded-2xl mb-4 text-gray-800 font-medium";
+    "border border-gray-200 bg-white p-4 rounded-2xl mb-4 text-gray-800 font-medium overflow-hidden ";
   const pickerContainer =
     "border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden";
 
