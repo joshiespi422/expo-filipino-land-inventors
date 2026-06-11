@@ -476,10 +476,10 @@ export default function ForgotPasswordPage() {
                           else router.back();
                         }}
                       >
-                        <Text className="text-slate-500 font-medium text-base">
+                        <Text className="text-primary text-lg font-bold">
                           {step === "OTP"
                             ? "Back to Change Number"
-                            : "Back to Sign In"}
+                            : "Back to Login"}
                         </Text>
                       </TouchableOpacity>
                     </>
