@@ -36,6 +36,9 @@ export default function ForgotPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // local safety flag to strictly prevent race conditions from rapid micro-clicks
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Form Management States
   const [form, setForm] = useState({
     number: "",
@@ -68,6 +71,7 @@ export default function ForgotPasswordPage() {
   useFocusEffect(
     useCallback(() => {
       setStatus((prev) => ({ ...prev, navigating: false }));
+      setIsSubmitting(false);
       if (Platform.OS === "android") {
         StatusBar.setTranslucent(true);
         StatusBar.setBackgroundColor("transparent");
@@ -169,6 +173,9 @@ export default function ForgotPasswordPage() {
       );
       setTimeout(() => showAlert("Request Failed", msg), 150);
     },
+    onSettled: () => {
+      setIsSubmitting(false);
+    },
   });
 
   // Resend Mutation Trigger
@@ -186,6 +193,9 @@ export default function ForgotPasswordPage() {
         "Could not re-route dynamic verification code.",
       );
       setTimeout(() => showAlert("OTP Resend Failed", msg), 150);
+    },
+    onSettled: () => {
+      setIsSubmitting(false);
     },
   });
 
@@ -213,9 +223,12 @@ export default function ForgotPasswordPage() {
     onError: (error: any) => {
       const msg = getBackendErrorMessage(
         error,
-        "Invalid validation credentials.",
+        "Original validation token mismatch or invalid code.",
       );
       setTimeout(() => showAlert("Verification Failed", msg), 150);
+    },
+    onSettled: () => {
+      setIsSubmitting(false);
     },
   });
 
@@ -247,11 +260,15 @@ export default function ForgotPasswordPage() {
       );
       setTimeout(() => showAlert("Password Update Failed", msg), 150);
     },
+    onSettled: () => {
+      setIsSubmitting(false);
+    },
   });
 
   // Unified Multi-Step Flow Router Handler
   const handlePrimaryAction = () => {
-    if (isPendingState || status.navigating) return;
+    // Rigid sync layer locking out incoming microtask triggers
+    if (isBusy || isSubmitting) return;
 
     if (step === "PHONE") {
       if (form.number.length !== 11) {
@@ -260,6 +277,7 @@ export default function ForgotPasswordPage() {
           "Mobile number must be exactly 11 digits.",
         );
       }
+      setIsSubmitting(true);
       sendOtpMutation.mutate();
     } else if (step === "OTP") {
       if (!form.otpCode.trim()) {
@@ -268,6 +286,7 @@ export default function ForgotPasswordPage() {
           "Please provide the active OTP token code.",
         );
       }
+      setIsSubmitting(true);
       verifyOtpMutation.mutate();
     } else if (step === "RESET") {
       if (!form.password || !form.passwordConfirmation) {
@@ -282,12 +301,14 @@ export default function ForgotPasswordPage() {
       if (form.password !== form.passwordConfirmation) {
         return showAlert("Mismatch", "Passwords do not match.");
       }
+      setIsSubmitting(true);
       resetPasswordMutation.mutate();
     }
   };
 
   const handleResendAction = () => {
-    if (cooldown > 0 || resendOtpMutation.isPending) return;
+    if (cooldown > 0 || isBusy || isSubmitting) return;
+    setIsSubmitting(true);
     resendOtpMutation.mutate();
   };
 
@@ -297,7 +318,7 @@ export default function ForgotPasswordPage() {
     resetPasswordMutation.isPending ||
     resendOtpMutation.isPending;
 
-  const isBusy = isPendingState || status.navigating;
+  const isBusy = isPendingState || status.navigating || isSubmitting;
 
   return (
     <>
