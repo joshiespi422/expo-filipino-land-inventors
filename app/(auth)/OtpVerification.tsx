@@ -7,47 +7,31 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { phoneVerificationService } from "@/services/phoneVerification";
 import { useMutation } from "@tanstack/react-query";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
   Keyboard,
-  Pressable,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+
 import OTPVerification from "../../assets/images/vector/OTPVerificationCode.png";
 import "../../global.css";
-
-/* ---------------- OTP BOX ---------------- */
-const OtpInputBox = memo(function OtpInputBox({
-  digit,
-  isFocused,
-}: {
-  digit: string;
-  isFocused: boolean;
-}) {
-  return (
-    <View
-      className={`w-[14%] h-14 border-2 rounded-xl justify-center items-center bg-slate-50 ${
-        isFocused ? "border-primary" : "border-slate-200"
-      }`}
-    >
-      <Text className="text-primary text-2xl font-bold">{digit}</Text>
-    </View>
-  );
-});
 
 export default function OtpVerificationPage() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
 
   const scrollRef = useRef<ScrollView>(null);
-  const inputRef = useRef<TextInput>(null);
+  const otpInputRef = useRef<TextInput>(null);
   const otpContainerRef = useRef<View>(null);
+  const scrollPosition = useRef(0);
 
   const [otp, setOtp] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
@@ -58,20 +42,31 @@ export default function OtpVerificationPage() {
     visible: false,
     title: "",
     message: "",
+    onCloseOverride: null as (() => void) | null,
   });
 
-  const showAlert = (title: string, message: string) => {
-    setAlert({ visible: true, title, message });
+  /* ---------------- ALERT ---------------- */
+  const showAlert = (
+    title: string,
+    message: string,
+    onCloseOverride?: () => void,
+  ) => {
+    setAlert({
+      visible: true,
+      title,
+      message,
+      onCloseOverride: onCloseOverride || null,
+    });
   };
 
-  /* ---------------- RESET NAV STATE ---------------- */
+  /* ---------------- NAV RESET ---------------- */
   useFocusEffect(
     useCallback(() => {
       setNavigating(false);
     }, []),
   );
 
-  /* ---------------- PAGE LOAD + TIMER ---------------- */
+  /* ---------------- LOAD + TIMER ---------------- */
   useEffect(() => {
     const load = setTimeout(() => setPageLoading(false), 400);
 
@@ -85,23 +80,23 @@ export default function OtpVerificationPage() {
     };
   }, []);
 
-  /* ---------------- KEYBOARD FIX (REAL VERSION) ---------------- */
+  /* ---------------- SMOOTHER KEYBOARD HANDLING ---------------- */
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () => {
-      setTimeout(() => {
-        otpContainerRef.current?.measure((x, y, w, h, px, py) => {
-          scrollRef.current?.scrollTo({
-            y: py - 120,
-            animated: true,
-          });
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({
+          y: scrollPosition.current + 40, // 🔥 small lift = smoother feel
+          animated: true,
         });
-      }, 100);
+      });
     });
 
     const hide = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({
-        y: 0,
-        animated: true,
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({
+          y: 0,
+          animated: true,
+        });
       });
     });
 
@@ -111,10 +106,16 @@ export default function OtpVerificationPage() {
     };
   }, []);
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  /* ---------------- SMOOTHER INPUT SCROLL ---------------- */
+  const scrollToInput = () => {
+    requestAnimationFrame(() => {
+      otpContainerRef.current?.measure((x, y, w, h, px, py) => {
+        scrollRef.current?.scrollTo({
+          y: py - 200, // 🔥 slightly deeper offset = less jump
+          animated: true,
+        });
+      });
+    });
   };
 
   /* ---------------- VERIFY OTP ---------------- */
@@ -124,13 +125,18 @@ export default function OtpVerificationPage() {
         phone: phone as string,
         otp_code: otpCode,
       }),
+
     onSuccess: (data) => {
       setNavigating(true);
-      router.push({
-        pathname: "/createPassword",
-        params: { token: data.verification_token, phone },
+
+      showAlert("Success", "OTP verified successfully.", () => {
+        router.push({
+          pathname: "/createPassword",
+          params: { token: data.verification_token, phone },
+        });
       });
     },
+
     onError: (error: any) => {
       const message =
         error.response?.data?.message || "Invalid OTP code. Please try again.";
@@ -144,6 +150,7 @@ export default function OtpVerificationPage() {
   const resendMutation = useMutation({
     mutationFn: () =>
       phoneVerificationService.resend({ phone: phone as string }),
+
     onSuccess: (data) => {
       setTimer(300);
       showAlert(
@@ -151,6 +158,7 @@ export default function OtpVerificationPage() {
         data.message || "A new verification code has been sent.",
       );
     },
+
     onError: (error: any) => {
       showAlert(
         "Resend Error",
@@ -165,18 +173,27 @@ export default function OtpVerificationPage() {
     }
   };
 
-  /* ---------------- UI ---------------- */
+  const isBusy =
+    verifyMutation.isPending || resendMutation.isPending || navigating;
+
+  const formatTime = (seconds: number) => `${seconds}s`;
+
   return (
-    <>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+    >
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingBottom: 40,
-        }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bounces={false}
+        onScroll={(e) => {
+          scrollPosition.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
       >
         <View className="flex-1 bg-slate-50">
           <HeaderAuth title="Join Us" />
@@ -210,49 +227,53 @@ export default function OtpVerificationPage() {
                       description={`Enter OTP sent to +${phone}`}
                     />
 
-                    {/* OTP INPUT */}
+                    {/* OTP INPUT (SMOOTHER ONLY HERE) */}
                     <View ref={otpContainerRef}>
-                      <View className="relative">
-                        <TextInput
-                          ref={inputRef}
-                          value={otp}
-                          onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, ""))}
-                          maxLength={6}
-                          keyboardType="number-pad"
-                          autoFocus
-                          style={{
-                            position: "absolute",
-                            width: "100%",
-                            height: "100%",
-                            opacity: 0,
-                          }}
-                        />
+                      <TextInput
+                        ref={otpInputRef}
+                        value={otp}
+                        onChangeText={(val) =>
+                          setOtp(val.replace(/[^0-9]/g, "").slice(0, 6))
+                        }
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        placeholder="Enter OTP Code"
+                        className="border border-slate-200 rounded-2xl px-4 py-4 text-base text-slate-800 bg-slate-50"
+                        editable={!isBusy}
+                        onFocus={scrollToInput}
+                      />
+                    </View>
 
-                        <Pressable
-                          onPress={() => inputRef.current?.focus()}
-                          className="flex-row justify-between items-center px-2"
+                    {/* RESEND */}
+                    <View className="flex-row justify-between items-center mt-6 mb-2 px-1">
+                      <Text className="text-slate-500 text-sm">
+                        Didn&apos;t get code?
+                      </Text>
+
+                      <TouchableOpacity
+                        onPress={() => resendMutation.mutate()}
+                        disabled={timer > 0 || resendMutation.isPending}
+                      >
+                        <Text
+                          className={`font-semibold text-sm ${
+                            timer > 0 || resendMutation.isPending
+                              ? "text-slate-400"
+                              : "text-primary"
+                          }`}
                         >
-                          {[0, 1, 2, 3, 4, 5].map((i) => (
-                            <OtpInputBox
-                              key={i}
-                              digit={otp[i] || ""}
-                              isFocused={otp.length === i}
-                            />
-                          ))}
-                        </Pressable>
-                      </View>
+                          {timer > 0
+                            ? `Resend in ${formatTime(timer)}`
+                            : "Resend OTP"}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
 
                     {/* VERIFY */}
                     <TouchableOpacity
                       onPress={handleVerify}
-                      disabled={
-                        verifyMutation.isPending || navigating || otp.length < 6
-                      }
+                      disabled={otp.length < 6 || isBusy}
                       className={`mt-5 p-5 rounded-2xl flex-row justify-center items-center ${
-                        otp.length < 6 || verifyMutation.isPending || navigating
-                          ? "bg-slate-300"
-                          : "bg-primary"
+                        otp.length < 6 || isBusy ? "bg-slate-300" : "bg-primary"
                       }`}
                     >
                       {verifyMutation.isPending ? (
@@ -263,27 +284,6 @@ export default function OtpVerificationPage() {
                         </Text>
                       )}
                     </TouchableOpacity>
-
-                    {/* RESEND */}
-                    <View className="mt-6 items-center">
-                      <Text className="text-slate-500">
-                        Didn’t receive code?
-                      </Text>
-
-                      {timer > 0 ? (
-                        <Text className="text-slate-400 mt-1">
-                          Resend in {formatTime(timer)}
-                        </Text>
-                      ) : (
-                        <TouchableOpacity
-                          onPress={() => resendMutation.mutate()}
-                        >
-                          <Text className="text-primary font-bold underline mt-1">
-                            Resend Code
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
 
                     <LinkAuth
                       onNavigating={setNavigating}
@@ -301,8 +301,14 @@ export default function OtpVerificationPage() {
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
-        onClose={() => setAlert({ ...alert, visible: false })}
+        onClose={() => {
+          const callback = alert.onCloseOverride;
+
+          setAlert((prev) => ({ ...prev, visible: false }));
+
+          if (callback) callback();
+        }}
       />
-    </>
+    </KeyboardAvoidingView>
   );
 }
