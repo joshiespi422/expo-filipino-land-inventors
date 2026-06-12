@@ -35,7 +35,6 @@ export default function AuthLayout() {
 
     configureSystemUI();
 
-    // 🔥 THIS IS THE IMPORTANT PART (FOR STATUS BAR)
     if (Platform.OS === "android") {
       StatusBar.setTranslucent(true);
       StatusBar.setBackgroundColor("transparent");
