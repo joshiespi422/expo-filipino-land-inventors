@@ -70,12 +70,12 @@ export function AgreementModal({
       {/* BACKDROP */}
       <Pressable onPress={onCancel} className="flex-1 bg-black/40 justify-end">
         {/* MODAL CARD */}
-        <Pressable className="bg-white rounded-t-3xl p-6 max-h-[80%]">
+        <Pressable className="bg-white rounded-t-3xl p-5 max-h-[80%]">
           <Text className="text-xl font-bold text-slate-800 mb-4">{title}</Text>
 
           {/* SCROLL CONTAINER WRAPPER */}
           <View
-            className="bg-slate-50 rounded-2xl mb-6 max-h-[60%] overflow-hidden"
+            className="bg-slate-50 rounded-2xl mb-4 max-h-[60%] overflow-hidden"
             onLayout={(e) => setContainerHeight(e.nativeEvent.layout.height)}
           >
             <ScrollView
@@ -98,7 +98,7 @@ export function AgreementModal({
           )}
 
           {/* ACTION BUTTONS */}
-          <View className="flex-row gap-x-3">
+          <View className="flex-row gap-x-3 border mb-0">
             <TouchableOpacity
               onPress={onCancel}
               className="flex-1 h-14 border border-slate-200 rounded-2xl justify-center items-center"
