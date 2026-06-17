@@ -26,8 +26,8 @@ import { Ionicons } from "@expo/vector-icons";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 // import Ask from "../../assets/images/icon/Ask.png";
 import Businessicon from "../../assets/images/icon/Businessicon.png";
-// import Coop from "../../assets/images/icon/coop.png";
-// import FISMPC from "../../assets/images/icon/FISMPC.png";
+import Coop from "../../assets/images/icon/coop.png";
+import FISMPC from "../../assets/images/icon/FISMPC.png";
 // import Funding from "../../assets/images/icon/Funding.png";
 import Intellectual from "../../assets/images/icon/Intellectual.png";
 // import Licensing from "../../assets/images/icon/Licensing.png";
@@ -122,7 +122,7 @@ export default function DashboardPage() {
       href: "/(intellectual)/",
       source: Intellectual,
     },
-    { label: "Loan Assistance", href: "../(loan)/", source: Loan },
+    { label: "Loan Assistance", href: "/(loan)/", source: Loan },
     // {
     //   label: "Funding & Invest Opportunities",
     //   href: "/(auth)/login",
@@ -135,11 +135,11 @@ export default function DashboardPage() {
     // },
     // { label: "R & D Collaboration", href: "/", source: RD },
     // { label: "Ask an Expert Assistance", href: "/", source: Ask },
-    // { label: "FISMPC Online Store", href: "/", source: FISMPC },
+    { label: "FISMPC Online Store", href: "/(store)/", source: FISMPC },
     // { label: "Product Validation Services", href: "/", source: Product },
     // { label: "Lost & Found", href: "/", source: Lost },
     // { label: "Suggest a Service", href: "/", source: Suggest },
-    // { label: "Coop Membership", href: "/", source: Coop },
+    { label: "Coop Membership", href: "/(coop)/", source: Coop },
     { label: "News & Event", href: "/news", source: News },
   ];
 
@@ -311,7 +311,7 @@ export default function DashboardPage() {
         </View>
 
         {/* 4. RESPONSIVE GRID MENU (3 Per Row) */}
-        <View className="flex-row flex-wrap justify-between">
+        <View className="flex-row flex-wrap justify-between pb-5">
           {pageLoading
             ? Array.from({ length: 9 }).map((_, i) => (
                 <View key={i} className="w-[30%] items-center mb-8">
