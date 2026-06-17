@@ -1,3 +1,4 @@
+import { AgreementModal } from "@/components/AgreementModal";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   computeLoan,
@@ -6,7 +7,7 @@ import {
 } from "@/services/loanService";
 import { ComputeLoanResponse } from "@/types/loan.types";
 import { Picker } from "@react-native-picker/picker";
-import { useFocusEffect } from "@react-navigation/native"; // Added for back-button reset
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -19,6 +20,10 @@ import {
   View,
 } from "react-native";
 import "../../global.css";
+
+// Static textual asset for the agreement details to avoid component reallocations
+const LOAN_TERMS_DESCRIPTION =
+  "Welcome to our Investment Society platform. By executing this application for loan financing, you explicitly agree to obey the governing credit policies, payment schedules, and interest obligations detailed herein. Borrowers are strictly responsible for maintaining adequate capital provisioning, fulfilling recurring amortization dates safely, and managing transaction ledger histories transparently. System manipulation, falsified financial reporting, or deliberate delinquency will trigger immediate technical asset profiling, membership suspension, and local legal mediation workflows.";
 
 export default function LoanFormPage() {
   const router = useRouter();
@@ -34,10 +39,13 @@ export default function LoanFormPage() {
   );
   const [isComputing, setIsComputing] = useState(false);
 
-  // NAVIGATION & SUBMIT LOCKS (The most important part)
+  // NAVIGATION & SUBMIT LOCKS
   const [isLoading, setIsLoading] = useState(false);
   const [navigating, setNavigating] = useState(false);
   const isProcessing = useRef(false);
+
+  // MODAL STATE
+  const [modalVisible, setModalVisible] = useState(false);
 
   // =========================
   // RESET LOCKS ON FOCUS
@@ -106,6 +114,15 @@ export default function LoanFormPage() {
 
   const isAmountValid =
     parseFloat(amount.replace(/,/g, "")) >= 1 && !hasInvalidScheduleAmount;
+
+  // Handle Terms Agreement Explicit Interception
+  const handleCheckboxPress = () => {
+    if (agreeToTerms) {
+      setAgreeToTerms(false);
+    } else {
+      setModalVisible(true);
+    }
+  };
 
   // =========================
   // HANDLE SUBMIT
@@ -283,8 +300,8 @@ export default function LoanFormPage() {
       {/* FOOTER ACTION */}
       <View className="w-full p-5 bg-white border-t border-slate-200">
         <TouchableOpacity
-          onPress={() => setAgreeToTerms(!agreeToTerms)}
-          className="flex-row pb-5 items-center"
+          onPress={handleCheckboxPress}
+          className="flex-row pb-5 items-center active:opacity-70"
         >
           <View
             className={`w-5 h-5 rounded border mr-2 items-center justify-center ${
@@ -297,9 +314,14 @@ export default function LoanFormPage() {
               <View className="w-1.5 h-1.5 bg-white rounded-sm" />
             )}
           </View>
-          <Text className="text-primary text-sm">
+          <Text className="text-primary text-sm flex-1">
             I agree to the{" "}
-            <Text className="underline font-bold">Terms and Conditions</Text>
+            <Text
+              onPress={() => setModalVisible(true)}
+              className="underline font-bold"
+            >
+              Terms and Conditions
+            </Text>
           </Text>
         </TouchableOpacity>
 
@@ -319,6 +341,20 @@ export default function LoanFormPage() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* AGREEMENT MODAL INTEGRATION */}
+      <AgreementModal
+        visible={modalVisible}
+        title="Terms and Conditions"
+        description={LOAN_TERMS_DESCRIPTION}
+        onAccept={() => {
+          setAgreeToTerms(true);
+          setModalVisible(false);
+        }}
+        onCancel={() => {
+          setModalVisible(false);
+        }}
+      />
     </View>
   );
 }
