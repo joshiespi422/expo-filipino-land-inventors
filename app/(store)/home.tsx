@@ -1,5 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
@@ -12,6 +13,8 @@ import {
   View,
 } from "react-native";
 
+import { ProductCard } from "@/components/ProductItems";
+import { products } from "@/services/productService";
 import image from "../../assets/images/vector/FISMPC.png";
 
 const categories = [
@@ -25,94 +28,28 @@ const categories = [
   "Accessories",
 ];
 
-const products = [
-  {
-    id: "1",
-    name: "Premium T-Shirt",
-    price: "₱399",
-    image: "https://picsum.photos/300?1",
-    category: "Clothes",
-  },
-  {
-    id: "2",
-    name: "Running Shoes",
-    price: "₱1,299",
-    image: "https://picsum.photos/300?2",
-    category: "Shoes",
-  },
-  {
-    id: "3",
-    name: "Bluetooth Speaker",
-    price: "₱899",
-    image: "https://picsum.photos/300?3",
-    category: "Electronics",
-  },
-  {
-    id: "4",
-    name: "Lipstick",
-    price: "₱199",
-    image: "https://picsum.photos/300?4",
-    category: "Beauty",
-  },
-  {
-    id: "5",
-    name: "Rice 5kg",
-    price: "₱280",
-    image: "https://picsum.photos/300?5",
-    category: "Grocery",
-  },
-  {
-    id: "6",
-    name: "Leather Bag",
-    price: "₱799",
-    image: "https://picsum.photos/300?6",
-    category: "Bags",
-  },
-  {
-    id: "7",
-    name: "Smart Watch",
-    price: "₱1,999",
-    image: "https://picsum.photos/300?7",
-    category: "Electronics",
-  },
-  {
-    id: "8",
-    name: "Cap",
-    price: "₱150",
-    image: "https://picsum.photos/300?8",
-    category: "Accessories",
-  },
-  {
-    id: "9",
-    name: "Sneakers",
-    price: "₱1,499",
-    image: "https://picsum.photos/300?9",
-    category: "Shoes",
-  },
-  {
-    id: "10",
-    name: "Jacket",
-    price: "₱899",
-    image: "https://picsum.photos/300?10",
-    category: "Clothes",
-  },
-];
-
 export default function HomePage() {
+  const router = useRouter();
+
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     setTimeout(() => {
-      setLoading(false);
+      if (isMounted) {
+        setLoading(false);
+      }
     }, 500);
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-
     setTimeout(() => {
       setRefreshing(false);
     }, 1000);
@@ -127,61 +64,39 @@ export default function HomePage() {
     return categoryMatch && searchMatch;
   });
 
-  const renderProduct = ({ item }: any) => (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      className="bg-white rounded-3xl border border-slate-100 mb-4 overflow-hidden"
-      style={{
-        width: "48%",
-      }}
-    >
-      <Image
-        source={{ uri: item.image }}
-        style={{
-          width: "100%",
-          height: 150,
-        }}
-      />
-
-      <View className="p-3">
-        <Text numberOfLines={1} className="font-semibold text-slate-800">
-          {item.name}
-        </Text>
-
-        <Text className="text-primary font-bold text-lg mt-1">
-          {item.price}
-        </Text>
-
-        <TouchableOpacity className="bg-primary mt-3 rounded-xl py-2">
-          <Text className="text-center text-white font-semibold">
-            Add to Cart
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+  const handleProductPress = (id: string) => {
+    router.push({
+      pathname: "/products",
+      params: { id },
+    });
+  };
 
   return (
     <View className="flex-1 bg-slate-50">
       <FlatList
-        data={filteredProducts}
-        renderItem={renderProduct}
+        // Skeletons replace the product content dynamically during load states
+        data={loading ? [] : filteredProducts}
+        renderItem={({ item }) => (
+          <ProductCard
+            item={item}
+            onPress={() => handleProductPress(item.id)}
+          />
+        )}
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={{
           justifyContent: "space-between",
         }}
         contentContainerStyle={{
-          padding: 16,
+          padding: 7,
           paddingBottom: 100,
         }}
         ListHeaderComponent={
           <>
-            {/* HEADER */}
-            <View className="flex-row items-center mb-5">
+            {/* Search and Navigation Row */}
+            <View className="flex-row items-center mb-3">
               <View className="flex-1 flex-row items-center bg-white rounded-2xl px-4 h-14 border border-slate-200">
                 <Ionicons name="search" size={22} color="#64748b" />
-
                 <TextInput
                   placeholder="Search products..."
                   value={search}
@@ -199,19 +114,18 @@ export default function HomePage() {
               </TouchableOpacity>
             </View>
 
-            {/* BANNER */}
-            <View className="bg-[#E0EEFD] rounded-3xl p-5 mb-5">
+            {/* Banner & Horizontal Categories Section */}
+            <View className="bg-blue rounded-3xl p-3 mb-3">
               <Image
                 source={image}
                 className="!w-full !h-24 rounded-2xl"
                 resizeMode="cover"
               />
 
-              {/* CATEGORY */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                className="mt-5"
+                className="mt-3"
               >
                 {categories.map((item) => (
                   <TouchableOpacity
@@ -220,11 +134,11 @@ export default function HomePage() {
                     className="mr-3 px-3"
                   >
                     <Text
-                      className={`font-medium ${
+                      className={
                         selectedCategory === item
-                          ? "text-primary"
-                          : "text-slate-600"
-                      }`}
+                          ? "font-medium text-primary"
+                          : "font-medium text-slate-600"
+                      }
                     >
                       {item}
                     </Text>
@@ -233,15 +147,11 @@ export default function HomePage() {
               </ScrollView>
             </View>
 
-            {/* TITLE */}
-            <Text className="text-xl font-bold text-slate-800 mb-4">
-              Featured Products
-            </Text>
-
+            {/* Skeleton Loading States (Will hide cleanly when loading finishes) */}
             {loading && (
               <View className="flex-row flex-wrap justify-between">
                 {[1, 2, 3, 4].map((item) => (
-                  <View key={item} className="mb-4" style={{ width: "48%" }}>
+                  <View key={item} style={{ width: "48%" }} className="mb-4">
                     <Skeleton className="h-[220px] rounded-3xl" />
                   </View>
                 ))}
