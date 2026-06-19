@@ -27,14 +27,14 @@
         "backgroundColor": "#FFFFFF"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["WRITE_EXTERNAL_STORAGE", "READ_EXTERNAL_STORAGE"]
+      "permissions": ["WRITE_EXTERNAL_STORAGE", "READ_EXTERNAL_STORAGE"],
+      "softwareKeyboardLayoutMode": "resize"
     },
     "androidStatusBar": {
-      "hidden": true,
-      "translucent": true
+      "hidden": true
     },
     "androidNavigationBar": {
-      "visible": "immersive"
+      "visible": true
     },
     "plugins": [
       "expo-router",
