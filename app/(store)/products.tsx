@@ -515,7 +515,10 @@ export default function Products() {
               {/* Action Button Layout Group */}
               <View className="w-full p-5 bg-white border-t border-slate-200">
                 <TouchableOpacity
-                  onPress={() => setModal(false)}
+                  onPress={() => {
+                    setModal(false);
+                    router.push("/cart");
+                  }}
                   className="h-16 rounded-2xl justify-center items-center bg-primary"
                 >
                   <Text className="text-white font-bold text-lg">

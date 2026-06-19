@@ -107,14 +107,6 @@ export default function Checkout() {
     <View className="flex-1 bg-slate-100">
       {/* HEADER */}
 
-      <View className="bg-white px-4 py-3 flex-row items-center">
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#034194" />
-        </TouchableOpacity>
-
-        <Text className="ml-3 font-bold text-lg">Checkout</Text>
-      </View>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{

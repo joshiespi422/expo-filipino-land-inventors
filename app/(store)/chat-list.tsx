@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import { FlatList, Image, Text, TouchableOpacity, View } from "react-native";
@@ -52,18 +51,6 @@ export default function ChatList() {
   return (
     <View className="flex-1 bg-slate-50">
       {/* HEADER */}
-
-      <View className="bg-white px-4 py-4 border-b border-slate-200">
-        <View className="flex-row items-center">
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={28}
-            color="#034194"
-          />
-
-          <Text className="ml-3 text-xl font-bold text-primary">Messages</Text>
-        </View>
-      </View>
 
       <FlatList
         data={chatList}
