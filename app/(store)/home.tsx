@@ -38,11 +38,11 @@ export default function HomePage() {
 
   useEffect(() => {
     let isMounted = true;
+
     setTimeout(() => {
-      if (isMounted) {
-        setLoading(false);
-      }
+      if (isMounted) setLoading(false);
     }, 500);
+
     return () => {
       isMounted = false;
     };
@@ -50,9 +50,7 @@ export default function HomePage() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
   const filteredProducts = products.filter((item) => {
@@ -71,10 +69,17 @@ export default function HomePage() {
     });
   };
 
+  const handleCartPress = () => {
+    router.push("/cart");
+  };
+
+  const handleChatPress = () => {
+    router.push("/chat-list");
+  };
+
   return (
     <View className="flex-1 bg-slate-50">
       <FlatList
-        // Skeletons replace the product content dynamically during load states
         data={loading ? [] : filteredProducts}
         renderItem={({ item }) => (
           <ProductCard
@@ -84,37 +89,51 @@ export default function HomePage() {
         )}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={{
-          justifyContent: "space-between",
-        }}
-        contentContainerStyle={{
-          padding: 7,
-          paddingBottom: 100,
-        }}
+        columnWrapperStyle={{ justifyContent: "space-between" }}
+        contentContainerStyle={{ padding: 7, paddingBottom: 100 }}
         ListHeaderComponent={
           <>
-            {/* Search and Navigation Row */}
+            {/* SEARCH + ACTIONS */}
             <View className="flex-row items-center mb-3">
+              {/* Search */}
               <View className="flex-1 flex-row items-center bg-white rounded-2xl px-4 h-14 border border-slate-200">
                 <Ionicons name="search" size={22} color="#64748b" />
                 <TextInput
-                  placeholder="Search products..."
+                  placeholder="Search products.."
                   value={search}
                   onChangeText={setSearch}
                   className="flex-1 ml-3"
                 />
               </View>
 
-              <TouchableOpacity className="ml-3 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200">
+              {/* CART */}
+              <TouchableOpacity
+                onPress={handleCartPress}
+                className="ml-3 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200 relative"
+              >
                 <Ionicons name="cart-outline" size={24} color="#034194" />
+
+                {/* Badge */}
+                <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 z-10">
+                  <Text className="text-white text-[10px] font-bold">3</Text>
+                </View>
               </TouchableOpacity>
 
-              <TouchableOpacity className="ml-2 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200">
+              {/* CHAT */}
+              <TouchableOpacity
+                onPress={handleChatPress}
+                className="ml-2 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200 relative"
+              >
                 <Ionicons name="chatbubble-outline" size={24} color="#034194" />
+
+                {/* Badge */}
+                <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 z-10">
+                  <Text className="text-white text-[10px] font-bold">3</Text>
+                </View>
               </TouchableOpacity>
             </View>
 
-            {/* Banner & Horizontal Categories Section */}
+            {/* BANNER */}
             <View className="bg-blue rounded-3xl p-3 mb-3">
               <Image
                 source={image}
@@ -147,7 +166,7 @@ export default function HomePage() {
               </ScrollView>
             </View>
 
-            {/* Skeleton Loading States (Will hide cleanly when loading finishes) */}
+            {/* SKELETON */}
             {loading && (
               <View className="flex-row flex-wrap justify-between">
                 {[1, 2, 3, 4].map((item) => (
