@@ -90,7 +90,7 @@ export default function HomePage() {
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={{ justifyContent: "space-between" }}
-        contentContainerStyle={{ padding: 7, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 7, paddingBottom: 20 }}
         ListHeaderComponent={
           <>
             {/* SEARCH + ACTIONS */}
