@@ -25,8 +25,6 @@ export default function ChatSeller() {
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [message, setMessage] = useState("");
-  const [showEmojis, setShowEmojis] = useState(false);
-  const [showActions, setShowActions] = useState(false);
 
   const [messages, setMessages] = useState([
     {
@@ -59,15 +57,18 @@ export default function ChatSeller() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, showEmojis, showActions]);
+  }, [messages]);
 
   const handleSendMessage = () => {
     if (!message.trim()) return;
 
     const newMsg = {
       id: Date.now().toString(),
+
       text: message.trim(),
+
       sender: "user",
+
       time: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
@@ -75,22 +76,20 @@ export default function ChatSeller() {
     };
 
     setMessages((prev) => [...prev, newMsg]);
-    setMessage("");
-  };
 
-  const handleEmojiSelect = (emoji: string) => {
-    setMessage((prev) => prev + emoji);
+    setMessage("");
+
+    setTimeout(() => {
+      scrollToBottom();
+    }, 100);
   };
 
   return (
     <View className="flex-1 bg-white">
       {/* HEADER */}
+
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-slate-100 bg-white">
         <View className="flex-row items-center flex-1">
-          <TouchableOpacity onPress={() => router.back()} className="mr-3">
-            <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-
           <View className="relative">
             <Image
               source={SELLER_INFO.avatar}
@@ -114,28 +113,33 @@ export default function ChatSeller() {
         </View>
 
         <View className="flex-row gap-4">
-          <Ionicons name="call-outline" size={22} color="#475569" />
+          {/* <Ionicons name="call-outline" size={22} color="#475569" /> */}
 
           <Ionicons name="ellipsis-vertical" size={22} color="#475569" />
         </View>
       </View>
 
-      {/* KEYBOARD AREA */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 20}
-        className="flex-1"
-      >
-        {/* MESSAGES */}
+      {/* CHAT AREA */}
 
+      <KeyboardAvoidingView
+        style={{
+          flex: 1,
+        }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
         <ScrollView
           ref={scrollViewRef}
           className="flex-1 bg-slate-50 px-4"
           contentContainerStyle={{
-            paddingVertical: 16,
+            paddingTop: 16,
+
+            paddingBottom: 20,
+
             flexGrow: 1,
           }}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={scrollToBottom}
         >
           {messages.map((msg) => {
@@ -153,7 +157,9 @@ export default function ChatSeller() {
                     source={SELLER_INFO.avatar}
                     style={{
                       width: 32,
+
                       height: 32,
+
                       borderRadius: 100,
                     }}
                     className="mr-2"
@@ -190,41 +196,17 @@ export default function ChatSeller() {
 
         <View className="border-t border-slate-100 bg-white px-3 py-3">
           <View className="flex-row items-center gap-2">
-            <TouchableOpacity
-              onPress={() => {
-                setShowActions(!showActions);
-                setShowEmojis(false);
-              }}
-              className="bg-slate-100 p-2 rounded-full"
-            >
-              <Ionicons name="add-outline" size={22} color="#475569" />
-            </TouchableOpacity>
-
-            <View className="flex-1 bg-slate-100 rounded-2xl px-4 flex-row items-center">
+            <View className="flex-1 bg-slate-100 rounded-2xl px-4 py-2">
               <TextInput
                 value={message}
                 onChangeText={setMessage}
                 placeholder="Type a message..."
                 multiline
-                onFocus={() => {
-                  setShowActions(false);
-                  setShowEmojis(false);
+                className="text-[15px]"
+                style={{
+                  maxHeight: 100,
                 }}
-                className="flex-1 text-[15px] max-h-20"
               />
-
-              <TouchableOpacity
-                onPress={() => {
-                  setShowEmojis(!showEmojis);
-                  setShowActions(false);
-                }}
-              >
-                <Ionicons
-                  name={showEmojis ? "keyboard-outline" : "happy-outline"}
-                  size={22}
-                  color="#475569"
-                />
-              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
@@ -237,35 +219,6 @@ export default function ChatSeller() {
               <Ionicons name="send" size={18} color="white" />
             </TouchableOpacity>
           </View>
-
-          {showActions && (
-            <View className="h-28 mt-3 bg-slate-50 flex-row justify-around items-center">
-              <Ionicons name="image" size={28} color="#3b82f6" />
-
-              <Ionicons name="camera" size={28} color="green" />
-
-              <Ionicons name="document-text" size={28} color="orange" />
-            </View>
-          )}
-
-          {showEmojis && (
-            <View className="h-48 bg-slate-50 mt-3 p-3">
-              <ScrollView>
-                <View className="flex-row flex-wrap gap-4">
-                  {["😀", "😂", "😍", "🥰", "👍", "🔥", "❤️", "💯"].map(
-                    (emo, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        onPress={() => handleEmojiSelect(emo)}
-                      >
-                        <Text className="text-3xl">{emo}</Text>
-                      </TouchableOpacity>
-                    ),
-                  )}
-                </View>
-              </ScrollView>
-            </View>
-          )}
         </View>
       </KeyboardAvoidingView>
     </View>
