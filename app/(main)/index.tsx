@@ -106,7 +106,12 @@ export default function DashboardPage() {
   };
 
   const handleMenuPress = (item: any) => {
-    // We check the latest isMember status derived from the updated user object
+    if (item.label === "News & Event") {
+      router.push(item.href as any);
+      return;
+    }
+
+    // Other features require MEMBER
     if (!isMember) {
       setPendingFeature(item.label);
       setShowAlert(true);

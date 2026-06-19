@@ -8,7 +8,8 @@ const initialCart = [
     id: "1",
     seller: "Fashion Store",
     name: "Premium T-Shirt Oversized Cotton Casual Wear",
-    image: "https://picsum.photos/300?1",
+    image:
+      "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/180221s4.jpg?im=Resize,width=750",
     price: 399,
     originalPrice: 599,
     discount: "33% OFF",
@@ -21,7 +22,8 @@ const initialCart = [
     id: "2",
     seller: "Fashion Store",
     name: "Casual Cotton Hoodie",
-    image: "https://picsum.photos/300?2",
+    image:
+      "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/740089s5.jpg?im=Resize,width=750",
     price: 599,
     originalPrice: 799,
     discount: "25% OFF",
@@ -34,7 +36,8 @@ const initialCart = [
     id: "3",
     seller: "Tech Gadget Shop",
     name: "Wireless Bluetooth Earbuds",
-    image: "https://picsum.photos/300?3",
+    image:
+      "https://www.belkin.com/dw/image/v2/BGBH_PRD/on/demandware.static/-/Sites-master-product-catalog-blk/default/dw6c001382/images/hi-res/7/7ecfadda6626ab6e_AUC013btSD_SoundForm_OpenEarTWSEarbuds_Hero_WEB.jpg?sw=700&sh=700&sm=fit&sfrm=png",
     price: 1299,
     originalPrice: 1299,
     discount: "",

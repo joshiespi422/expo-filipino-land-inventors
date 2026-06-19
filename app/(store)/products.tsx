@@ -34,9 +34,9 @@ const products = [
     description:
       "Premium quality cotton shirt perfect for daily wear. Comfortable and durable.",
     images: [
-      "https://picsum.photos/500?1", // index 0 (Black)
-      "https://picsum.photos/500?2", // index 1 (White)
-      "https://picsum.photos/500?3", // index 2 (Blue)
+      "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/180221s4.jpg?im=Resize,width=750", // index 0 (Black)
+      "https://rustans.com/cdn/shop/files/HANES_2353788_01.jpg?v=1755665587&width=800", // index 1 (White)
+      "https://i5.walmartimages.com/seo/Men-Heavy-Cotton-Multi-Colors-T-Shirt-Color-Neon-Blue-Small-Size_114ac5d7-632b-4975-9006-f341620eedb7.fdff6c7b97b5c4fcea877b9ce35c1598.jpeg", // index 2 (Blue)
     ],
     seller: {
       name: "Fashion Store",

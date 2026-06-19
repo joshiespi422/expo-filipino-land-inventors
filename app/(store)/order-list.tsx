@@ -29,14 +29,16 @@ const initialOrders = [
     products: [
       {
         name: "Premium T-Shirt Oversized Cotton Casual Wear",
-        image: "https://picsum.photos/300?1",
+        image:
+          "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/180221s4.jpg?im=Resize,width=750",
         price: 399,
         qty: 1,
         variant: "Size XL • Color Red",
       },
       {
         name: "Casual Cotton Hoodie",
-        image: "https://picsum.photos/300?2",
+        image:
+          "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/740089s5.jpg?im=Resize,width=750",
         price: 599,
         qty: 2,
         variant: "Size Large • Color Gray",
@@ -52,7 +54,8 @@ const initialOrders = [
     products: [
       {
         name: "Wireless Bluetooth Earbuds",
-        image: "https://picsum.photos/300?3",
+        image:
+          "https://www.belkin.com/dw/image/v2/BGBH_PRD/on/demandware.static/-/Sites-master-product-catalog-blk/default/dw6c001382/images/hi-res/7/7ecfadda6626ab6e_AUC013btSD_SoundForm_OpenEarTWSEarbuds_Hero_WEB.jpg?sw=700&sh=700&sm=fit&sfrm=png",
         price: 1299,
         qty: 1,
         variant: "",
@@ -68,7 +71,8 @@ const initialOrders = [
     products: [
       {
         name: "Skin Care Set",
-        image: "https://picsum.photos/300?4",
+        image:
+          "https://gotoskincare.com/cdn/shop/articles/0425_GT_Blog_How_To_Build_A_Skincare_Routine4_1d86a2ce-9fd3-4662-9ce9-6934df8e5969.jpg?v=1749704207&width=1000",
         price: 799,
         qty: 1,
         variant: "",

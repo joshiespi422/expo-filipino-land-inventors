@@ -203,6 +203,21 @@ export default function BuyerProfile() {
           </View>
           <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.6}
+          onPress={() => router.push("/")}
+          className="flex-row items-center justify-between p-4"
+        >
+          <View className="flex-row items-center">
+            <Ionicons name="storefront-outline" size={20} color="#034194" />
+            <Text className="ml-3 text-slate-700 font-medium">
+              Return to FISMPC
+            </Text>
+          </View>
+
+          <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
