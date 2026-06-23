@@ -1,49 +1,65 @@
-export const products = [
-  // CLOTHES
-  {
-    id: "1",
-    name: "Premium T-Shirt Oversized Cotton Casual Wear",
-    price: "₱399",
-    image:
-      "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/180221s4.jpg?im=Resize,width=750",
-    category: "Clothes",
-    sold: "1.2k sold",
-    rating: "5.0",
-    location: "Las Piñas City, Metro Manila",
-  },
-  {
-    id: "2",
-    name: "Classic Hoodie Jacket Unisex",
-    price: "₱799",
-    image:
-      "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/740089s5.jpg?im=Resize,width=750",
-    category: "Clothes",
-    sold: "850 sold",
-    rating: "4.8",
-    location: "Manila City",
-  },
-  {
-    id: "3",
-    name: "Summer Casual Polo Shirt",
-    price: "₱499",
-    image:
-      "https://www.rrj.com.ph/cdn/shop/products/ssph.zone-1705748511-RMRWOH23_009_-_146791_RED-1_590x.jpg?v=1705749283",
-    category: "Clothes",
-    sold: "670 sold",
-    rating: "4.9",
-    location: "Makati City",
-  },
+import api from "./api";
 
-  // SHOES
-  {
-    id: "4",
-    name: "Running Shoes Sports Edition",
-    price: "₱1,299",
-    image:
-      "https://contents.mediadecathlon.com/p2153047/k$04e4aed013c4d3d38bf4acaa2c69179b/women-s-running-shoes-jogflow-500k-1-dark-grey-kalenji-8640202.jpg?f=768x0&format=auto",
-    category: "Shoes",
-    sold: "890 sold",
-    rating: "4.8",
-    location: "Makati City, Metro Manila",
-  },
-];
+// Matches your database category fields
+export interface Category {
+  id: number | string;
+  name: string;
+  slug: string;
+  parent_id?: number | null;
+  image?: string | null;
+}
+
+export interface Product {
+  id: number;
+  name: string;
+  slug: string;
+  image: string | null;
+  price: number | null;
+  compare_price: number | null;
+  stock: number;
+}
+
+export interface Pagination {
+  current_page: number;
+  last_page: number;
+  has_more: boolean;
+}
+
+export interface StoreHomeResponse {
+  success: boolean;
+  data: {
+    categories: Category[];
+    productsTopDeals: Product[];
+    productsDiscover: Product[];
+    pagination: Pagination;
+  };
+}
+
+// Supports category filtering and pagination
+export const getStoreHome = async (
+  categoryId?: string | number,
+  page: number = 1,
+): Promise<StoreHomeResponse> => {
+  const params: {
+    category_id?: string | number;
+    page: number;
+  } = {
+    page,
+  };
+
+  // Attach category filter when selected
+  if (categoryId && categoryId !== "All") {
+    params.category_id = categoryId;
+  }
+
+  const response = await api.get("/store/home", {
+    params,
+  });
+
+  console.log(
+    `STORE API RESPONSE (Page ${page}):`,
+    JSON.stringify(response.data, null, 2),
+  );
+
+  return response.data;
+};

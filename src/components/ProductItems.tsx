@@ -12,9 +12,9 @@ export interface Product {
   rating: string | number;
   location: string;
   category: string;
-  isLiked?: boolean; // Controls whether the heart is filled or outline
-  isOnSale?: boolean; // Used by collection filters
-  quantity?: number; // Used by collection availability status
+  isLiked?: boolean;
+  isOnSale?: boolean;
+  quantity?: number;
 }
 
 interface ProductCardProps {
@@ -65,7 +65,7 @@ export const ProductCard = React.memo(
           </TouchableOpacity>
         )}
 
-        <View className="py-3">
+        <View className="pt-3 pt-0.5">
           <Text
             numberOfLines={1}
             ellipsizeMode="tail"

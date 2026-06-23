@@ -206,7 +206,7 @@ export default function BuyerProfile() {
 
         <TouchableOpacity
           activeOpacity={0.6}
-          onPress={() => router.push("/")}
+          onPress={() => router.push("../(main)")}
           className="flex-row items-center justify-between p-4"
         >
           <View className="flex-row items-center">
@@ -215,7 +215,6 @@ export default function BuyerProfile() {
               Return to FISMPC
             </Text>
           </View>
-
           <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
         </TouchableOpacity>
       </View>
