@@ -62,7 +62,6 @@ export default function Products() {
           initialImage = detailedProduct.images[0].url;
         }
 
-        // Keep selections unselected initially to allow clean default calculations
         const initialSelections: Record<string, string> = {};
 
         const defaultVariant = detailedProduct.variants.find(
@@ -108,7 +107,7 @@ export default function Products() {
     fetchProductData();
   }, [slug]);
 
-  // Match current active selection or dynamically cascade to default fallback values
+  // Exact variant match calculation
   const currentVariant = product?.variants.find(
     (v) =>
       v.attributes.every(
@@ -131,12 +130,21 @@ export default function Products() {
       ? defaultVariant.compare_price
       : null;
 
-  // Total Default Calculation for Stock Metrics
+  // Calculate clean stock pools relative to partial or full selections
   const totalDefaultStock =
     product?.variants.reduce((acc, v) => acc + v.stock, 0) || 0;
+
   const currentStock = currentVariant
     ? currentVariant.stock
-    : totalDefaultStock;
+    : Object.keys(selectedAttributes).length > 0
+      ? product?.variants
+          .filter((v) =>
+            Object.entries(selectedAttributes).every(([key, val]) =>
+              v.attributes.some((a) => a.name === key && a.value === val),
+            ),
+          )
+          .reduce((acc, v) => acc + v.stock, 0) || 0
+      : totalDefaultStock;
 
   const getGroupedAttributes = () => {
     if (!product) return {};
@@ -157,8 +165,37 @@ export default function Products() {
 
   const groupedAttributes = getGroupedAttributes();
 
+  // Look-ahead check to verify if a combination variation is valid and has stock
+  const isOptionAvailable = (attributeName: string, optionValue: string) => {
+    if (!product) return false;
+
+    // Simulate what selections look like with this option variant checked
+    const testSelections = {
+      ...selectedAttributes,
+      [attributeName]: optionValue,
+    };
+
+    // Find if there is at least one variant that matches all simulated parameters and has stock
+    return product.variants.some((variant) => {
+      const matchesSelections = Object.entries(testSelections).every(
+        ([key, val]) =>
+          variant.attributes.some(
+            (attr) => attr.name === key && attr.value === val,
+          ),
+      );
+      return matchesSelections && variant.stock > 0;
+    });
+  };
+
   const handleAttributeSelect = (attributeName: string, value: string) => {
-    const updatedSelections = { ...selectedAttributes, [attributeName]: value };
+    let updatedSelections = { ...selectedAttributes };
+
+    if (updatedSelections[attributeName] === value) {
+      delete updatedSelections[attributeName];
+    } else {
+      updatedSelections[attributeName] = value;
+    }
+
     setSelectedAttributes(updatedSelections);
 
     const matchingVariant = product?.variants.find(
@@ -178,6 +215,8 @@ export default function Products() {
       } else if (quantity > matchingVariant.stock || quantity === 0) {
         setQuantity(matchingVariant.stock);
       }
+    } else {
+      setQuantity(1);
     }
   };
 
@@ -219,6 +258,16 @@ export default function Products() {
 
   const fallbackImageUri = product.images?.[0]?.url || "";
 
+  // Dynamic unique array calculation for continuous inline rendering of Gallery thumbnails
+  const dynamicGalleryUrls = (product.images || [])
+    .map((img) => img.url)
+    .concat(
+      (product.variants || [])
+        .map((v) => v.image)
+        .filter((img): img is string => !!img),
+    )
+    .filter((url, index, self) => self.indexOf(url) === index);
+
   return (
     <View className="flex-1 bg-white p-1">
       <ScrollView
@@ -252,49 +301,33 @@ export default function Products() {
         </View>
 
         {/* IMAGE GALLERY */}
-        {(product.images || [])
-          .map((img) => img.url)
-          .concat(
-            (product.variants || [])
-              .map((v) => v.image)
-              .filter((img): img is string => !!img),
-          )
-          .filter((url, index, self) => self.indexOf(url) === index).length >
-          0 && (
+        {dynamicGalleryUrls.length > 0 && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             className="mt-4 px-2"
           >
-            {(product.images || [])
-              .map((img) => img.url)
-              .concat(
-                (product.variants || [])
-                  .map((v) => v.image)
-                  .filter((img): img is string => !!img),
-              )
-              .filter((url, index, self) => self.indexOf(url) === index)
-              .map((imgUrl, index) => (
-                <TouchableOpacity
-                  key={`gallery-img-${index}`}
-                  onPress={() => setMainImage(imgUrl)}
-                  className={`mr-3 rounded-md overflow-hidden border ${
-                    mainImage === imgUrl
-                      ? "border-primary-500 border-2"
-                      : "border-slate-200"
-                  }`}
-                >
-                  <Image
-                    source={{
-                      uri: imgUrl.startsWith("http")
-                        ? imgUrl
-                        : `http://192.168.1.53:8000${imgUrl}`,
-                    }}
-                    style={{ width: 70, height: 70 }}
-                    className="rounded-md"
-                  />
-                </TouchableOpacity>
-              ))}
+            {dynamicGalleryUrls.map((imgUrl, index) => (
+              <TouchableOpacity
+                key={`gallery-img-${index}`}
+                onPress={() => setMainImage(imgUrl)}
+                className={`mr-3 rounded-md overflow-hidden border ${
+                  mainImage === imgUrl
+                    ? "border-primary border-2"
+                    : "border-slate-200"
+                }`}
+              >
+                <Image
+                  source={{
+                    uri: imgUrl.startsWith("http")
+                      ? imgUrl
+                      : `http://192.168.1.53:8000${imgUrl}`,
+                  }}
+                  style={{ width: 70, height: 70 }}
+                  className="rounded-md"
+                />
+              </TouchableOpacity>
+            ))}
           </ScrollView>
         )}
 
@@ -616,20 +649,36 @@ export default function Products() {
                       {groupedAttributes[attributeName].map((optionValue) => {
                         const isCurrentlySelected =
                           selectedAttributes[attributeName] === optionValue;
+
+                        // Run lookahead checks to see if this option combination is valid
+                        const isAvailable = isOptionAvailable(
+                          attributeName,
+                          optionValue,
+                        );
+
                         return (
                           <TouchableOpacity
                             key={optionValue}
+                            disabled={!isAvailable && !isCurrentlySelected}
                             onPress={() =>
                               handleAttributeSelect(attributeName, optionValue)
                             }
                             className={`flex-row items-center px-3 py-2 rounded-xl border mr-2 mb-2 ${
                               isCurrentlySelected
                                 ? "bg-blue-50 border-primary"
-                                : "border-slate-200 bg-slate-50"
+                                : !isAvailable
+                                  ? "border-slate-100 bg-slate-100 opacity-40"
+                                  : "border-slate-200 bg-slate-50"
                             }`}
                           >
                             <Text
-                              className={`text-sm ${isCurrentlySelected ? "text-primary font-semibold" : "text-slate-700"}`}
+                              className={`text-sm ${
+                                isCurrentlySelected
+                                  ? "text-primary font-semibold"
+                                  : !isAvailable
+                                    ? "text-slate-400"
+                                    : "text-slate-700"
+                              }`}
                             >
                               {optionValue}
                             </Text>
@@ -678,11 +727,28 @@ export default function Products() {
                     setModal(false);
                     router.push("/cart");
                   }}
-                  disabled={currentStock === 0 || quantity === 0}
-                  className={`h-16 rounded-2xl justify-center items-center ${currentStock === 0 || quantity === 0 ? "bg-slate-300" : "bg-primary"}`}
+                  disabled={
+                    currentStock === 0 ||
+                    quantity === 0 ||
+                    Object.keys(selectedAttributes).length !==
+                      Object.keys(groupedAttributes).length
+                  }
+                  className={`h-16 rounded-2xl justify-center items-center ${
+                    currentStock === 0 ||
+                    quantity === 0 ||
+                    Object.keys(selectedAttributes).length !==
+                      Object.keys(groupedAttributes).length
+                      ? "bg-slate-300"
+                      : "bg-primary"
+                  }`}
                 >
                   <Text className="text-white font-bold text-lg">
-                    {currentStock === 0 ? "Out of Stock" : "Confirm Action"}
+                    {Object.keys(selectedAttributes).length !==
+                    Object.keys(groupedAttributes).length
+                      ? "Select Options"
+                      : currentStock === 0
+                        ? "Out of Stock"
+                        : "Confirm Action"}
                   </Text>
                 </TouchableOpacity>
               </View>
