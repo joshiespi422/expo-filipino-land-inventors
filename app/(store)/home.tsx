@@ -26,7 +26,6 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState<string | number>(
     "All",
   );
-
   const [search, setSearch] = useState("");
 
   // --- SMOOTH ANIMATION CONFIGURATION ---
@@ -61,7 +60,6 @@ export default function HomePage() {
     }
 
     try {
-      // Ensure your getStoreHome service signature accepts a secondary numeric page parameter
       const response = await getStoreHome(catId, targetPage);
 
       console.log("STORE RESPONSE:", response);
@@ -131,16 +129,20 @@ export default function HomePage() {
   };
 
   const filteredProducts = (products ?? []).filter((item) => {
-    const searchMatch = item.name.toLowerCase().includes(search.toLowerCase());
-    return searchMatch;
+    return item.name.toLowerCase().includes(search.toLowerCase());
   });
 
-  const handleProductPress = (id: string | number) => {
+  // FIXED: Explicit structural matching syntax targeting app/products/[slug].tsx layout trees
+  const handleProductPress = (slug: string) => {
+    if (!slug) {
+      console.warn(
+        "Cannot navigate: Selected product item slug is missing or undefined.",
+      );
+      return;
+    }
     router.push({
-      pathname: "/products",
-      params: {
-        id: id.toString(),
-      },
+      pathname: "/products/[slug]",
+      params: { slug },
     });
   };
 
@@ -162,15 +164,15 @@ export default function HomePage() {
               id: item.id.toString(),
               name: item.name,
               price: item.price
-                ? `₱${Number(item.price).toLocaleString()}`
-                : "₱0",
+                ? `₱${Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : "₱0.00",
               image: item.image ?? "",
               sold: `${item.stock} stocks`,
               rating: "5.0",
               location: "FISMPC Store",
               category: "",
             }}
-            onPress={() => handleProductPress(item.id)}
+            onPress={() => handleProductPress(item.slug)}
           />
         )}
         keyExtractor={(item, index) => `${item.id.toString()}-${index}`}
@@ -257,15 +259,15 @@ export default function HomePage() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 className="mt-3"
-                scrollEventThrottle={1} // Captured at maximum resolution for extreme smoothness
+                scrollEventThrottle={1}
                 onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
                 onContentSizeChange={(w) => setContentWidth(w)}
                 onScroll={Animated.event(
                   [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                  { useNativeDriver: true }, // Offloads calculations directly to OS user interface layer
+                  { useNativeDriver: true },
                 )}
               >
-                {categories.map((item, index) => (
+                {categories.map((item) => (
                   <TouchableOpacity
                     key={item.id.toString()}
                     onPress={() => handleCategoryPress(item.id)}
@@ -348,7 +350,7 @@ export default function HomePage() {
                       key={item.id}
                       activeOpacity={0.8}
                       className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm w-44"
-                      onPress={() => handleProductPress(item.id)}
+                      onPress={() => handleProductPress(item.slug)}
                     >
                       <View className="relative">
                         <Image
@@ -375,10 +377,21 @@ export default function HomePage() {
 
                         <View className="flex-row items-center mt-2">
                           <Text className="text-primary font-bold text-base">
-                            ₱{Number(item.price).toLocaleString()}
+                            ₱
+                            {Number(item.price).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
                           </Text>
                           <Text className="text-xs text-slate-400 line-through ml-2">
-                            ₱{(Number(item.price ?? 0) + 100).toLocaleString()}
+                            ₱
+                            {Number(item.compare_price).toLocaleString(
+                              undefined,
+                              {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              },
+                            )}
                           </Text>
                         </View>
                       </View>
