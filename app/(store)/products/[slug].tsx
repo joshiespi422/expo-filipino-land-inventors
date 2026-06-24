@@ -24,6 +24,8 @@ import {
 import delivery from "../../../assets/images/icon/deliveryBlueB.png";
 import UserProfile from "../../../assets/images/UserProfile.jpg";
 
+type ActionType = "cart" | "buy_now" | null;
+
 export default function Products() {
   const router = useRouter();
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -39,6 +41,7 @@ export default function Products() {
   >({});
   const [quantity, setQuantity] = useState<number>(1);
   const [modal, setModal] = useState<boolean>(false);
+  const [modalAction, setModalAction] = useState<ActionType>(null);
 
   useEffect(() => {
     if (!slug) {
@@ -228,6 +231,21 @@ export default function Products() {
     });
   };
 
+  // Triggers the modal with contextual redirect paths
+  const openPurchaseModal = (action: ActionType) => {
+    setModalAction(action);
+    setModal(true);
+  };
+
+  const handleConfirmAction = () => {
+    setModal(false);
+    if (modalAction === "cart") {
+      router.push("/cart");
+    } else if (modalAction === "buy_now") {
+      router.push("/checkout");
+    }
+  };
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -311,10 +329,8 @@ export default function Products() {
               <TouchableOpacity
                 key={`gallery-img-${index}`}
                 onPress={() => setMainImage(imgUrl)}
-                className={`mr-3 rounded-md overflow-hidden border ${
-                  mainImage === imgUrl
-                    ? "border-primary border-2"
-                    : "border-slate-200"
+                className={`mr-3 rounded-md overflow-hidden border-2 ${
+                  mainImage === imgUrl ? "border-primary" : "border-slate-200"
                 }`}
               >
                 <Image
@@ -324,7 +340,6 @@ export default function Products() {
                       : `http://192.168.1.53:8000${imgUrl}`,
                   }}
                   style={{ width: 70, height: 70 }}
-                  className="rounded-md"
                 />
               </TouchableOpacity>
             ))}
@@ -551,7 +566,7 @@ export default function Products() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setModal(true)}
+            onPress={() => openPurchaseModal("cart")}
             className="flex-1 p-1.5 bg-primary rounded-xl items-center justify-center"
           >
             <Ionicons name="cart-outline" size={24} color="#fff" />
@@ -561,7 +576,7 @@ export default function Products() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setModal(true)}
+            onPress={() => openPurchaseModal("buy_now")}
             className="flex-1 p-1.5 bg-[#D70127] rounded-xl items-center justify-center"
           >
             <Text className="text-white font-semibold text-base">Buy Now</Text>
@@ -723,10 +738,7 @@ export default function Products() {
 
               <View className="w-full p-5 bg-white border-t border-slate-200">
                 <TouchableOpacity
-                  onPress={() => {
-                    setModal(false);
-                    router.push("/cart");
-                  }}
+                  onPress={handleConfirmAction}
                   disabled={
                     currentStock === 0 ||
                     quantity === 0 ||
@@ -739,7 +751,9 @@ export default function Products() {
                     Object.keys(selectedAttributes).length !==
                       Object.keys(groupedAttributes).length
                       ? "bg-slate-300"
-                      : "bg-primary"
+                      : modalAction === "buy_now"
+                        ? "bg-[#D70127]"
+                        : "bg-primary"
                   }`}
                 >
                   <Text className="text-white font-bold text-lg">
@@ -748,7 +762,9 @@ export default function Products() {
                       ? "Select Options"
                       : currentStock === 0
                         ? "Out of Stock"
-                        : "Confirm Action"}
+                        : modalAction === "buy_now"
+                          ? "Buy Now"
+                          : "Add to Cart"}
                   </Text>
                 </TouchableOpacity>
               </View>
