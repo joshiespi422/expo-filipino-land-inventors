@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   ScrollView,
@@ -20,6 +21,8 @@ import {
   getStoreHome,
   Product,
 } from "@/services/productService";
+
+import { addToCart } from "@/services/cart";
 
 import delivery from "../../../assets/images/icon/deliveryBlueB.png";
 import UserProfile from "../../../assets/images/UserProfile.jpg";
@@ -46,7 +49,7 @@ export default function Products() {
   useEffect(() => {
     if (!slug) {
       setError("No product identifier provided.");
-      setLoading(false);
+      loading && setLoading(false);
       return;
     }
 
@@ -111,12 +114,13 @@ export default function Products() {
   }, [slug]);
 
   // Exact variant match calculation
-  const currentVariant = product?.variants.find(
-    (v) =>
-      v.attributes.every(
-        (attr) => selectedAttributes[attr.name] === attr.value,
-      ) && v.attributes.length === Object.keys(selectedAttributes).length,
-  );
+  const currentVariant =
+    product?.variants.find(
+      (v) =>
+        v.attributes.every(
+          (attr) => selectedAttributes[attr.name] === attr.value,
+        ) && v.attributes.length === Object.keys(selectedAttributes).length,
+    ) || null;
 
   const defaultVariant =
     product?.variants.find((v) => v.is_default) || product?.variants[0];
@@ -237,12 +241,47 @@ export default function Products() {
     setModal(true);
   };
 
-  const handleConfirmAction = () => {
-    setModal(false);
-    if (modalAction === "cart") {
-      router.push("/cart");
-    } else if (modalAction === "buy_now") {
-      router.push("/checkout");
+  const handleConfirmAction = async () => {
+    try {
+      if (!currentVariant) {
+        Alert.alert("Variant Required", "Please select all product options.");
+        return;
+      }
+
+      if (modalAction === "cart") {
+        const response = await addToCart({
+          product_variant_id: currentVariant.id,
+          quantity,
+        });
+
+        setModal(false);
+
+        Alert.alert("Success", response?.message || "Added to cart.");
+
+        router.push("/cart");
+        return;
+      }
+
+      if (modalAction === "buy_now") {
+        setModal(false);
+
+        router.push({
+          pathname: "/checkout",
+          params: {
+            variant_id: currentVariant.id,
+            quantity,
+          },
+        });
+
+        return;
+      }
+    } catch (error: any) {
+      console.error(error);
+
+      Alert.alert(
+        "Error",
+        error?.response?.data?.message || "Something went wrong.",
+      );
     }
   };
 
@@ -300,10 +339,10 @@ export default function Products() {
                 uri: mainImage
                   ? mainImage.startsWith("http")
                     ? mainImage
-                    : `http://192.168.1.53:8000${mainImage}`
+                    : `http://192.168.1.46:8000${mainImage}`
                   : fallbackImageUri.startsWith("http")
                     ? fallbackImageUri
-                    : `http://192.168.1.53:8000${fallbackImageUri}`,
+                    : `http://192.168.1.46:8000${fallbackImageUri}`,
               }}
               className="rounded-xl"
               style={{ width: "100%", height: 350 }}
@@ -337,7 +376,7 @@ export default function Products() {
                   source={{
                     uri: imgUrl.startsWith("http")
                       ? imgUrl
-                      : `http://192.168.1.53:8000${imgUrl}`,
+                      : `http://192.168.1.46:8000${imgUrl}`,
                   }}
                   style={{ width: 70, height: 70 }}
                 />
@@ -611,10 +650,10 @@ export default function Products() {
                     uri: mainImage
                       ? mainImage.startsWith("http")
                         ? mainImage
-                        : `http://192.168.1.53:8000${mainImage}`
+                        : `http://192.168.1.46:8000${mainImage}`
                       : fallbackImageUri.startsWith("http")
                         ? fallbackImageUri
-                        : `http://192.168.1.53:8000${fallbackImageUri}`,
+                        : `http://192.168.1.46:8000${fallbackImageUri}`,
                   }}
                   style={{ width: 90, height: 90 }}
                   className="rounded-xl border border-slate-200"
