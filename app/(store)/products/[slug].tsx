@@ -252,29 +252,49 @@ export default function Products() {
         </View>
 
         {/* IMAGE GALLERY */}
-        {product.images && product.images.length > 0 && (
+        {(product.images || [])
+          .map((img) => img.url)
+          .concat(
+            (product.variants || [])
+              .map((v) => v.image)
+              .filter((img): img is string => !!img),
+          )
+          .filter((url, index, self) => self.indexOf(url) === index).length >
+          0 && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             className="mt-4 px-2"
           >
-            {product.images.map((img) => (
-              <TouchableOpacity
-                key={img.id}
-                onPress={() => setMainImage(img.url)}
-                className="mr-3"
-              >
-                <Image
-                  source={{
-                    uri: img.url.startsWith("http")
-                      ? img.url
-                      : `http://192.168.1.53:8000${img.url}`,
-                  }}
-                  style={{ width: 70, height: 70 }}
-                  className="rounded-md border border-slate-200"
-                />
-              </TouchableOpacity>
-            ))}
+            {(product.images || [])
+              .map((img) => img.url)
+              .concat(
+                (product.variants || [])
+                  .map((v) => v.image)
+                  .filter((img): img is string => !!img),
+              )
+              .filter((url, index, self) => self.indexOf(url) === index)
+              .map((imgUrl, index) => (
+                <TouchableOpacity
+                  key={`gallery-img-${index}`}
+                  onPress={() => setMainImage(imgUrl)}
+                  className={`mr-3 rounded-md overflow-hidden border ${
+                    mainImage === imgUrl
+                      ? "border-primary-500 border-2"
+                      : "border-slate-200"
+                  }`}
+                >
+                  <Image
+                    source={{
+                      uri: imgUrl.startsWith("http")
+                        ? imgUrl
+                        : `http://192.168.1.53:8000${imgUrl}`,
+                    }}
+                    style={{ width: 70, height: 70 }}
+                    className="rounded-md"
+                  />
+                </TouchableOpacity>
+              ))}
           </ScrollView>
         )}
 
