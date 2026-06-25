@@ -17,7 +17,6 @@ import {
   View,
 } from "react-native";
 
-// Since frontend UI needs to track checkboxes locally, we extend the backend type
 interface UIItems extends CartItem {
   selected: boolean;
 }
@@ -28,12 +27,10 @@ export default function CartPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  // 1. Fetch Cart Data from API
   const fetchCartData = async () => {
     try {
       const data = await getCart();
       if (data.success && data.cart && data.cart.items) {
-        // Map backend items and preserve or default selection state to true
         const itemsWithSelection = data.cart.items.map((item) => ({
           ...item,
           selected: true,
@@ -57,25 +54,20 @@ export default function CartPage() {
     fetchCartData();
   };
 
-  // 2. Group items by Seller/Brand (Fallback to 'Store' if brand/seller data is unavailable)
   const groupedSellers = useMemo(() => {
     const groups: Record<string, typeof cartItems> = {};
 
     cartItems.forEach((item) => {
-      // Looks for the dynamic backend seller property name, falls back if blank
       const sellerName = item.product?.seller || "FISMPC Store";
-
       if (!groups[sellerName]) {
         groups[sellerName] = [];
       }
-
       groups[sellerName].push(item);
     });
 
     return Object.entries(groups);
   }, [cartItems]);
 
-  // 3. Dynamic API-linked Actions
   const handleUpdateQuantity = async (
     cartItemId: number,
     currentQty: number,
@@ -84,7 +76,6 @@ export default function CartPage() {
     const newQty = type === "add" ? currentQty + 1 : currentQty - 1;
     if (newQty < 1) return;
 
-    // Optimistic Update UI
     setCartItems((prev) =>
       prev.map((item) =>
         item.id === cartItemId ? { ...item, quantity: newQty } : item,
@@ -95,25 +86,21 @@ export default function CartPage() {
       await updateCartItem(cartItemId, newQty);
     } catch (error) {
       console.error("Failed to update cart quantity:", error);
-      // Revert if API call fails
       fetchCartData();
     }
   };
 
   const handleRemoveItem = async (cartItemId: number) => {
-    // Optimistic Remove UI
     setCartItems((prev) => prev.filter((item) => item.id !== cartItemId));
 
     try {
       await removeCartItem(cartItemId);
     } catch (error) {
       console.error("Failed to remove item from cart:", error);
-      // Revert if API call fails
       fetchCartData();
     }
   };
 
-  // 4. Client Side Selection Handlers
   const toggleProduct = (id: number) => {
     setCartItems((prev) =>
       prev.map((item) =>
@@ -123,10 +110,19 @@ export default function CartPage() {
   };
 
   const toggleSeller = (sellerName: string) => {
-    // Since all fallback to 'Store' currently, toggle everything within this group
-    const allSelected = cartItems.every((item) => item.selected);
+    const sellerItems = cartItems.filter(
+      (item) => (item.product?.seller || "FISMPC Store") === sellerName,
+    );
+    const allSellerItemsSelected = sellerItems.every((item) => item.selected);
+
     setCartItems((prev) =>
-      prev.map((item) => ({ ...item, selected: !allSelected })),
+      prev.map((item) => {
+        const currentItemSeller = item.product?.seller || "FISMPC Store";
+        if (currentItemSeller === sellerName) {
+          return { ...item, selected: !allSellerItemsSelected };
+        }
+        return item;
+      }),
     );
   };
 
@@ -137,7 +133,6 @@ export default function CartPage() {
     );
   };
 
-  // 5. Calculations
   const total = useMemo(() => {
     return cartItems
       .filter((item) => item.selected)
@@ -153,7 +148,15 @@ export default function CartPage() {
 
   const goCheckout = () => {
     if (selectedCount === 0) return;
-    router.push("/checkout");
+
+    const selectedIds = cartItems
+      .filter((item) => item.selected)
+      .map((item) => item.id);
+
+    router.push({
+      pathname: "/checkout",
+      params: { cart_item_ids: selectedIds.join(",") },
+    });
   };
 
   if (loading) {
@@ -195,7 +198,6 @@ export default function CartPage() {
 
           return (
             <View className="bg-white rounded-2xl mb-4 overflow-hidden">
-              {/* SHOP HEADER */}
               <View className="flex-row items-center px-4 py-3 border-b border-slate-100">
                 <TouchableOpacity onPress={() => toggleSeller(seller)}>
                   <Ionicons
@@ -217,7 +219,6 @@ export default function CartPage() {
                 </Text>
               </View>
 
-              {/* PRODUCTS LIST */}
               {products.map((item) => {
                 const variantImage = item.variant.image || "";
                 const attributesString = item.variant.attributes
@@ -334,7 +335,6 @@ export default function CartPage() {
         }}
       />
 
-      {/* FOOTER */}
       {cartItems.length > 0 && (
         <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3">
           <View className="flex-row justify-between items-center">

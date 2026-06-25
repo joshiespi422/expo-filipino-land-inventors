@@ -1,7 +1,17 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
 import {
+  Address,
+  CheckoutItem,
+  CheckoutSummary,
+  fetchCheckoutDetails,
+  PaymentMethod,
+  placeOrderAPI,
+} from "@/services/checkout";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   Text,
@@ -10,275 +20,399 @@ import {
   View,
 } from "react-native";
 
-const orderItems = [
-  {
-    seller: "Fashion Store",
-    products: [
-      {
-        id: "1",
-        name: "Premium T-Shirt Oversized Cotton Casual Wear",
-        image:
-          "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/180221s4.jpg?im=Resize,width=750",
-        price: 399,
-        originalPrice: 599,
-        quantity: 1,
-        variant: "Size: XL • Color: Red",
-      },
-      {
-        id: "2",
-        name: "Casual Cotton Hoodie",
-        image:
-          "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/740089s5.jpg?im=Resize,width=750",
-        price: 599,
-        originalPrice: 799,
-        quantity: 2,
-        variant: "Size: Large • Color: Gray",
-      },
-    ],
-  },
-
-  {
-    seller: "Tech Gadget Shop",
-    products: [
-      {
-        id: "3",
-        name: "Wireless Bluetooth Earbuds",
-        image:
-          "https://www.belkin.com/dw/image/v2/BGBH_PRD/on/demandware.static/-/Sites-master-product-catalog-blk/default/dw6c001382/images/hi-res/7/7ecfadda6626ab6e_AUC013btSD_SoundForm_OpenEarTWSEarbuds_Hero_WEB.jpg?sw=700&sh=700&sm=fit&sfrm=png",
-        price: 1299,
-        originalPrice: 1299,
-        quantity: 1,
-        variant: "",
-      },
-    ],
-  },
-];
-
 export default function Checkout() {
   const router = useRouter();
+  const params = useLocalSearchParams();
 
-  const [payment, setPayment] = useState("COD");
+  console.log("🔍 [CHECKOUT MOUNT/UPDATE] Raw Route Params:", params);
 
-  const [message, setMessage] = useState("");
+  const rawCartItemIds = params.cart_item_ids;
 
-  const subtotal = orderItems.reduce(
-    (total, shop) =>
-      total +
-      shop.products.reduce(
-        (sum, item) => sum + item.originalPrice * item.quantity,
-        0,
-      ),
-    0,
-  );
+  // Compute the clean numeric array from route params
+  const cartItemIds = useMemo<number[]>(() => {
+    if (!rawCartItemIds) {
+      console.log("⚠️ [PARSING] No rawCartItemIds found in parameters.");
+      return [];
+    }
 
-  const discountTotal = orderItems.reduce(
-    (total, shop) =>
-      total +
-      shop.products.reduce(
-        (sum, item) => sum + (item.originalPrice - item.price) * item.quantity,
-        0,
-      ),
-    0,
-  );
+    let parsed: number[] = [];
+    if (Array.isArray(rawCartItemIds)) {
+      parsed = rawCartItemIds.map(Number).filter(Boolean);
+    } else {
+      parsed = String(rawCartItemIds).split(",").map(Number).filter(Boolean);
+    }
 
-  const itemTotal = orderItems.reduce(
-    (total, shop) =>
-      total +
-      shop.products.reduce((sum, item) => sum + item.price * item.quantity, 0),
-    0,
-  );
+    console.log("✅ [PARSING] Successfully parsed Item IDs array:", parsed);
+    return parsed;
+  }, [rawCartItemIds]);
 
-  const shipping = 50;
+  // View Layout States
+  const [loading, setLoading] = useState<boolean>(true);
+  const [submitting, setSubmitting] = useState<boolean>(false);
 
-  const totalPayment = itemTotal + shipping;
+  // Dynamic Model Data Arrays
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] =
+    useState<PaymentMethod | null>(null);
+  const [items, setItems] = useState<CheckoutItem[]>([]);
+  const [summary, setSummary] = useState<CheckoutSummary | null>(null);
+  const [note, setNote] = useState<string>("");
 
-  const paymentMethods = ["Online Payment", "COD", "Wallet"];
+  // ✅ FIXED: Rely on rawCartItemIds string primitive representation instead of array reference matching
+  useEffect(() => {
+    console.log(
+      "🚀 [EFFECT TRIGGER] Checking cartItemIds length:",
+      cartItemIds.length,
+    );
 
-  const placeOrder = () => {
-    console.log({
-      items: orderItems,
-      payment,
-      message,
-      totalPayment,
+    if (cartItemIds.length === 0) {
+      console.log(
+        "🛑 [EFFECT HALT] Blocking fetch, cartItemIds list is completely empty.",
+      );
+      Alert.alert("Error", "No items selected for checkout.", [
+        { text: "Go Back", onPress: () => router.back() },
+      ]);
+      return;
+    }
+
+    const loadCheckoutData = async () => {
+      try {
+        console.log(
+          "📡 [API REQUEST] Dispatching fetchCheckoutDetails with IDs:",
+          cartItemIds,
+        );
+        setLoading(true);
+
+        const response = await fetchCheckoutDetails(cartItemIds);
+        console.log(
+          "📥 [API RESPONSE] Success status:",
+          response.success,
+          "Full Response payload:",
+          response,
+        );
+
+        if (response.success) {
+          const data = response.data;
+          setAddresses(data.addresses);
+          setPaymentMethods(data.paymentMethods);
+          setItems(data.items);
+          setSummary(data.summary);
+
+          // Auto select default address profile
+          const defaultAddr =
+            data.addresses.find((addr) => addr.is_default) || data.addresses[0];
+          setSelectedAddress(defaultAddr || null);
+          console.log(
+            "🏠 [DATA BOUND] Automatically assigned address profile:",
+            defaultAddr,
+          );
+
+          // Auto select primary payment method
+          if (data.paymentMethods.length > 0) {
+            setSelectedPaymentMethod(data.paymentMethods[0]);
+            console.log(
+              "💳 [DATA BOUND] Automatically assigned payment profile:",
+              data.paymentMethods[0],
+            );
+          }
+        }
+      } catch (error: any) {
+        console.error(
+          "❌ [API ERROR] Network breakdown or backend rejection:",
+          error,
+        );
+        if (error?.response) {
+          console.error("⚠️ [SERVER RESPONSE DATA]:", error.response.data);
+          console.error("⚠️ [SERVER STATUS CODE]:", error.response.status);
+        }
+
+        Alert.alert(
+          "Error",
+          error?.response?.data?.message || "Failed to load checkout details.",
+        );
+        router.back();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCheckoutData();
+  }, [rawCartItemIds]); // ✅ Dependent on string representation to stop loop cycles
+
+  // Group retrieved flat resources into explicit store headers layout blocks
+  const groupedItems = useMemo(() => {
+    const groups: {
+      [key: string]: { seller: string; products: CheckoutItem[] };
+    } = {};
+    items.forEach((item) => {
+      const storeName = item.product?.store?.name || "FISMPC Store";
+      if (!groups[storeName]) {
+        groups[storeName] = { seller: storeName, products: [] };
+      }
+      groups[storeName].products.push(item);
     });
+    return Object.values(groups);
+  }, [items]);
 
-    // after success
-    router.push("/order-list");
+  const handlePlaceOrder = async () => {
+    console.log("🔘 [SUBMIT CLICKED] Initializing validation assertions...");
+    console.log("👉 Target Address:", selectedAddress);
+    console.log("👉 Target Payment Method:", selectedPaymentMethod);
+
+    if (!selectedAddress) {
+      Alert.alert("Validation Error", "Please choose a delivery address.");
+      return;
+    }
+    if (!selectedPaymentMethod) {
+      Alert.alert("Validation Error", "Please select a payment method.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const payload = {
+        address_id: selectedAddress.id,
+        payment_method_id: selectedPaymentMethod.id,
+        cart_item_ids: cartItemIds,
+        note: note.trim() || undefined,
+      };
+
+      console.log("📤 [ORDER SUBMIT PAYLOAD]:", payload);
+
+      const result = await placeOrderAPI(payload);
+      console.log("📥 [ORDER SUBMIT RESPONSE]:", result);
+
+      if (result.success) {
+        Alert.alert("Success", result.message, [
+          {
+            text: "OK",
+            onPress: () => router.replace("/order-list"),
+          },
+        ]);
+      }
+    } catch (error: any) {
+      console.error("❌ [ORDER PLACEMENT REJECTION] System Crash:", error);
+      if (error?.response) {
+        console.error("⚠️ [SERVER FAILURE BLOB]:", error.response.data);
+      }
+      Alert.alert(
+        "Order Failure",
+        error?.response?.data?.message ||
+          "Something went wrong parsing transaction components.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-slate-100">
+        <ActivityIndicator size="large" color="#034194" />
+        <Text className="mt-3 text-slate-500 font-medium">
+          Preparing checkout records...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-slate-100">
-      {/* HEADER */}
-
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          padding: 12,
-          paddingBottom: 130,
-        }}
+        contentContainerStyle={{ padding: 12, paddingBottom: 130 }}
       >
         {/* ADDRESS */}
-
         <View className="bg-white rounded-2xl p-4 mb-3">
           <View className="flex-row justify-between items-center">
             <View className="flex-row items-center">
               <Ionicons name="location-outline" size={24} color="#034194" />
-
               <Text className="ml-2 font-bold text-lg">Delivery Address</Text>
             </View>
-
-            <TouchableOpacity>
-              <Text className="text-primary">Change</Text>
+            <TouchableOpacity
+              onPress={() =>
+                Alert.alert("Address Selection", "Feature coming soon.")
+              }
+            >
+              <Text className="text-primary font-semibold">Change</Text>
             </TouchableOpacity>
           </View>
 
-          <Text className="font-semibold mt-4">Joshua Payumo</Text>
-
-          <Text className="text-slate-500">0912 345 6789</Text>
-
-          <Text className="text-slate-500">
-            Las Piñas City, Metro Manila, Philippines
-          </Text>
+          {selectedAddress ? (
+            <View className="mt-3">
+              <Text className="font-semibold text-slate-800">
+                {selectedAddress.recipient_name}
+              </Text>
+              <Text className="text-slate-500 my-0.5">
+                {selectedAddress.recipient_number}
+              </Text>
+              <Text className="text-slate-500 text-sm leading-5">
+                {selectedAddress.full_address}
+              </Text>
+              {selectedAddress.landmark && (
+                <Text className="text-xs text-slate-400 mt-1 italic">
+                  Landmark: {selectedAddress.landmark}
+                </Text>
+              )}
+            </View>
+          ) : (
+            <Text className="text-red-500 mt-3 font-medium">
+              No address options configured.
+            </Text>
+          )}
         </View>
 
         {/* ITEMS */}
-
         <View className="bg-white rounded-2xl p-4 mb-3">
           <Text className="font-bold text-lg mb-3">Order Items</Text>
 
-          {orderItems.map((shop) => (
-            <View key={shop.seller}>
+          {groupedItems.map((shop) => (
+            <View key={shop.seller} className="mb-2">
               <View className="flex-row items-center mb-3">
                 <Ionicons name="storefront-outline" size={20} color="#034194" />
-
-                <Text className="ml-2 font-semibold">{shop.seller}</Text>
+                <Text className="ml-2 font-semibold text-slate-800">
+                  {shop.seller}
+                </Text>
               </View>
 
-              {shop.products.map((item) => (
-                <View key={item.id} className="flex-row mb-4">
-                  <Image
-                    source={{
-                      uri: item.image,
-                    }}
-                    style={{
-                      width: 75,
-                      height: 75,
-                      borderRadius: 12,
-                    }}
-                  />
+              {shop.products.map((item) => {
+                const variantAttributes =
+                  item.attributes
+                    ?.map((attr) => `${attr.name}: ${attr.value}`)
+                    .join(" • ") || "";
 
-                  <View className="flex-1 ml-3">
-                    <Text numberOfLines={2} className="font-medium">
-                      {item.name}
-                    </Text>
+                return (
+                  <View key={item.id} className="flex-row mb-4">
+                    <Image
+                      source={{
+                        // ✨ Fallback path safely pointing to item.product.image
+                        uri: `http://192.168.1.46:8000${item.product.image || ""}`,
+                      }}
+                      style={{ width: 75, height: 75, borderRadius: 12 }}
+                    />
 
-                    {item.variant !== "" && (
-                      <Text className="text-xs text-slate-500 mt-1">
-                        {item.variant}
-                      </Text>
-                    )}
-
-                    <View className="flex-row items-center mt-2">
-                      <Text className="text-slate-400 line-through text-xs mr-2">
-                        ₱{item.originalPrice}
+                    <View className="flex-1 ml-3 justify-between">
+                      <Text
+                        numberOfLines={2}
+                        className="font-medium text-slate-800"
+                      >
+                        {item.product.name}
                       </Text>
 
-                      <Text className="font-bold text-primary">
-                        ₱{item.price}
-                      </Text>
+                      {variantAttributes !== "" && (
+                        <Text className="text-xs text-slate-500 mt-0.5">
+                          {variantAttributes}
+                        </Text>
+                      )}
 
-                      <Text className="ml-2 text-slate-500">
-                        x{item.quantity}
-                      </Text>
+                      <View className="flex-row items-center justify-between mt-1">
+                        <Text className="font-bold text-primary text-base">
+                          ₱{item.variant.price.toLocaleString()}
+                        </Text>
+                        <Text className="text-slate-500 font-medium">
+                          x{item.quantity}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           ))}
         </View>
 
-        {/* PAYMENT */}
-
+        {/* PAYMENT METHODS */}
         <View className="bg-white rounded-2xl p-4 mb-3">
           <Text className="font-bold text-lg mb-3">Payment Method</Text>
 
-          {paymentMethods.map((item) => (
+          {paymentMethods.map((method) => (
             <TouchableOpacity
-              key={item}
-              onPress={() => setPayment(item)}
+              key={method.id}
+              onPress={() => setSelectedPaymentMethod(method)}
               className="flex-row items-center mb-3"
             >
               <Ionicons
-                name={payment === item ? "radio-button-on" : "radio-button-off"}
+                name={
+                  selectedPaymentMethod?.id === method.id
+                    ? "radio-button-on"
+                    : "radio-button-off"
+                }
                 size={22}
                 color="#034194"
               />
-
-              <Text className="ml-3">{item}</Text>
+              <Text className="ml-3 font-medium text-slate-700">
+                {method.name}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* MESSAGE */}
-
         <View className="bg-white rounded-2xl p-4 mb-3">
-          <Text className="font-bold mb-2">Message to Seller (Optional)</Text>
-
+          <Text className="font-bold mb-2 text-slate-800">
+            Message to Seller (Optional)
+          </Text>
           <TextInput
-            value={message}
-            onChangeText={setMessage}
+            value={note}
+            onChangeText={setNote}
             placeholder="Add note for seller..."
             multiline
-            className="bg-slate-100 rounded-xl px-4 py-3"
-            style={{
-              height: 90,
-            }}
+            className="bg-slate-100 rounded-xl px-4 py-3 text-slate-700"
+            style={{ height: 90, textAlignVertical: "top" }}
           />
         </View>
 
         {/* SUMMARY */}
+        {summary && (
+          <View className="bg-white rounded-2xl p-4 mb-3">
+            <Text className="font-bold text-lg mb-3">Order Summary</Text>
 
-        <View className="bg-white rounded-2xl p-4 mb-3">
-          <Text className="font-bold text-lg mb-3">Order Summary</Text>
+            <View className="flex-row justify-between mb-2">
+              <Text className="text-slate-500">Subtotal</Text>
+              <Text className="text-slate-800 font-medium">
+                ₱{summary.subtotal.toLocaleString()}
+              </Text>
+            </View>
 
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-slate-500">Subtotal</Text>
+            <View className="flex-row justify-between mb-2">
+              <Text className="text-slate-500">Discount</Text>
+              <Text className="text-red-500 font-medium">
+                -₱{summary.discount.toLocaleString()}
+              </Text>
+            </View>
 
-            <Text>₱{subtotal.toLocaleString()}</Text>
+            <View className="flex-row justify-between mb-2">
+              <Text className="text-slate-500">Estimated Shipping</Text>
+              <Text className="text-slate-800 font-medium">
+                ₱{summary.shipping_fee.toLocaleString()}
+              </Text>
+            </View>
+
+            <View className="border-t border-slate-200 mt-3 pt-3 flex-row justify-between">
+              <Text className="font-bold text-lg text-slate-800">
+                Total Payment
+              </Text>
+              <Text className="font-bold text-primary text-lg">
+                ₱{summary.total.toLocaleString()}
+              </Text>
+            </View>
           </View>
-
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-slate-500">Discount</Text>
-
-            <Text className="text-red-500">
-              -₱{discountTotal.toLocaleString()}
-            </Text>
-          </View>
-
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-slate-500">Estimated Shipping</Text>
-
-            <Text>₱{shipping}</Text>
-          </View>
-
-          <View className="border-t border-slate-200 mt-3 pt-3 flex-row justify-between">
-            <Text className="font-bold text-lg">Total Payment</Text>
-
-            <Text className="font-bold text-primary text-lg">
-              ₱{totalPayment.toLocaleString()}
-            </Text>
-          </View>
-        </View>
+        )}
       </ScrollView>
 
+      {/* FOOTER ACTION */}
       <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4">
         <TouchableOpacity
-          onPress={placeOrder}
-          className="bg-primary rounded-2xl py-4 items-center"
+          onPress={handlePlaceOrder}
+          disabled={submitting}
+          className={`rounded-2xl py-4 items-center ${submitting ? "bg-slate-400" : "bg-primary"}`}
         >
           <Text className="text-white font-bold text-lg">
-            Place Order ₱{totalPayment.toLocaleString()}
+            {submitting
+              ? "Processing Order..."
+              : `Place Order ₱${summary?.total ? summary.total.toLocaleString() : "0"}`}
           </Text>
         </TouchableOpacity>
       </View>
