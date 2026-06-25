@@ -1,146 +1,168 @@
+import {
+  CartItem,
+  getCart,
+  removeCartItem,
+  updateCartItem,
+} from "@/services/cart";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
-import { FlatList, Image, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  RefreshControl,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-const initialCart = [
-  {
-    id: "1",
-    seller: "Fashion Store",
-    name: "Premium T-Shirt Oversized Cotton Casual Wear",
-    image:
-      "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/180221s4.jpg?im=Resize,width=750",
-    price: 399,
-    originalPrice: 599,
-    discount: "33% OFF",
-    variant1: "Size: XL",
-    variant2: "Color: Red",
-    quantity: 1,
-    selected: true,
-  },
-  {
-    id: "2",
-    seller: "Fashion Store",
-    name: "Casual Cotton Hoodie",
-    image:
-      "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/740089s5.jpg?im=Resize,width=750",
-    price: 599,
-    originalPrice: 799,
-    discount: "25% OFF",
-    variant1: "Size: Large",
-    variant2: "Color: Gray",
-    quantity: 2,
-    selected: true,
-  },
-  {
-    id: "3",
-    seller: "Tech Gadget Shop",
-    name: "Wireless Bluetooth Earbuds",
-    image:
-      "https://www.belkin.com/dw/image/v2/BGBH_PRD/on/demandware.static/-/Sites-master-product-catalog-blk/default/dw6c001382/images/hi-res/7/7ecfadda6626ab6e_AUC013btSD_SoundForm_OpenEarTWSEarbuds_Hero_WEB.jpg?sw=700&sh=700&sm=fit&sfrm=png",
-    price: 1299,
-    originalPrice: 1299,
-    discount: "",
-    variant1: "",
-    variant2: "",
-    quantity: 1,
-    selected: false,
-  },
-];
+// Since frontend UI needs to track checkboxes locally, we extend the backend type
+interface UIItems extends CartItem {
+  selected: boolean;
+}
 
 export default function CartPage() {
   const router = useRouter();
+  const [cartItems, setCartItems] = useState<UIItems[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  const [cartItems, setCartItems] = useState(initialCart);
+  // 1. Fetch Cart Data from API
+  const fetchCartData = async () => {
+    try {
+      const data = await getCart();
+      if (data.success && data.cart && data.cart.items) {
+        // Map backend items and preserve or default selection state to true
+        const itemsWithSelection = data.cart.items.map((item) => ({
+          ...item,
+          selected: true,
+        }));
+        setCartItems(itemsWithSelection);
+      }
+    } catch (error) {
+      console.error("Error fetching cart data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
+  useEffect(() => {
+    fetchCartData();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchCartData();
+  };
+
+  // 2. Group items by Seller/Brand (Fallback to 'Store' if brand/seller data is unavailable)
   const groupedSellers = useMemo(() => {
     const groups: Record<string, typeof cartItems> = {};
 
     cartItems.forEach((item) => {
-      if (!groups[item.seller]) {
-        groups[item.seller] = [];
+      // Looks for the dynamic backend seller property name, falls back if blank
+      const sellerName = item.product?.seller || "FISMPC Store";
+
+      if (!groups[sellerName]) {
+        groups[sellerName] = [];
       }
 
-      groups[item.seller].push(item);
+      groups[sellerName].push(item);
     });
 
     return Object.entries(groups);
   }, [cartItems]);
 
-  const updateQuantity = (id: string, type: "add" | "minus") => {
+  // 3. Dynamic API-linked Actions
+  const handleUpdateQuantity = async (
+    cartItemId: number,
+    currentQty: number,
+    type: "add" | "minus",
+  ) => {
+    const newQty = type === "add" ? currentQty + 1 : currentQty - 1;
+    if (newQty < 1) return;
+
+    // Optimistic Update UI
     setCartItems((prev) =>
       prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              quantity:
-                type === "add"
-                  ? item.quantity + 1
-                  : Math.max(1, item.quantity - 1),
-            }
-          : item,
+        item.id === cartItemId ? { ...item, quantity: newQty } : item,
+      ),
+    );
+
+    try {
+      await updateCartItem(cartItemId, newQty);
+    } catch (error) {
+      console.error("Failed to update cart quantity:", error);
+      // Revert if API call fails
+      fetchCartData();
+    }
+  };
+
+  const handleRemoveItem = async (cartItemId: number) => {
+    // Optimistic Remove UI
+    setCartItems((prev) => prev.filter((item) => item.id !== cartItemId));
+
+    try {
+      await removeCartItem(cartItemId);
+    } catch (error) {
+      console.error("Failed to remove item from cart:", error);
+      // Revert if API call fails
+      fetchCartData();
+    }
+  };
+
+  // 4. Client Side Selection Handlers
+  const toggleProduct = (id: number) => {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, selected: !item.selected } : item,
       ),
     );
   };
 
-  const toggleProduct = (id: string) => {
+  const toggleSeller = (sellerName: string) => {
+    // Since all fallback to 'Store' currently, toggle everything within this group
+    const allSelected = cartItems.every((item) => item.selected);
     setCartItems((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              selected: !item.selected,
-            }
-          : item,
-      ),
-    );
-  };
-
-  const toggleSeller = (seller: string) => {
-    const products = cartItems.filter((item) => item.seller === seller);
-
-    const selected = products.every((item) => item.selected);
-
-    setCartItems((prev) =>
-      prev.map((item) =>
-        item.seller === seller
-          ? {
-              ...item,
-              selected: !selected,
-            }
-          : item,
-      ),
+      prev.map((item) => ({ ...item, selected: !allSelected })),
     );
   };
 
   const toggleAll = () => {
-    const selected = cartItems.every((item) => item.selected);
-
+    const allSelected = cartItems.every((item) => item.selected);
     setCartItems((prev) =>
-      prev.map((item) => ({
-        ...item,
-        selected: !selected,
-      })),
+      prev.map((item) => ({ ...item, selected: !allSelected })),
     );
   };
 
-  const removeItem = (id: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
-  };
+  // 5. Calculations
+  const total = useMemo(() => {
+    return cartItems
+      .filter((item) => item.selected)
+      .reduce((sum, item) => {
+        const itemPrice = item.variant?.price ?? 0;
+        return sum + itemPrice * item.quantity;
+      }, 0);
+  }, [cartItems]);
 
-  const total = cartItems
-    .filter((item) => item.selected)
-    .reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-  const selectedCount = cartItems.filter((item) => item.selected).length;
+  const selectedCount = useMemo(() => {
+    return cartItems.filter((item) => item.selected).length;
+  }, [cartItems]);
 
   const goCheckout = () => {
-    if (selectedCount === 0) {
-      return;
-    }
-
+    if (selectedCount === 0) return;
     router.push("/checkout");
   };
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-slate-100 items-center justify-center">
+        <ActivityIndicator size="large" color="#034194" />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-slate-100">
@@ -151,16 +173,29 @@ export default function CartPage() {
           padding: 12,
           paddingBottom: 140,
         }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#034194"]}
+          />
+        }
+        ListEmptyComponent={
+          <View className="items-center justify-center py-20">
+            <Ionicons name="cart-outline" size={64} color="#94a3b8" />
+            <Text className="text-slate-500 mt-4 font-medium">
+              Your cart is empty
+            </Text>
+          </View>
+        }
         renderItem={({ item }) => {
           const seller = item[0];
           const products = item[1];
-
           const sellerSelected = products.every((product) => product.selected);
 
           return (
             <View className="bg-white rounded-2xl mb-4 overflow-hidden">
               {/* SHOP HEADER */}
-
               <View className="flex-row items-center px-4 py-3 border-b border-slate-100">
                 <TouchableOpacity onPress={() => toggleSeller(seller)}>
                   <Ionicons
@@ -174,9 +209,7 @@ export default function CartPage() {
                   name="storefront-outline"
                   size={20}
                   color="#034194"
-                  style={{
-                    marginLeft: 10,
-                  }}
+                  style={{ marginLeft: 10 }}
                 />
 
                 <Text className="ml-2 font-semibold text-slate-800">
@@ -184,141 +217,168 @@ export default function CartPage() {
                 </Text>
               </View>
 
-              {products.map((product) => (
-                <View
-                  key={product.id}
-                  className="flex-row p-3 border-b border-slate-100"
-                >
-                  <TouchableOpacity
-                    onPress={() => toggleProduct(product.id)}
-                    className="justify-center mr-3"
+              {/* PRODUCTS LIST */}
+              {products.map((item) => {
+                const variantImage = item.variant.image || "";
+                const attributesString = item.variant.attributes
+                  ?.map((attr) => `${attr.name}: ${attr.value}`)
+                  .join(" • ");
+
+                return (
+                  <View
+                    key={item.id}
+                    className="flex-row p-3 border-b border-slate-100"
                   >
-                    <Ionicons
-                      name={product.selected ? "checkbox" : "square-outline"}
-                      size={24}
-                      color="#034194"
-                    />
-                  </TouchableOpacity>
-
-                  <Image
-                    source={{
-                      uri: product.image,
-                    }}
-                    style={{
-                      width: 85,
-
-                      height: 85,
-
-                      borderRadius: 12,
-                    }}
-                  />
-
-                  <View className="flex-1 ml-3">
-                    <Text
-                      numberOfLines={2}
-                      className="font-medium text-slate-800"
+                    <TouchableOpacity
+                      onPress={() => toggleProduct(item.id)}
+                      className="justify-center mr-3"
                     >
-                      {product.name}
-                    </Text>
+                      <Ionicons
+                        name={item.selected ? "checkbox" : "square-outline"}
+                        size={24}
+                        color="#034194"
+                      />
+                    </TouchableOpacity>
 
-                    {(product.variant1 || product.variant2) && (
-                      <Text className="text-xs text-slate-500 mt-1">
-                        {[product.variant1, product.variant2]
-                          .filter(Boolean)
-                          .join(" • ")}
+                    <Image
+                      source={{
+                        uri: `http://192.168.1.46:8000${variantImage}`,
+                      }}
+                      style={{
+                        width: 85,
+                        height: 85,
+                        borderRadius: 12,
+                      }}
+                    />
+
+                    <View className="flex-1 ml-3">
+                      <Text
+                        numberOfLines={2}
+                        className="font-medium text-slate-800"
+                      >
+                        {item.product.name}
                       </Text>
-                    )}
 
-                    <View className="flex-row items-center mt-2">
-                      {product.originalPrice > product.price && (
-                        <Text className="text-xs text-slate-400 line-through mr-2">
-                          ₱{product.originalPrice}
+                      {attributesString ? (
+                        <Text className="text-xs text-slate-500 mt-1">
+                          {attributesString}
                         </Text>
-                      )}
+                      ) : null}
 
-                      <Text className="text-primary font-bold text-lg">
-                        ₱{product.price}
-                      </Text>
+                      <View className="flex-row items-center mt-2">
+                        {item.variant.compare_price &&
+                        item.variant.compare_price > item.variant.price ? (
+                          <Text className="text-xs text-slate-400 line-through mr-2">
+                            ₱{item.variant.compare_price}
+                          </Text>
+                        ) : null}
 
-                      {product.discount && (
-                        <Text className="ml-2 text-red-500 text-xs">
-                          {product.discount}
+                        <Text className="text-primary font-bold text-lg">
+                          ₱{item.variant.price}
                         </Text>
-                      )}
-                    </View>
+                      </View>
 
-                    <View className="flex-row justify-between mt-3">
-                      <TouchableOpacity onPress={() => removeItem(product.id)}>
-                        <Ionicons name="trash-outline" size={20} color="red" />
-                      </TouchableOpacity>
-
-                      <View className="flex-row items-center">
+                      <View className="flex-row justify-between mt-3">
                         <TouchableOpacity
-                          onPress={() => updateQuantity(product.id, "minus")}
-                          className="w-8 h-8 border rounded-lg items-center justify-center"
+                          onPress={() => handleRemoveItem(item.id)}
                         >
-                          <Text>-</Text>
+                          <Ionicons
+                            name="trash-outline"
+                            size={20}
+                            color="red"
+                          />
                         </TouchableOpacity>
 
-                        <Text className="mx-4">{product.quantity}</Text>
+                        <View className="flex-row items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                          <TouchableOpacity
+                            onPress={() =>
+                              handleUpdateQuantity(
+                                item.id,
+                                item.quantity,
+                                "minus",
+                              )
+                            }
+                            className="px-4 py-1 bg-slate-100 active:bg-slate-200"
+                          >
+                            <Text className="text-lg font-bold text-slate-600">
+                              -
+                            </Text>
+                          </TouchableOpacity>
 
-                        <TouchableOpacity
-                          onPress={() => updateQuantity(product.id, "add")}
-                          className="w-8 h-8 border rounded-lg items-center justify-center"
-                        >
-                          <Text>+</Text>
-                        </TouchableOpacity>
+                          <Text className="px-5 font-semibold text-base text-slate-800">
+                            {item.quantity}
+                          </Text>
+
+                          <TouchableOpacity
+                            onPress={() =>
+                              handleUpdateQuantity(
+                                item.id,
+                                item.quantity,
+                                "add",
+                              )
+                            }
+                            className="px-4 py-1 bg-slate-100 active:bg-slate-200"
+                          >
+                            <Text className="text-lg font-bold text-slate-600">
+                              +
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           );
         }}
       />
 
       {/* FOOTER */}
+      {cartItems.length > 0 && (
+        <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3">
+          <View className="flex-row justify-between items-center">
+            <TouchableOpacity
+              onPress={toggleAll}
+              className="flex-row items-center"
+            >
+              <Ionicons
+                name={
+                  cartItems.every((i) => i.selected)
+                    ? "checkbox"
+                    : "square-outline"
+                }
+                size={24}
+                color="#034194"
+              />
+              <Text className="ml-2 text-slate-700 font-medium">
+                Select All
+              </Text>
+            </TouchableOpacity>
 
-      <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3">
-        <View className="flex-row justify-between items-center">
-          <TouchableOpacity
-            onPress={toggleAll}
-            className="flex-row items-center"
-          >
-            <Ionicons
-              name={
-                cartItems.every((i) => i.selected)
-                  ? "checkbox"
-                  : "square-outline"
-              }
-              size={24}
-              color="#034194"
-            />
-
-            <Text className="ml-2">Select All</Text>
-          </TouchableOpacity>
-
-          <View>
-            <Text className="text-xs text-slate-500">
-              {selectedCount} item(s)
-            </Text>
-
-            <Text className="text-primary font-bold text-xl">
-              ₱{total.toLocaleString()}
-            </Text>
+            <View className="items-end">
+              <Text className="text-xs text-slate-500">
+                {selectedCount} item(s)
+              </Text>
+              <Text className="text-primary font-bold text-xl">
+                ₱{total.toLocaleString()}
+              </Text>
+            </View>
           </View>
-        </View>
 
-        <TouchableOpacity
-          onPress={goCheckout}
-          className="bg-primary rounded-2xl mt-3 py-4 items-center"
-        >
-          <Text className="text-white font-semibold">
-            Checkout ({selectedCount})
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            onPress={goCheckout}
+            disabled={selectedCount === 0}
+            className={`rounded-2xl mt-3 py-4 items-center ${
+              selectedCount === 0 ? "bg-slate-300" : "bg-primary"
+            }`}
+          >
+            <Text className="text-white font-semibold">
+              Checkout ({selectedCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }

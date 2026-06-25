@@ -19,6 +19,7 @@ export interface CartProduct {
   id: number;
   name: string;
   slug: string;
+  seller: string;
 }
 
 export interface CartItem {
