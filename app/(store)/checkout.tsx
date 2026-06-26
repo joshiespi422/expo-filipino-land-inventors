@@ -109,11 +109,25 @@ export default function Checkout() {
             defaultAddr,
           );
 
-          // Auto select primary payment method
-          if (data.paymentMethods.length > 0) {
+          // Filter payment methods to find allowed target names safely ("cash on delivery", "pay online")
+          const allowedMethods = data.paymentMethods.filter((method) => {
+            const name = method.name.toLowerCase();
+            return (
+              name.includes("cash on delivery") || name.includes("pay online")
+            );
+          });
+
+          // Auto select primary allowed payment method
+          if (allowedMethods.length > 0) {
+            setSelectedPaymentMethod(allowedMethods[0]);
+            console.log(
+              "💳 [DATA BOUND] Automatically assigned filtered payment profile:",
+              allowedMethods[0],
+            );
+          } else if (data.paymentMethods.length > 0) {
             setSelectedPaymentMethod(data.paymentMethods[0]);
             console.log(
-              "💳 [DATA BOUND] Automatically assigned payment profile:",
+              "💳 [DATA BOUND] Fallback selection assigned:",
               data.paymentMethods[0],
             );
           }
@@ -327,26 +341,34 @@ export default function Checkout() {
         <View className="bg-white rounded-2xl p-4 mb-3">
           <Text className="font-bold text-lg mb-3">Payment Method</Text>
 
-          {paymentMethods.map((method) => (
-            <TouchableOpacity
-              key={method.id}
-              onPress={() => setSelectedPaymentMethod(method)}
-              className="flex-row items-center mb-3"
-            >
-              <Ionicons
-                name={
-                  selectedPaymentMethod?.id === method.id
-                    ? "radio-button-on"
-                    : "radio-button-off"
-                }
-                size={22}
-                color="#034194"
-              />
-              <Text className="ml-3 font-medium text-slate-700">
-                {method.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {paymentMethods
+            // 👇 Filter array dynamically matching names only
+            .filter((method) => {
+              const name = method.name.toLowerCase();
+              return (
+                name.includes("cash on delivery") || name.includes("pay online")
+              );
+            })
+            .map((method) => (
+              <TouchableOpacity
+                key={method.id}
+                onPress={() => setSelectedPaymentMethod(method)}
+                className="flex-row items-center mb-3"
+              >
+                <Ionicons
+                  name={
+                    selectedPaymentMethod?.id === method.id
+                      ? "radio-button-on"
+                      : "radio-button-off"
+                  }
+                  size={22}
+                  color="#034194"
+                />
+                <Text className="ml-3 font-medium text-slate-700">
+                  {method.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
         </View>
 
         {/* MESSAGE */}
