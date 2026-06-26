@@ -1,124 +1,102 @@
+import {
+  fetchOrdersAPI,
+  OrderListItem,
+  PaginationMeta,
+} from "@/services/order";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Image,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 
-const filters = [
-  "All",
-  "To Pay",
-  "To Ship",
-  "To Receive",
-  "Completed",
-  "Cancelled",
-  "Returned",
-];
-
-const initialOrders = [
-  {
-    id: "1",
-    shop: "Fashion Store",
-    status: "To Ship",
-    date: "June 19, 2026",
-    products: [
-      {
-        name: "Premium T-Shirt Oversized Cotton Casual Wear",
-        image:
-          "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/180221s4.jpg?im=Resize,width=750",
-        price: 399,
-        qty: 1,
-        variant: "Size XL • Color Red",
-      },
-      {
-        name: "Casual Cotton Hoodie",
-        image:
-          "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/740089s5.jpg?im=Resize,width=750",
-        price: 599,
-        qty: 2,
-        variant: "Size Large • Color Gray",
-      },
-    ],
-    total: 1597,
-  },
-  {
-    id: "2",
-    shop: "Tech Gadget Shop",
-    status: "To Receive",
-    date: "June 18, 2026",
-    products: [
-      {
-        name: "Wireless Bluetooth Earbuds",
-        image:
-          "https://www.belkin.com/dw/image/v2/BGBH_PRD/on/demandware.static/-/Sites-master-product-catalog-blk/default/dw6c001382/images/hi-res/7/7ecfadda6626ab6e_AUC013btSD_SoundForm_OpenEarTWSEarbuds_Hero_WEB.jpg?sw=700&sh=700&sm=fit&sfrm=png",
-        price: 1299,
-        qty: 1,
-        variant: "",
-      },
-    ],
-    total: 1299,
-  },
-  {
-    id: "3",
-    shop: "Beauty Store",
-    status: "Completed",
-    date: "June 10, 2026",
-    products: [
-      {
-        name: "Skin Care Set",
-        image:
-          "https://gotoskincare.com/cdn/shop/articles/0425_GT_Blog_How_To_Build_A_Skincare_Routine4_1d86a2ce-9fd3-4662-9ce9-6934df8e5969.jpg?v=1749704207&width=1000",
-        price: 799,
-        qty: 1,
-        variant: "",
-      },
-    ],
-    total: 799,
-  },
+const filterTabs = [
+  { label: "All", slug: "all" },
+  { label: "To Pay", slug: "to-pay" },
+  { label: "To Ship", slug: "to-ship" },
+  { label: "To Receive", slug: "to-receive" },
+  { label: "Completed", slug: "completed" },
+  { label: "Cancelled", slug: "cancelled" },
+  { label: "Returned", slug: "returned" },
 ];
 
 export default function OrderList() {
   const router = useRouter();
+  const { status: routeStatus } = useLocalSearchParams<{ status?: string }>();
 
-  // Extracts parameters passed during navigation routing actions
-  const { status } = useLocalSearchParams<{ status?: string }>();
+  const [selectedSlug, setSelectedSlug] = useState<string>("all");
+  const [orders, setOrders] = useState<OrderListItem[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
 
-  const [selectedFilter, setSelectedFilter] = useState("All");
-  const [orders, setOrders] = useState(initialOrders);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  // Monitors search parameters to apply the correct active filter tab dynamically
+  // FIXED: Standardized dependencies to stop execution race patterns
+  const getOrders = useCallback(
+    async (page: number = 1, clearExisting: boolean = false) => {
+      try {
+        if (page === 1 && !clearExisting) setIsLoading(true);
+        if (page > 1) setIsLoadingMore(true);
+
+        const response = await fetchOrdersAPI(selectedSlug, page);
+
+        if (response.success) {
+          setOrders((prev) =>
+            page === 1
+              ? response.data.orders
+              : [...prev, ...response.data.orders],
+          );
+          setPagination(response.data.pagination);
+        }
+      } catch (error) {
+        console.error("❌ [FETCH_ORDERS_ERROR]:", error);
+      } finally {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+        setIsRefreshing(false);
+      }
+    },
+    [selectedSlug],
+  );
+
+  // Sync route param with tab selection state safely
   useEffect(() => {
-    if (status && filters.includes(status)) {
-      setSelectedFilter(status);
+    if (routeStatus) {
+      const activeTab = filterTabs.find(
+        (t) =>
+          t.slug === routeStatus ||
+          t.label.toLowerCase() === routeStatus.toLowerCase(),
+      );
+      if (activeTab) {
+        setSelectedSlug(activeTab.slug);
+        return;
+      }
     }
-  }, [status]);
+    setSelectedSlug("all");
+  }, [routeStatus]);
 
-  const filteredOrders = useMemo(() => {
-    if (selectedFilter === "All") {
-      return orders;
-    }
-    return orders.filter((item) => item.status === selectedFilter);
-  }, [selectedFilter, orders]);
+  // Handle fetching triggers cleanly when component shifts tabs
+  useEffect(() => {
+    getOrders(1, false);
+  }, [getOrders]);
 
-  const cancelOrder = (id: string) => {
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === id ? { ...order, status: "Cancelled" } : order,
-      ),
-    );
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    getOrders(1, true);
   };
 
-  const refundOrder = (id: string) => {
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === id ? { ...order, status: "Returned" } : order,
-      ),
-    );
+  const handleLoadMore = () => {
+    if (!isLoadingMore && pagination?.has_more) {
+      getOrders(pagination.current_page + 1, false);
+    }
   };
 
   return (
@@ -131,7 +109,6 @@ export default function OrderList() {
         >
           <Ionicons name="home-outline" size={22} color="#1e293b" />
         </TouchableOpacity>
-
         <Text className="font-bold text-xl text-slate-800">Return Home</Text>
       </View>
 
@@ -142,12 +119,12 @@ export default function OrderList() {
           showsHorizontalScrollIndicator={false}
           className="px-3"
         >
-          {filters.map((item) => {
-            const isTabActive = selectedFilter === item;
+          {filterTabs.map((tab) => {
+            const isTabActive = selectedSlug === tab.slug;
             return (
               <TouchableOpacity
-                key={item}
-                onPress={() => setSelectedFilter(item)}
+                key={tab.slug}
+                onPress={() => setSelectedSlug(tab.slug)}
                 className={`mr-2 px-4 py-2 rounded-full border ${
                   isTabActive
                     ? "bg-[#034194] border-[#034194]"
@@ -155,11 +132,9 @@ export default function OrderList() {
                 }`}
               >
                 <Text
-                  className={`font-medium text-xs ${
-                    isTabActive ? "text-white" : "text-slate-600"
-                  }`}
+                  className={`font-medium text-xs ${isTabActive ? "text-white" : "text-slate-600"}`}
                 >
-                  {item}
+                  {tab.label}
                 </Text>
               </TouchableOpacity>
             );
@@ -168,119 +143,150 @@ export default function OrderList() {
       </View>
 
       {/* RENDER LIST COMPONENT */}
-      <FlatList
-        data={filteredOrders}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{
-          padding: 12,
-          paddingBottom: 100,
-        }}
-        renderItem={({ item }) => (
-          <View className="bg-white rounded-2xl mb-4 p-4 border border-slate-200 shadow-sm">
-            {/* SHOP HEADER */}
-            <View className="flex-row justify-between items-center mb-3">
-              <View className="flex-row items-center">
-                <Ionicons name="storefront-outline" size={18} color="#034194" />
-                <Text className="ml-2 font-bold text-slate-800">
-                  {item.shop}
+      {isLoading ? (
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#034194" />
+        </View>
+      ) : (
+        <FlatList
+          data={orders}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={{ padding: 12, paddingBottom: 100 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={["#034194"]}
+            />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.1}
+          renderItem={({ item }) => (
+            <View className="bg-white rounded-2xl mb-4 p-4 border border-slate-200 shadow-sm">
+              {/* SHOP HEADER */}
+              <View className="flex-row justify-between items-center mb-3">
+                <View className="flex-row items-center">
+                  <Ionicons
+                    name="storefront-outline"
+                    size={18}
+                    color="#034194"
+                  />
+                  <Text className="ml-2 font-bold text-slate-800">
+                    {item.store_name || "Unknown Shop"}
+                  </Text>
+                </View>
+                <Text className="text-[#034194] font-semibold text-xs bg-blue-50 px-2 py-1 rounded-md">
+                  {item.status_label}
                 </Text>
               </View>
-              <Text className="text-[#034194] font-semibold text-xs bg-blue-50 px-2 py-1 rounded-md">
-                {item.status}
-              </Text>
-            </View>
 
-            {/* PRODUCTS */}
-            {item.products.map((product, index) => (
-              <View key={`${product.name}-${index}`} className="flex-row mb-3">
-                <Image
-                  source={{ uri: product.image }}
-                  style={{
-                    width: 75,
-                    height: 75,
-                    borderRadius: 12,
-                  }}
-                />
-                <View className="flex-1 ml-3 justify-between">
-                  <View>
-                    <Text
-                      numberOfLines={2}
-                      className="font-medium text-slate-800 text-sm"
-                    >
-                      {product.name}
-                    </Text>
-                    {product.variant !== "" && (
-                      <Text className="text-[11px] text-slate-400 mt-0.5">
-                        {product.variant}
+              {/* PRODUCTS */}
+              {item.items?.map((product, index) => (
+                <View
+                  key={`${product.product_name}-${index}`}
+                  className="flex-row mb-3"
+                >
+                  <Image
+                    source={{
+                      // 💡 APPLY IMAGE VARIANT PARSING LOGIC HERE:
+                      uri:
+                        product.product_image &&
+                        product.product_image.startsWith("http")
+                          ? product.product_image
+                          : `http://192.168.1.46:8000${product.product_image || ""}`,
+                    }}
+                    style={{
+                      width: 75,
+                      height: 75,
+                      borderRadius: 12,
+                      backgroundColor: "#f1f5f9",
+                    }}
+                  />
+                  <View className="flex-1 ml-3 justify-between">
+                    <View>
+                      <Text
+                        numberOfLines={2}
+                        className="font-medium text-slate-800 text-sm"
+                      >
+                        {product.product_name}
                       </Text>
-                    )}
-                  </View>
-                  <View className="flex-row justify-between items-center mt-1">
-                    <Text className="text-[#034194] font-bold">
-                      ₱{product.price}
-                    </Text>
-                    <Text className="text-slate-400 text-xs">
-                      x{product.qty}
-                    </Text>
+                      {product.variant_name ? (
+                        <Text className="text-[11px] text-slate-400 mt-0.5">
+                          {product.variant_name}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View className="flex-row justify-between items-center mt-1">
+                      <Text className="text-[#034194] font-bold">
+                        ₱{product.price}
+                      </Text>
+                      <Text className="text-slate-400 text-xs">
+                        x{product.quantity}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            ))}
+              ))}
 
-            {/* BILLING AND ACTIONS SUB-SECTION */}
-            <View className="border-t border-slate-100 pt-3 mt-2">
-              <View className="flex-row justify-between items-center">
-                <Text className="text-slate-400 text-xs">Order Total</Text>
-                <Text className="font-bold text-base text-slate-800">
-                  ₱{item.total}
-                </Text>
+              {/* BILLING AND ACTIONS SUB-SECTION */}
+              <View className="border-t border-slate-100 pt-3 mt-2">
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-slate-400 text-xs">Order Total</Text>
+                  <Text className="font-bold text-base text-slate-800">
+                    ₱{item.total}
+                  </Text>
+                </View>
               </View>
-            </View>
 
-            {/* ACTION TRIGGERS CONTAINER */}
-            <View className="flex-row justify-end mt-4 gap-2">
-              {item.status === "To Ship" && (
+              {/* ACTION TRIGGERS CONTAINER */}
+              <View className="flex-row justify-end mt-4 gap-2">
+                {item.status === "to-pay" && (
+                  <TouchableOpacity className="border border-red-500 px-4 py-2 rounded-xl">
+                    <Text className="text-red-500 text-xs font-semibold">
+                      Cancel Order
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {item.status === "completed" && (
+                  <TouchableOpacity className="border border-orange-500 px-4 py-2 rounded-xl">
+                    <Text className="text-orange-500 text-xs font-semibold">
+                      Refund
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 <TouchableOpacity
-                  onPress={() => cancelOrder(item.id)}
-                  className="border border-red-500 px-4 py-2 rounded-xl"
+                  onPress={() => router.push(`/orders/${item.id}`)}
+                  className="bg-[#034194] px-4 py-2 rounded-xl"
                 >
-                  <Text className="text-red-500 text-xs font-semibold">
-                    Cancel Order
+                  <Text className="text-white text-xs font-semibold">
+                    View Details
                   </Text>
                 </TouchableOpacity>
-              )}
-
-              {item.status === "Completed" && (
-                <TouchableOpacity
-                  onPress={() => refundOrder(item.id)}
-                  className="border border-orange-500 px-4 py-2 rounded-xl"
-                >
-                  <Text className="text-orange-500 text-xs font-semibold">
-                    Refund
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity className="bg-[#034194] px-4 py-2 rounded-xl">
-                <Text className="text-white text-xs font-semibold">
-                  View Details
-                </Text>
-              </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
-        ListEmptyComponent={
-          <View className="items-center justify-center py-20">
-            <Ionicons name="receipt-outline" size={48} color="#94a3b8" />
-            <Text className="text-slate-500 font-semibold mt-2">
-              No orders found
-            </Text>
-            <Text className="text-slate-400 text-xs mt-1">
-              There are no orders matching this selection status.
-            </Text>
-          </View>
-        }
-      />
+          )}
+          ListEmptyComponent={
+            <View className="items-center justify-center py-20">
+              <Ionicons name="receipt-outline" size={48} color="#94a3b8" />
+              <Text className="text-slate-500 font-semibold mt-2">
+                No orders found
+              </Text>
+              <Text className="text-slate-400 text-xs mt-1 text-center px-6">
+                There are no orders matching this selection status.
+              </Text>
+            </View>
+          }
+          ListFooterComponent={
+            isLoadingMore ? (
+              <View className="py-4">
+                <ActivityIndicator size="small" color="#034194" />
+              </View>
+            ) : null
+          }
+        />
+      )}
     </View>
   );
 }
