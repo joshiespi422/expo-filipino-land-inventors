@@ -49,7 +49,7 @@ export default function Products() {
   useEffect(() => {
     if (!slug) {
       setError("No product identifier provided.");
-      loading && setLoading(false);
+      setLoading(false);
       return;
     }
 
@@ -70,11 +70,19 @@ export default function Products() {
 
         const initialSelections: Record<string, string> = {};
 
-        const defaultVariant = detailedProduct.variants.find(
-          (v) => v.is_default,
-        );
-        if (defaultVariant && defaultVariant.image) {
-          initialImage = defaultVariant.image;
+        // Find standard fallback variant configurations
+        const defaultVariant =
+          detailedProduct.variants.find((v) => v.is_default) ||
+          detailedProduct.variants[0];
+
+        if (defaultVariant) {
+          if (defaultVariant.image) {
+            initialImage = defaultVariant.image;
+          }
+          // Pre-populate selections from default variant to avoid broken state UI
+          defaultVariant.attributes.forEach((attr) => {
+            initialSelections[attr.name] = attr.value;
+          });
         }
 
         setMainImage(initialImage);
@@ -176,13 +184,11 @@ export default function Products() {
   const isOptionAvailable = (attributeName: string, optionValue: string) => {
     if (!product) return false;
 
-    // Simulate what selections look like with this option variant checked
     const testSelections = {
       ...selectedAttributes,
       [attributeName]: optionValue,
     };
 
-    // Find if there is at least one variant that matches all simulated parameters and has stock
     return product.variants.some((variant) => {
       const matchesSelections = Object.entries(testSelections).every(
         ([key, val]) =>
@@ -223,7 +229,7 @@ export default function Products() {
         setQuantity(matchingVariant.stock);
       }
     } else {
-      setQuantity(1);
+      setQuantity(currentStock > 0 ? 1 : 0);
     }
   };
 
@@ -235,7 +241,6 @@ export default function Products() {
     });
   };
 
-  // Triggers the modal with contextual redirect paths
   const openPurchaseModal = (action: ActionType) => {
     setModalAction(action);
     setModal(true);
@@ -255,16 +260,13 @@ export default function Products() {
         });
 
         setModal(false);
-
         Alert.alert("Success", response?.message || "Added to cart.");
-
         router.push("/cart");
         return;
       }
 
       if (modalAction === "buy_now") {
         setModal(false);
-
         router.push({
           pathname: "/checkout",
           params: {
@@ -272,17 +274,20 @@ export default function Products() {
             quantity,
           },
         });
-
         return;
       }
     } catch (error: any) {
       console.error(error);
-
       Alert.alert(
         "Error",
         error?.response?.data?.message || "Something went wrong.",
       );
     }
+  };
+
+  const formatImageUrl = (url: string | null) => {
+    if (!url) return "";
+    return url.startsWith("http") ? url : `http://192.168.1.46:8000${url}`;
   };
 
   if (loading) {
@@ -315,7 +320,6 @@ export default function Products() {
 
   const fallbackImageUri = product.images?.[0]?.url || "";
 
-  // Dynamic unique array calculation for continuous inline rendering of Gallery thumbnails
   const dynamicGalleryUrls = (product.images || [])
     .map((img) => img.url)
     .concat(
@@ -329,20 +333,14 @@ export default function Products() {
     <View className="flex-1 bg-white p-1">
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 90 }}
+        contentContainerStyle={{ paddingBottom: 110 }}
       >
         {/* MAIN IMAGE */}
         <View className="p-1 border border-primary/20 shadow-brand rounded-2xl">
           {mainImage || fallbackImageUri ? (
             <Image
               source={{
-                uri: mainImage
-                  ? mainImage.startsWith("http")
-                    ? mainImage
-                    : `http://192.168.1.46:8000${mainImage}`
-                  : fallbackImageUri.startsWith("http")
-                    ? fallbackImageUri
-                    : `http://192.168.1.46:8000${fallbackImageUri}`,
+                uri: formatImageUrl(mainImage || fallbackImageUri),
               }}
               className="rounded-xl"
               style={{ width: "100%", height: 350 }}
@@ -373,11 +371,7 @@ export default function Products() {
                 }`}
               >
                 <Image
-                  source={{
-                    uri: imgUrl.startsWith("http")
-                      ? imgUrl
-                      : `http://192.168.1.46:8000${imgUrl}`,
-                  }}
+                  source={{ uri: formatImageUrl(imgUrl) }}
                   style={{ width: 70, height: 70 }}
                 />
               </TouchableOpacity>
@@ -515,12 +509,21 @@ export default function Products() {
                   </View>
                 </View>
                 <TouchableOpacity
-                  onPress={() =>
+                  onPress={() => {
+                    console.log("Store:", product.store);
+
+                    if (!product.store?.slug) {
+                      console.warn("Store slug is missing.");
+                      return;
+                    }
+
                     router.push({
-                      pathname: "/store",
-                      params: { seller: product.store.name },
-                    })
-                  }
+                      pathname: "/store/[slug]",
+                      params: {
+                        slug: product.store.slug,
+                      },
+                    });
+                  }}
                 >
                   <View className="bg-blue py-1 px-5 border border-primary rounded-lg">
                     <Text className="text-primary font-semibold">Visit</Text>
@@ -592,7 +595,7 @@ export default function Products() {
       </ScrollView>
 
       {/* FOOTER ACTIONS */}
-      <View className="absolute bottom-0 left-0 right-0 bg-white p-3 border-t border-slate-100">
+      <View className="absolute bottom-0 left-0 right-0 bg-white p-3 border-t border-slate-100 z-10">
         <View className="flex-row gap-2">
           <TouchableOpacity
             onPress={() => router.push("/chat-seller")}
@@ -647,13 +650,7 @@ export default function Products() {
               <View className="flex-row p-5 border-b border-slate-100">
                 <Image
                   source={{
-                    uri: mainImage
-                      ? mainImage.startsWith("http")
-                        ? mainImage
-                        : `http://192.168.1.46:8000${mainImage}`
-                      : fallbackImageUri.startsWith("http")
-                        ? fallbackImageUri
-                        : `http://192.168.1.46:8000${fallbackImageUri}`,
+                    uri: formatImageUrl(mainImage || fallbackImageUri),
                   }}
                   style={{ width: 90, height: 90 }}
                   className="rounded-xl border border-slate-200"
@@ -704,7 +701,6 @@ export default function Products() {
                         const isCurrentlySelected =
                           selectedAttributes[attributeName] === optionValue;
 
-                        // Run lookahead checks to see if this option combination is valid
                         const isAvailable = isOptionAvailable(
                           attributeName,
                           optionValue,
