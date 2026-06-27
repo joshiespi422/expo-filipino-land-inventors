@@ -231,7 +231,7 @@ export default function ProfileScreen() {
       {/* --- PENDING NOTIFICATION --- */}
       {isBasic && isForApproval && (
         <View className="mt-6 px-4">
-          <View className="bg-blue-50 border border-blue-200 p-5 rounded-[30px]">
+          <View className="bg-blue border border-primary p-5 rounded-[30px]">
             <View className="flex-row items-center">
               <View className="bg-primary p-2 rounded-full">
                 <Ionicons name="time" size={20} color="white" />
