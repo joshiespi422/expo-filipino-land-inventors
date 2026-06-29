@@ -12,10 +12,13 @@ export interface Product {
   id: number;
   name: string;
   slug: string;
+  rating: number | null;
+  sold_count: number | null;
   image: string | null;
   price: number | null;
   compare_price: number | null;
   stock: number;
+  is_liked: boolean;
 }
 
 export interface Pagination {
@@ -70,11 +73,13 @@ export interface DetailedProduct {
   description: string | null;
   is_featured: boolean;
   is_active: boolean;
+  rating: number | null;
   categories: Category[];
   images: ProductImage[];
   video: string | null;
   variants: ProductVariant[];
   store: Store;
+  is_liked?: boolean;
 }
 
 export interface ProductShowResponse {
@@ -82,6 +87,30 @@ export interface ProductShowResponse {
   product: DetailedProduct;
 }
 
+export interface ToggleCollectionResponse {
+  status: string;
+  message: string;
+  is_active: boolean;
+}
+
+export interface CollectionProduct {
+  id: number;
+  user_id: number;
+  product_id: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  product: Product;
+}
+
+export interface CollectionResponse {
+  status: string;
+  collections: CollectionProduct[];
+}
+
+/**
+ * STORE HOME
+ */
 export const getStoreHome = async (
   categoryId?: string | number,
   page: number = 1,
@@ -93,26 +122,40 @@ export const getStoreHome = async (
   }
 
   const response = await api.get("/store/home", { params });
-
-  console.log(
-    `STORE API RESPONSE (Page ${page}):`,
-    JSON.stringify(response.data, null, 2),
-  );
   return response.data;
 };
 
 /**
- * Fetch detailed single product using Route Model Binding with Slug.
- * Appends the missing '/store' prefix to perfectly match your backend routing groups.
+ * PRODUCT DETAILS
  */
 export const getProductShow = async (
   slug: string,
 ): Promise<ProductShowResponse> => {
   const response = await api.get(`/store/products/${slug}`);
+  return response.data;
+};
+
+/**
+ * MY COLLECTIONS
+ */
+export const getCollections = async (): Promise<CollectionResponse> => {
+  const response = await api.get("/store/collections");
+  return response.data;
+};
+
+/**
+ * TOGGLE COLLECTION
+ * Expects the product slug string to match Laravel Route Model Binding rules
+ */
+export const toggleCollection = async (
+  slug: string,
+): Promise<ToggleCollectionResponse> => {
+  const response = await api.post(`/store/collections/${slug}/toggle`);
 
   console.log(
-    `PRODUCT DETAILS API RESPONSE (${slug}):`,
+    `TOGGLE COLLECTION (${slug}):`,
     JSON.stringify(response.data, null, 2),
   );
+
   return response.data;
 };
