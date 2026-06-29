@@ -1,4 +1,10 @@
+import { ProductCard } from "@/components/ProductItems";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  CollectionProduct,
+  getCollections,
+  toggleCollection,
+} from "@/services/productService";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -10,79 +16,82 @@ import {
   View,
 } from "react-native";
 
-import { Product, ProductCard } from "@/components/ProductItems";
-import { products } from "@/services/productService";
-
-// Shopee-style sub-tabs for liked items
-const favoriteTabs = ["All Items", "On Sale", "Available", "Out of Stock"];
-
 export default function FavoritesPage() {
   const router = useRouter();
 
-  const [selectedTab, setSelectedTab] = useState("All Items");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Local state to hold our working favorites array list
-  const [favoriteItems, setFavoriteItems] = useState<Product[]>([]);
+  // Strongly typed using your explicit CollectionProduct interface definition
+  const [favoriteItems, setFavoriteItems] = useState<CollectionProduct[]>([]);
 
-  // Initialize and automatically make every product heart red on mount
-  useEffect(() => {
-    let isMounted = true;
+  // Fetches authentic collection datasets using your custom productService client
+  const fetchCollections = async (showLoadingIndicator = true) => {
+    if (showLoadingIndicator) setLoading(true);
+    try {
+      const response = await getCollections();
 
-    if (isMounted) {
-      // Map through your static service array and force isLiked to true initially
-      const initializedFavorites = products.map((item) => ({
-        ...item,
-        isLiked: true,
-      }));
+      if (
+        response &&
+        (response.status === "success" || (response as any).success === true)
+      ) {
+        // Filter out items that don't have a valid nested product object
+        const activeCollections = response.collections.filter(
+          (item) => item && item.product,
+        );
 
-      setFavoriteItems(initializedFavorites);
+        setFavoriteItems(activeCollections);
+      }
+    } catch (error) {
+      console.error("Failed to load backend favorites data:", error);
+    } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
 
-    return () => {
-      isMounted = false;
-    };
+  // Trigger data loader on layout mounting cycle
+  useEffect(() => {
+    fetchCollections(true);
   }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // Reset back to base array layout with red hearts on pull-to-refresh
-    const refreshedFavorites = products.map((item) => ({
-      ...item,
-      isLiked: true,
-    }));
-    setFavoriteItems(refreshedFavorites);
-    setTimeout(() => setRefreshing(false), 1000);
+    fetchCollections(false);
   }, []);
 
-  // Toggles heart off, which automatically removes it from the filtered list below
-  const handleToggleFavorite = useCallback((id: string) => {
+  // Toggles heart off optimistically and updates the database record status
+  const handleToggleFavorite = async (collectionId: number, slug: string) => {
+    if (!slug) return;
+
+    // Cache copy of item state context to enable rollbacks on connection errors
+    const technicalFallbackItems = [...favoriteItems];
+
+    // 1. Optimistic UI update: Remove immediately from list for zero visual latency
     setFavoriteItems((prevItems) =>
-      prevItems.map((item) =>
-        item.id === id ? { ...item, isLiked: !item.isLiked } : item,
+      prevItems.filter(
+        (item) => item.id !== collectionId && item.product?.slug !== slug,
       ),
     );
-  }, []);
 
-  // Filter listings based on tab index AND whether they are still hearted (isLiked === true)
-  const likedProducts = favoriteItems.filter((item) => {
-    // Only show items that are explicitly liked
-    if (!item.isLiked) return false;
+    try {
+      // 2. Transmit toggle packet down through network layer boundaries
+      await toggleCollection(slug);
+    } catch (error) {
+      console.error(
+        "Failed to persist layout favorite selection toggles:",
+        error,
+      );
+      // Rollback optimistic state changes instantly if backend exception rules trigger
+      setFavoriteItems(technicalFallbackItems);
+    }
+  };
 
-    if (selectedTab === "On Sale") return !!item.isOnSale;
-    if (selectedTab === "Out of Stock") return item.quantity === 0;
-    if (selectedTab === "Available")
-      return item.quantity ? item.quantity > 0 : true;
-
-    return true;
-  });
-
-  const handleProductPress = (id: string) => {
+  const handleProductPress = (slug: string) => {
+    if (!slug) return;
     router.push({
-      pathname: "/products",
-      params: { id },
+      pathname: "/products/[slug]",
+      params: { slug },
     });
   };
 
@@ -97,80 +106,96 @@ export default function FavoritesPage() {
         <View className="flex-row items-center">
           <Text className="text-xl font-bold text-slate-800">My Favorites</Text>
           <Text className="text-xs text-slate-400 ml-2 bg-slate-100 px-2 py-0.5 rounded-full font-medium">
-            {loading ? "..." : likedProducts.length}
+            {loading ? "..." : favoriteItems.length}
           </Text>
         </View>
 
         {/* Action button commonly found on Shopee headers */}
         <TouchableOpacity onPress={handleCartPress} className="p-2 relative">
-          <Ionicons name="cart-outline" size={24} color="#64748b" />
+          <Ionicons name="cart-outline" size={24} color="#034194" />
           <View className="absolute top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 z-10">
             <Text className="text-white text-[9px] font-bold">3</Text>
           </View>
         </TouchableOpacity>
       </View>
 
-      {/* HORIZONTAL FILTER TABS (Directly under header) */}
-      <View className="bg-white border-b border-slate-200">
-        <FlatList
-          horizontal
-          data={favoriteTabs}
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10 }}
-          renderItem={({ item }) => {
-            const isActive = selectedTab === item;
-            return (
-              <TouchableOpacity
-                onPress={() => setSelectedTab(item)}
-                className={`mr-2 px-4 py-2 rounded-full border ${
-                  isActive
-                    ? "bg-[#034194] border-[#034194]"
-                    : "bg-slate-50 border-slate-200"
-                }`}
-              >
-                <Text
-                  className={`font-medium text-xs ${
-                    isActive ? "text-white" : "text-slate-600"
-                  }`}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      </View>
-
-      {/* PRODUCTS LIST */}
+      {/* PRODUCTS GRID */}
       <FlatList
-        data={loading ? [] : likedProducts}
-        renderItem={({ item }) => (
-          <ProductCard
-            item={item}
-            onPress={() => handleProductPress(item.id)}
-            onFavoritePress={() => handleToggleFavorite(item.id)} // Activates heart features inside this collection screen
-          />
-        )}
-        keyExtractor={(item) => item.id}
+        data={loading ? [] : favoriteItems}
+        renderItem={({ item }) => {
+          const product = item.product;
+
+          if (!product) return null;
+
+          // 1. Direct alignment mapping from ProductCardResource output payload fields
+          const productPrice = Number(product.price ?? 0);
+
+          // 2. SOLD COUNT CHECK
+          const productSold = Number(product.sold_count ?? 0);
+
+          // 3. RATING CHECK
+          const productRating =
+            product.rating !== null && product.rating !== undefined
+              ? Number(product.rating)
+              : 5;
+
+          // 4. MATCHING STOCK
+          const productStock = Number(product.stock ?? 0);
+
+          // 5. MATCHING THE IMAGE FIELD RESOLVED BY THE RESOURCE
+          const productImage = product.image ?? "";
+
+          return (
+            <ProductCard
+              item={{
+                id: product.id.toString(),
+                name: product.name,
+                price:
+                  productPrice > 0
+                    ? `₱${productPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "₱0.00",
+                image: productImage,
+                sold_count: `${productSold} sold`,
+                rating: productRating,
+                stock: productStock,
+                category: "",
+                isLiked: true,
+              }}
+              onPress={() => handleProductPress(product.slug)}
+              onFavoritePress={() =>
+                handleToggleFavorite(item.id, product.slug)
+              }
+            />
+          );
+        }}
+        keyExtractor={(item, index) =>
+          item.id ? item.id.toString() : `fav-${item.product_id}-${index}`
+        }
         numColumns={2}
-        columnWrapperStyle={{ justifyContent: "space-between" }}
-        contentContainerStyle={{ padding: 8, paddingBottom: 20 }}
+        columnWrapperStyle={{
+          justifyContent: "space-between",
+          paddingHorizontal: 4,
+        }}
+        contentContainerStyle={{ padding: 4, paddingBottom: 20 }}
         ListHeaderComponent={
           <>
             {/* SKELETON LOADING STATE */}
             {loading && (
-              <View className="flex-row flex-wrap justify-between pt-2">
-                {[1, 2, 3, 4].map((item) => (
-                  <View key={item} style={{ width: "48%" }} className="mb-4">
+              <View className="flex-row flex-wrap justify-between pt-2 px-1">
+                {[1, 2, 3, 4].map((skeletonId) => (
+                  <View
+                    key={skeletonId}
+                    style={{ width: "48%" }}
+                    className="mb-4"
+                  >
                     <Skeleton className="h-[220px] rounded-3xl" />
                   </View>
                 ))}
               </View>
             )}
 
-            {/* EMPTY STATE (If they haven't liked anything or filters are empty) */}
-            {!loading && likedProducts.length === 0 && (
+            {/* EMPTY STATE */}
+            {!loading && favoriteItems.length === 0 && (
               <View className="items-center justify-center py-20">
                 <View className="bg-slate-200 p-4 rounded-full mb-3">
                   <Ionicons
