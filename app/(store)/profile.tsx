@@ -180,7 +180,7 @@ export default function BuyerProfile() {
           <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
         </TouchableOpacity>
 
-        <TouchableOpacity
+        {/* <TouchableOpacity
           activeOpacity={0.6}
           className="flex-row items-center justify-between p-4 border-b border-slate-50"
         >
@@ -191,9 +191,9 @@ export default function BuyerProfile() {
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
-        <TouchableOpacity
+        {/* <TouchableOpacity
           activeOpacity={0.6}
           className="flex-row items-center justify-between p-4"
         >
@@ -202,7 +202,7 @@ export default function BuyerProfile() {
             <Text className="ml-3 text-slate-700 font-medium">Help Center</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         <TouchableOpacity
           activeOpacity={0.6}
