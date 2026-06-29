@@ -10,6 +10,7 @@ export interface Product {
   price: string | number;
   sold?: string | number;
   rating: number | null;
+  compare_price?: number | null;
   sold_count: string | number | null;
   stock: number;
   // location: string;
@@ -91,6 +92,16 @@ export const ProductCard = React.memo(
             />
           </TouchableOpacity>
         </View>
+
+        {item.compare_price != null && Number(item.compare_price) > 0 && (
+          <Text className="text-xs text-slate-400 line-through">
+            ₱
+            {Number(item.compare_price).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </Text>
+        )}
 
         {/* Bottom Metadata Action Zone */}
         <TouchableOpacity activeOpacity={0.85} onPress={onPress}>

@@ -383,9 +383,11 @@ export default function HomePage() {
                   <Text className="text-lg font-bold text-primary">
                     Top Deals
                   </Text>
-                  <Text className="text-sm text-primary font-medium underline">
-                    View All
-                  </Text>
+                  <TouchableOpacity onPress={() => router.push("/top-deal")}>
+                    <Text className="text-sm text-primary font-medium underline">
+                      View All
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
                 <ScrollView

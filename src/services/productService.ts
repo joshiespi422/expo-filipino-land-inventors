@@ -136,6 +136,17 @@ export const getProductShow = async (
 };
 
 /**
+ * TOP DEAL
+ */
+export interface TopDealsResponse {
+  success: boolean;
+  data: {
+    products: Product[];
+    pagination: Pagination;
+  };
+}
+
+/**
  * MY COLLECTIONS
  */
 export const getCollections = async (): Promise<CollectionResponse> => {
@@ -156,6 +167,18 @@ export const toggleCollection = async (
     `TOGGLE COLLECTION (${slug}):`,
     JSON.stringify(response.data, null, 2),
   );
+
+  return response.data;
+};
+
+export const getTopDeals = async (
+  page: number = 1,
+): Promise<TopDealsResponse> => {
+  const response = await api.get("/store/top-deals", {
+    params: {
+      page,
+    },
+  });
 
   return response.data;
 };
