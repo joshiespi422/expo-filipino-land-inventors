@@ -1,6 +1,11 @@
 import { ProductCard } from "@/components/ProductItems";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Category, getStoreHome, Product } from "@/services/productService";
+import {
+  Category,
+  getStoreHome,
+  Product,
+  toggleCollection,
+} from "@/services/productService";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -146,6 +151,48 @@ export default function HomePage() {
     });
   };
 
+  // Dynamic state toggle handler for Collection / Wishlist updates with backend API triggering
+  const handleToggleFavorite = async (productId: number, slug: string) => {
+    if (!slug) {
+      console.warn("Cannot toggle favorite: Missing product slug value.");
+      return;
+    }
+
+    // 1. Optimistic UI update: Toggle state instantly for an responsive feel
+    setProducts((prevProducts) =>
+      prevProducts.map((p) =>
+        p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
+      ),
+    );
+
+    setTopDeals((prevDeals) =>
+      prevDeals.map((d) =>
+        d.id === productId ? { ...d, is_liked: !d.is_liked } : d,
+      ),
+    );
+
+    try {
+      // 2. Dispatch network bundle trigger payload to your Laravel route model binding endpoint
+      const result = await toggleCollection(slug);
+      console.log(`Backend sync complete for [${slug}]:`, result.message);
+    } catch (error) {
+      console.error("Failed to sync collection endpoint changes:", error);
+
+      // Rollback optimistic UI changes if backend execution breaks down
+      setProducts((prevProducts) =>
+        prevProducts.map((p) =>
+          p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
+        ),
+      );
+
+      setTopDeals((prevDeals) =>
+        prevDeals.map((d) =>
+          d.id === productId ? { ...d, is_liked: !d.is_liked } : d,
+        ),
+      );
+    }
+  };
+
   const handleCartPress = () => {
     router.push("/cart");
   };
@@ -167,12 +214,15 @@ export default function HomePage() {
                 ? `₱${Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 : "₱0.00",
               image: item.image ?? "",
-              sold: `${item.stock} stocks`,
-              rating: "5.0",
-              location: "FISMPC Store",
+              sold_count: `${item.sold_count ?? 0} sold`,
+              rating: item.rating,
+              stock: item.stock,
+              // location: "FISMPC Store",
               category: "",
+              isLiked: item.is_liked, // Synced to target backend naming schema
             }}
             onPress={() => handleProductPress(item.slug)}
+            onFavoritePress={() => handleToggleFavorite(item.id, item.slug)}
           />
         )}
         keyExtractor={(item, index) => `${item.id.toString()}-${index}`}
@@ -326,7 +376,7 @@ export default function HomePage() {
               </View>
             </View>
 
-            {/* TOP DEALS */}
+            {/* TOP DEALS - DESIGN TOTALLY PRESERVED */}
             {!loading && topDeals.length > 0 && (
               <View className="mb-5 mt-2">
                 <View className="flex-row justify-between items-center px-2 mb-2">
@@ -346,28 +396,49 @@ export default function HomePage() {
                   }}
                 >
                   {topDeals.map((item) => (
-                    <TouchableOpacity
+                    <View
                       key={item.id}
-                      activeOpacity={0.8}
-                      className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm w-44"
-                      onPress={() => handleProductPress(item.slug)}
+                      className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm w-44 relative"
                     >
-                      <View className="relative">
-                        <Image
-                          source={{
-                            uri: item.image ?? "",
-                          }}
-                          className="w-full h-36"
-                          resizeMode="cover"
-                        />
-                        <View className="absolute top-2 left-2 bg-[#D70127] px-2 py-1 rounded-full">
-                          <Text className="text-white text-xs font-bold">
-                            DEAL
-                          </Text>
+                      {/* Top Action Layer split to secure the Heart Badge */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => handleProductPress(item.slug)}
+                      >
+                        <View className="relative">
+                          <Image
+                            source={{
+                              uri: item.image ?? "",
+                            }}
+                            className="w-full h-36"
+                            resizeMode="cover"
+                          />
+                          <View className="absolute top-2 left-2 bg-[#D70127] px-2 py-1 rounded-full">
+                            <Text className="text-white text-xs font-bold">
+                              DEAL
+                            </Text>
+                          </View>
                         </View>
-                      </View>
+                      </TouchableOpacity>
 
-                      <View className="p-3">
+                      {/* Top Deals Heart Icon Zone */}
+                      <TouchableOpacity
+                        onPress={() => handleToggleFavorite(item.id, item.slug)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        className="absolute top-2 right-2 bg-white/90 p-1.5 rounded-full shadow-sm z-20"
+                      >
+                        <Ionicons
+                          name={item.is_liked ? "heart" : "heart-outline"}
+                          size={16}
+                          color={item.is_liked ? "#D70127" : "#64748b"}
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => handleProductPress(item.slug)}
+                        className="p-3"
+                      >
                         <Text
                           numberOfLines={2}
                           className="text-sm font-semibold text-slate-800"
@@ -394,8 +465,8 @@ export default function HomePage() {
                             )}
                           </Text>
                         </View>
-                      </View>
-                    </TouchableOpacity>
+                      </TouchableOpacity>
+                    </View>
                   ))}
                 </ScrollView>
               </View>
