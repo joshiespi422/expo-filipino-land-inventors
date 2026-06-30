@@ -27,15 +27,19 @@ export default function ManageAddressesScreen() {
   const [cities, setCities] = useState<any[]>([]);
   const [barangays, setBarangays] = useState<any[]>([]);
 
-  // Form State
+  // Form State adapted to Migration payload parameters
   const [form, setForm] = useState({
     label: "home",
     recipient_name: "",
     recipient_number: "",
     region: "",
-    province: "",
+    region_code: "",
+    province: null as string | null,
+    province_code: null as string | null,
     city: "",
+    city_code: "",
     barangay: "",
+    barangay_code: "",
     street: "",
     unit_bldg_house: "",
     postal_code: "",
@@ -67,69 +71,97 @@ export default function ManageAddressesScreen() {
   };
 
   const fetchRegions = async () => {
-    const res = await fetch("https://psgc.gitlab.io/api/regions/");
-    setRegions(await res.json());
+    try {
+      const res = await fetch("https://psgc.gitlab.io/api/regions/");
+      setRegions(await res.json());
+    } catch (err) {
+      console.error("Failed to fetch regions", err);
+    }
   };
 
   const fetchProvinces = async (regionCode: string) => {
-    const res = await fetch(
-      `https://psgc.gitlab.io/api/regions/${regionCode}/provinces/`,
-    );
-    setProvinces(await res.json());
+    try {
+      const res = await fetch(
+        `https://psgc.gitlab.io/api/regions/${regionCode}/provinces/`,
+      );
+      setProvinces(await res.json());
+    } catch (err) {
+      console.error("Failed to fetch provinces", err);
+    }
   };
 
   const fetchCities = async (provinceCode: string) => {
-    const res = await fetch(
-      `https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities/`,
-    );
-    setCities(await res.json());
+    try {
+      const res = await fetch(
+        `https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities/`,
+      );
+      setCities(await res.json());
+    } catch (err) {
+      console.error("Failed to fetch cities", err);
+    }
   };
 
   const fetchBarangays = async (cityCode: string) => {
-    const res = await fetch(
-      `https://psgc.gitlab.io/api/cities-municipalities/${cityCode}/barangays/`,
-    );
-    setBarangays(await res.json());
+    try {
+      const res = await fetch(
+        `https://psgc.gitlab.io/api/cities-municipalities/${cityCode}/barangays/`,
+      );
+      setBarangays(await res.json());
+    } catch (err) {
+      console.error("Failed to fetch barangays", err);
+    }
   };
 
   const handleOpenModal = async (address: any = null) => {
     if (address) {
-      // Setup editing
       setEditingAddressId(address.id);
+
+      // Load dependent data sources dynamically via current codes
+      if (address.region_code) await fetchProvinces(address.region_code);
+      if (address.province_code) await fetchCities(address.province_code);
+      if (address.city_code) await fetchBarangays(address.city_code);
+
       setForm({
         label: address.label || "home",
         recipient_name: address.recipient_name || "",
         recipient_number: address.recipient_number || "",
         region: address.region || "",
+        region_code: address.region_code || "",
         province: address.province || "",
+        province_code: address.province_code || "",
         city: address.city || "",
+        city_code: address.city_code || "",
         barangay: address.barangay || "",
+        barangay_code: address.barangay_code || "",
         street: address.street || "",
         unit_bldg_house: address.unit_bldg_house || "",
         postal_code: address.postal_code || "",
         landmark: address.landmark || "",
         is_default: !!address.is_default,
       });
-      if (address.region) await fetchProvinces(address.region);
-      if (address.province) await fetchCities(address.province);
-      if (address.city) await fetchBarangays(address.city);
     } else {
-      // Setup creating new
       setEditingAddressId(null);
       setForm({
         label: "home",
         recipient_name: "",
         recipient_number: "",
         region: "",
+        region_code: "",
         province: "",
+        province_code: "",
         city: "",
+        city_code: "",
         barangay: "",
+        barangay_code: "",
         street: "",
         unit_bldg_house: "",
         postal_code: "",
         landmark: "",
-        is_default: addresses.length === 0, // auto default if first address
+        is_default: addresses.length === 0,
       });
+      setProvinces([]);
+      setCities([]);
+      setBarangays([]);
     }
     setModalVisible(true);
   };
@@ -138,9 +170,9 @@ export default function ManageAddressesScreen() {
     if (
       !form.recipient_name ||
       !form.recipient_number ||
-      !form.region ||
-      !form.city ||
-      !form.barangay ||
+      !form.region_code ||
+      !form.city_code ||
+      !form.barangay_code ||
       !form.street ||
       !form.unit_bldg_house ||
       !form.postal_code
@@ -282,7 +314,7 @@ export default function ManageAddressesScreen() {
             </Text>
             <Text className="text-gray-600 text-sm leading-relaxed">
               {item.full_address ||
-                `${item.unit_bldg_house}, ${item.street}, ${item.barangay}, ${item.city}, ${item.province || ""}, ${item.region}, ${item.postal_code}`}
+                `${item.unit_bldg_house}, ${item.street}, ${item.barangay}, ${item.city}, ${item.province ? item.province + ", " : ""}${item.region}, ${item.postal_code}`}
             </Text>
 
             {item.landmark && (
@@ -370,16 +402,24 @@ export default function ManageAddressesScreen() {
             </Text>
             <View className="border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden">
               <Picker
-                selectedValue={form.region}
-                onValueChange={(v) => {
+                selectedValue={form.region_code}
+                onValueChange={(code) => {
+                  const selectedRegion = regions.find((r) => r.code === code);
                   setForm({
                     ...form,
-                    region: v,
+                    region_code: code,
+                    region: selectedRegion ? selectedRegion.name : "",
                     province: "",
+                    province_code: "",
                     city: "",
+                    city_code: "",
                     barangay: "",
+                    barangay_code: "",
                   });
-                  if (v) fetchProvinces(v);
+                  setProvinces([]);
+                  setCities([]);
+                  setBarangays([]);
+                  if (code) fetchProvinces(code);
                 }}
               >
                 <Picker.Item label="Select Region" value="" />
@@ -391,14 +431,32 @@ export default function ManageAddressesScreen() {
 
             {/* Province Selector */}
             <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
-              Province
+              Province (Optional)
             </Text>
             <View className="border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden">
               <Picker
-                selectedValue={form.province}
-                onValueChange={(v) => {
-                  setForm({ ...form, province: v, city: "", barangay: "" });
-                  if (v) fetchCities(v);
+                selectedValue={form.province_code}
+                onValueChange={(code) => {
+                  const selectedProvince = provinces.find(
+                    (p) => p.code === code,
+                  );
+                  setForm({
+                    ...form,
+                    province_code: code || null,
+                    province: selectedProvince ? selectedProvince.name : null,
+                    city: "",
+                    city_code: "",
+                    barangay: "",
+                    barangay_code: "",
+                  });
+                  setCities([]);
+                  setBarangays([]);
+                  if (code) {
+                    fetchCities(code);
+                  } else if (form.region_code) {
+                    // Fallback for independent cities outside standard provinces (e.g., NCR districts)
+                    fetchCities(form.region_code);
+                  }
                 }}
               >
                 <Picker.Item label="Select Province" value="" />
@@ -414,10 +472,18 @@ export default function ManageAddressesScreen() {
             </Text>
             <View className="border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden">
               <Picker
-                selectedValue={form.city}
-                onValueChange={(v) => {
-                  setForm({ ...form, city: v, barangay: "" });
-                  if (v) fetchBarangays(v);
+                selectedValue={form.city_code}
+                onValueChange={(code) => {
+                  const selectedCity = cities.find((c) => c.code === code);
+                  setForm({
+                    ...form,
+                    city_code: code,
+                    city: selectedCity ? selectedCity.name : "",
+                    barangay: "",
+                    barangay_code: "",
+                  });
+                  setBarangays([]);
+                  if (code) fetchBarangays(code);
                 }}
               >
                 <Picker.Item label="Select City" value="" />
@@ -433,8 +499,17 @@ export default function ManageAddressesScreen() {
             </Text>
             <View className="border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden">
               <Picker
-                selectedValue={form.barangay}
-                onValueChange={(v) => setForm({ ...form, barangay: v })}
+                selectedValue={form.barangay_code}
+                onValueChange={(code) => {
+                  const selectedBarangay = barangays.find(
+                    (b) => b.code === code,
+                  );
+                  setForm({
+                    ...form,
+                    barangay_code: code,
+                    barangay: selectedBarangay ? selectedBarangay.name : "",
+                  });
+                }}
               >
                 <Picker.Item label="Select Barangay" value="" />
                 {barangays.map((b) => (
