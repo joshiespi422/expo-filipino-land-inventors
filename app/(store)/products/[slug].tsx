@@ -593,9 +593,9 @@ export default function Products() {
                       ? `₱${Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                       : "₱0.00",
                     image: item.image ?? "",
-                    sold: `${item.stock} stocks`,
-                    rating: "5.0",
-                    location: "FISMPC Store",
+                    sold_count: `${item.sold_count ?? 0} sold`,
+                    rating: item.rating,
+                    stock: item.stock,
                     category: "",
                   }}
                   onPress={() => handleProductPress(item.slug)}
