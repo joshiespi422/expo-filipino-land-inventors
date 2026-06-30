@@ -33,6 +33,13 @@ export interface PaginationMeta {
   has_more: boolean;
 }
 
+export interface OrderBadges {
+  to_pay: number;
+  to_ship: number;
+  to_receive: number;
+  to_rate: number;
+}
+
 export interface OrderIndexResponse {
   success: boolean;
   data: {
@@ -46,6 +53,7 @@ export interface OrderIndexResponse {
     filters: {
       status: string;
     };
+    badges: OrderBadges;
   };
 }
 
@@ -62,5 +70,21 @@ export const fetchOrdersAPI = async (
       page,
     },
   });
+
   return response.data;
+};
+
+/**
+ * Fetches order badge counts for the buyer profile.
+ * Uses the same endpoint to avoid creating another API.
+ */
+export const fetchOrderBadgesAPI = async (): Promise<OrderBadges> => {
+  const response = await api.get<OrderIndexResponse>("/store/orders", {
+    params: {
+      status: "all",
+      page: 1,
+    },
+  });
+
+  return response.data.data.badges;
 };
