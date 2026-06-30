@@ -182,3 +182,24 @@ export const getTopDeals = async (
 
   return response.data;
 };
+
+export interface DirectCheckoutSelectPayload {
+  mode: "direct";
+  product_variant_id: number;
+  quantity: number;
+}
+
+export interface DirectCheckoutSelectResponse {
+  success: boolean;
+  message?: string;
+}
+
+/**
+ * DIRECT CHECKOUT SELECT VERIFICATION
+ */
+export const selectDirectCheckout = async (
+  payload: DirectCheckoutSelectPayload,
+): Promise<DirectCheckoutSelectResponse> => {
+  const response = await api.post("/store/checkout/select", payload);
+  return response.data;
+};

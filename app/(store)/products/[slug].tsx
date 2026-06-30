@@ -20,6 +20,7 @@ import {
   getProductShow,
   getStoreHome,
   Product,
+  selectDirectCheckout,
 } from "@/services/productService";
 
 import { addToCart } from "@/services/cart";
@@ -37,6 +38,7 @@ export default function Products() {
   const [recommendations, setRecommendations] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState<boolean>(false);
 
   const [mainImage, setMainImage] = useState<string | null>(null);
   const [selectedAttributes, setSelectedAttributes] = useState<
@@ -247,11 +249,13 @@ export default function Products() {
   };
 
   const handleConfirmAction = async () => {
+    if (!currentVariant) {
+      Alert.alert("Variant Required", "Please select all product options.");
+      return;
+    }
+
     try {
-      if (!currentVariant) {
-        Alert.alert("Variant Required", "Please select all product options.");
-        return;
-      }
+      setSubmitting(true);
 
       if (modalAction === "cart") {
         const response = await addToCart({
@@ -266,22 +270,35 @@ export default function Products() {
       }
 
       if (modalAction === "buy_now") {
-        setModal(false);
-        router.push({
-          pathname: "/checkout",
-          params: {
-            variant_id: currentVariant.id,
-            quantity,
-          },
+        // Safe backend verification execution inside your abstraction layer
+        const verifyResponse = await selectDirectCheckout({
+          mode: "direct",
+          product_variant_id: currentVariant.id,
+          quantity: quantity,
         });
+
+        if (verifyResponse.success) {
+          setModal(false);
+          router.push({
+            pathname: "/checkout",
+            params: {
+              mode: "direct",
+              product_variant_id: currentVariant.id,
+              quantity: quantity,
+            },
+          });
+        }
         return;
       }
     } catch (error: any) {
       console.error(error);
       Alert.alert(
-        "Error",
-        error?.response?.data?.message || "Something went wrong.",
+        "Checkout Error",
+        error?.response?.data?.message ||
+          "Something went wrong while executing request.",
       );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -775,12 +792,14 @@ export default function Products() {
                 <TouchableOpacity
                   onPress={handleConfirmAction}
                   disabled={
+                    submitting ||
                     currentStock === 0 ||
                     quantity === 0 ||
                     Object.keys(selectedAttributes).length !==
                       Object.keys(groupedAttributes).length
                   }
                   className={`h-16 rounded-2xl justify-center items-center ${
+                    submitting ||
                     currentStock === 0 ||
                     quantity === 0 ||
                     Object.keys(selectedAttributes).length !==
@@ -791,16 +810,20 @@ export default function Products() {
                         : "bg-primary"
                   }`}
                 >
-                  <Text className="text-white font-bold text-lg">
-                    {Object.keys(selectedAttributes).length !==
-                    Object.keys(groupedAttributes).length
-                      ? "Select Options"
-                      : currentStock === 0
-                        ? "Out of Stock"
-                        : modalAction === "buy_now"
-                          ? "Buy Now"
-                          : "Add to Cart"}
-                  </Text>
+                  {submitting ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text className="text-white font-bold text-lg">
+                      {Object.keys(selectedAttributes).length !==
+                      Object.keys(groupedAttributes).length
+                        ? "Select Options"
+                        : currentStock === 0
+                          ? "Out of Stock"
+                          : modalAction === "buy_now"
+                            ? "Buy Now"
+                            : "Add to Cart"}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>

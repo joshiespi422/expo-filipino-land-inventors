@@ -55,11 +55,23 @@ export interface CheckoutDetailsResponse {
   };
 }
 
+// Unified input parameter capabilities interface supporting both modes
+export interface FetchCheckoutParams {
+  mode?: "direct" | "cart";
+  cart_item_ids?: number[];
+  product_variant_id?: number | null;
+  quantity?: number;
+}
+
+// Flexible structural payload type supporting both direct buy configurations and cart array arrays
 export interface PlaceOrderPayload {
   address_id: number;
   payment_method_id: number;
-  cart_item_ids: number[];
   note?: string;
+  mode: "direct" | "cart";
+  cart_item_ids?: number[];
+  product_variant_id?: number | null;
+  quantity?: number;
 }
 
 export interface PlaceOrderResponse {
@@ -69,23 +81,37 @@ export interface PlaceOrderResponse {
 }
 
 /**
- * Fetches the checkout records from Laravel using standard URL parameter serialization
+ * Fetches the checkout records from Laravel supporting standard cart setups and direct bypasses
  */
 export const fetchCheckoutDetails = async (
-  cartItemIds: number[],
+  params: FetchCheckoutParams,
 ): Promise<CheckoutDetailsResponse> => {
   const response = await api.get<CheckoutDetailsResponse>("/store/checkout", {
-    params: {
-      cart_item_ids: cartItemIds,
-    },
-    // ✅ FIXED: Using direct assignment transformation arrays for standard key value configurations
-    paramsSerializer: (params) => {
+    params,
+    // ✅ FIXED: Lookahead checks implemented to verify array properties before running mutations
+    paramsSerializer: (serializedParams) => {
       const searchParams = new URLSearchParams();
-      if (params.cart_item_ids) {
-        params.cart_item_ids.forEach((id: number) => {
+
+      if (serializedParams.mode === "direct") {
+        searchParams.append("mode", "direct");
+        if (serializedParams.product_variant_id) {
+          searchParams.append(
+            "product_variant_id",
+            serializedParams.product_variant_id.toString(),
+          );
+        }
+        if (serializedParams.quantity) {
+          searchParams.append("quantity", serializedParams.quantity.toString());
+        }
+      } else if (
+        serializedParams.cart_item_ids &&
+        Array.isArray(serializedParams.cart_item_ids)
+      ) {
+        serializedParams.cart_item_ids.forEach((id: number) => {
           searchParams.append("cart_item_ids[]", id.toString());
         });
       }
+
       return searchParams.toString();
     },
   });

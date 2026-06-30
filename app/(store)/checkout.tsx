@@ -26,10 +26,16 @@ export default function Checkout() {
 
   console.log("🔍 [CHECKOUT MOUNT/UPDATE] Raw Route Params:", params);
 
+  const mode = params.mode === "direct" ? "direct" : "cart";
   const rawCartItemIds = params.cart_item_ids;
+  const productVariantId = params.product_variant_id
+    ? Number(params.product_variant_id)
+    : null;
+  const quantity = params.quantity ? Number(params.quantity) : 1;
 
-  // Compute the clean numeric array from route params
+  // Compute clean numeric array from route params if mode is cart
   const cartItemIds = useMemo<number[]>(() => {
+    if (mode === "direct") return [];
     if (!rawCartItemIds) {
       console.log("⚠️ [PARSING] No rawCartItemIds found in parameters.");
       return [];
@@ -44,7 +50,7 @@ export default function Checkout() {
 
     console.log("✅ [PARSING] Successfully parsed Item IDs array:", parsed);
     return parsed;
-  }, [rawCartItemIds]);
+  }, [rawCartItemIds, mode]);
 
   // View Layout States
   const [loading, setLoading] = useState<boolean>(true);
@@ -60,14 +66,12 @@ export default function Checkout() {
   const [summary, setSummary] = useState<CheckoutSummary | null>(null);
   const [note, setNote] = useState<string>("");
 
-  // ✅ FIXED: Rely on rawCartItemIds string primitive representation instead of array reference matching
   useEffect(() => {
     console.log(
-      "🚀 [EFFECT TRIGGER] Checking cartItemIds length:",
-      cartItemIds.length,
+      `🚀 [EFFECT TRIGGER] Checking configurations. Mode: ${mode}, Cart Items: ${cartItemIds.length}, Direct Variant: ${productVariantId}`,
     );
 
-    if (cartItemIds.length === 0) {
+    if (mode === "cart" && cartItemIds.length === 0) {
       console.log(
         "🛑 [EFFECT HALT] Blocking fetch, cartItemIds list is completely empty.",
       );
@@ -77,21 +81,38 @@ export default function Checkout() {
       return;
     }
 
+    if (mode === "direct" && !productVariantId) {
+      console.log(
+        "🛑 [EFFECT HALT] Blocking fetch, direct buy variant is missing.",
+      );
+      Alert.alert("Error", "Invalid checkout options configuration.", [
+        { text: "Go Back", onPress: () => router.back() },
+      ]);
+      return;
+    }
+
     const loadCheckoutData = async () => {
       try {
-        console.log(
-          "📡 [API REQUEST] Dispatching fetchCheckoutDetails with IDs:",
-          cartItemIds,
-        );
         setLoading(true);
+        let response;
 
-        const response = await fetchCheckoutDetails(cartItemIds);
-        console.log(
-          "📥 [API RESPONSE] Success status:",
-          response.success,
-          "Full Response payload:",
-          response,
-        );
+        if (mode === "direct" && productVariantId) {
+          console.log("📡 [API REQUEST] Dispatching direct fetch details...");
+          response = await fetchCheckoutDetails({
+            mode: "direct",
+            product_variant_id: productVariantId,
+            quantity: quantity,
+          });
+        } else {
+          console.log(
+            "📡 [API REQUEST] Dispatching cart array fetch details...",
+          );
+          response = await fetchCheckoutDetails({
+            cart_item_ids: cartItemIds,
+          });
+        }
+
+        console.log("📥 [API RESPONSE] Success status:", response.success);
 
         if (response.success) {
           const data = response.data;
@@ -104,12 +125,8 @@ export default function Checkout() {
           const defaultAddr =
             data.addresses.find((addr) => addr.is_default) || data.addresses[0];
           setSelectedAddress(defaultAddr || null);
-          console.log(
-            "🏠 [DATA BOUND] Automatically assigned address profile:",
-            defaultAddr,
-          );
 
-          // Filter payment methods to find allowed target names safely ("cash on delivery", "pay online")
+          // Filter payment methods safely
           const allowedMethods = data.paymentMethods.filter((method) => {
             const name = method.name.toLowerCase();
             return (
@@ -120,16 +137,8 @@ export default function Checkout() {
           // Auto select primary allowed payment method
           if (allowedMethods.length > 0) {
             setSelectedPaymentMethod(allowedMethods[0]);
-            console.log(
-              "💳 [DATA BOUND] Automatically assigned filtered payment profile:",
-              allowedMethods[0],
-            );
           } else if (data.paymentMethods.length > 0) {
             setSelectedPaymentMethod(data.paymentMethods[0]);
-            console.log(
-              "💳 [DATA BOUND] Fallback selection assigned:",
-              data.paymentMethods[0],
-            );
           }
         }
       } catch (error: any) {
@@ -137,11 +146,6 @@ export default function Checkout() {
           "❌ [API ERROR] Network breakdown or backend rejection:",
           error,
         );
-        if (error?.response) {
-          console.error("⚠️ [SERVER RESPONSE DATA]:", error.response.data);
-          console.error("⚠️ [SERVER STATUS CODE]:", error.response.status);
-        }
-
         Alert.alert(
           "Error",
           error?.response?.data?.message || "Failed to load checkout details.",
@@ -153,9 +157,9 @@ export default function Checkout() {
     };
 
     loadCheckoutData();
-  }, [rawCartItemIds]); // ✅ Dependent on string representation to stop loop cycles
+  }, [rawCartItemIds, productVariantId, quantity, mode]);
 
-  // Group retrieved flat resources into explicit store headers layout blocks
+  // Group items by store vendor block sections
   const groupedItems = useMemo(() => {
     const groups: {
       [key: string]: { seller: string; products: CheckoutItem[] };
@@ -171,10 +175,6 @@ export default function Checkout() {
   }, [items]);
 
   const handlePlaceOrder = async () => {
-    console.log("🔘 [SUBMIT CLICKED] Initializing validation assertions...");
-    console.log("👉 Target Address:", selectedAddress);
-    console.log("👉 Target Payment Method:", selectedPaymentMethod);
-
     if (!selectedAddress) {
       Alert.alert("Validation Error", "Please choose a delivery address.");
       return;
@@ -186,12 +186,20 @@ export default function Checkout() {
 
     try {
       setSubmitting(true);
-      const payload = {
+
+      const payload: any = {
         address_id: selectedAddress.id,
         payment_method_id: selectedPaymentMethod.id,
-        cart_item_ids: cartItemIds,
         note: note.trim() || undefined,
+        mode: mode,
       };
+
+      if (mode === "direct") {
+        payload.product_variant_id = productVariantId;
+        payload.quantity = quantity;
+      } else {
+        payload.cart_item_ids = cartItemIds;
+      }
 
       console.log("📤 [ORDER SUBMIT PAYLOAD]:", payload);
 
@@ -199,7 +207,7 @@ export default function Checkout() {
       console.log("📥 [ORDER SUBMIT RESPONSE]:", result);
 
       if (result.success) {
-        Alert.alert("Success", result.message, [
+        Alert.alert("Success", result.message || "Order placed successfully!", [
           {
             text: "OK",
             onPress: () => router.replace("/order-list"),
@@ -207,14 +215,11 @@ export default function Checkout() {
         ]);
       }
     } catch (error: any) {
-      console.error("❌ [ORDER PLACEMENT REJECTION] System Crash:", error);
-      if (error?.response) {
-        console.error("⚠️ [SERVER FAILURE BLOB]:", error.response.data);
-      }
+      console.error("❌ [ORDER PLACEMENT REJECTION] Request failure:", error);
       Alert.alert(
         "Order Failure",
         error?.response?.data?.message ||
-          "Something went wrong parsing transaction components.",
+          "Something went wrong processing your transaction.",
       );
     } finally {
       setSubmitting(false);
@@ -250,7 +255,7 @@ export default function Checkout() {
                 Alert.alert("Address Selection", "Feature coming soon.")
               }
             >
-              <Text className="text-primary font-semibold">Change</Text>
+              <Text className="text-[#034194] font-semibold">Change</Text>
             </TouchableOpacity>
           </View>
 
@@ -297,13 +302,15 @@ export default function Checkout() {
                     ?.map((attr) => `${attr.name}: ${attr.value}`)
                     .join(" • ") || "";
 
+                // Dynamic fallbacks for image processing strings
+                const cleanImgUrl = item.product.image?.startsWith("http")
+                  ? item.product.image
+                  : `http://192.168.1.46:8000${item.product.image || ""}`;
+
                 return (
                   <View key={item.id} className="flex-row mb-4">
                     <Image
-                      source={{
-                        // ✨ Fallback path safely pointing to item.product.image
-                        uri: `http://192.168.1.46:8000${item.product.image || ""}`,
-                      }}
+                      source={{ uri: cleanImgUrl }}
                       style={{ width: 75, height: 75, borderRadius: 12 }}
                     />
 
@@ -322,8 +329,8 @@ export default function Checkout() {
                       )}
 
                       <View className="flex-row items-center justify-between mt-1">
-                        <Text className="font-bold text-primary text-base">
-                          ₱{item.variant.price.toLocaleString()}
+                        <Text className="font-bold text-[#034194] text-base">
+                          ₱{Number(item.variant.price).toLocaleString()}
                         </Text>
                         <Text className="text-slate-500 font-medium">
                           x{item.quantity}
@@ -342,7 +349,6 @@ export default function Checkout() {
           <Text className="font-bold text-lg mb-3">Payment Method</Text>
 
           {paymentMethods
-            // 👇 Filter array dynamically matching names only
             .filter((method) => {
               const name = method.name.toLowerCase();
               return (
@@ -394,21 +400,21 @@ export default function Checkout() {
             <View className="flex-row justify-between mb-2">
               <Text className="text-slate-500">Subtotal</Text>
               <Text className="text-slate-800 font-medium">
-                ₱{summary.subtotal.toLocaleString()}
+                ₱{Number(summary.subtotal).toLocaleString()}
               </Text>
             </View>
 
             <View className="flex-row justify-between mb-2">
               <Text className="text-slate-500">Discount</Text>
               <Text className="text-red-500 font-medium">
-                -₱{summary.discount.toLocaleString()}
+                -₱{Number(summary.discount).toLocaleString()}
               </Text>
             </View>
 
             <View className="flex-row justify-between mb-2">
               <Text className="text-slate-500">Estimated Shipping</Text>
               <Text className="text-slate-800 font-medium">
-                ₱{summary.shipping_fee.toLocaleString()}
+                ₱{Number(summary.shipping_fee).toLocaleString()}
               </Text>
             </View>
 
@@ -416,8 +422,8 @@ export default function Checkout() {
               <Text className="font-bold text-lg text-slate-800">
                 Total Payment
               </Text>
-              <Text className="font-bold text-primary text-lg">
-                ₱{summary.total.toLocaleString()}
+              <Text className="font-bold text-[#034194] text-lg">
+                ₱{Number(summary.total).toLocaleString()}
               </Text>
             </View>
           </View>
@@ -429,12 +435,12 @@ export default function Checkout() {
         <TouchableOpacity
           onPress={handlePlaceOrder}
           disabled={submitting}
-          className={`rounded-2xl py-4 items-center ${submitting ? "bg-slate-400" : "bg-primary"}`}
+          className={`rounded-2xl py-4 items-center ${submitting ? "bg-slate-400" : "bg-[#034194]"}`}
         >
           <Text className="text-white font-bold text-lg">
             {submitting
               ? "Processing Order..."
-              : `Place Order ₱${summary?.total ? summary.total.toLocaleString() : "0"}`}
+              : `Place Order ₱${summary?.total ? Number(summary.total).toLocaleString() : "0"}`}
           </Text>
         </TouchableOpacity>
       </View>
