@@ -1,13 +1,14 @@
 import { ProductCard } from "@/components/ProductItems";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getCart } from "@/services/cart";
 import {
   CollectionProduct,
   getCollections,
   toggleCollection,
 } from "@/services/productService";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router"; // 1. Added useFocusEffect import
+import React, { useCallback, useState } from "react"; // Removed unused useEffect
 import {
   FlatList,
   RefreshControl,
@@ -21,53 +22,73 @@ export default function FavoritesPage() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Strongly typed using your explicit CollectionProduct interface definition
   const [favoriteItems, setFavoriteItems] = useState<CollectionProduct[]>([]);
+  const [cartCount, setCartCount] = useState<number>(0);
 
-  // Fetches authentic collection datasets using your custom productService client
-  const fetchCollections = async (showLoadingIndicator = true) => {
+  // Central data loader for collections and cart badges
+  const fetchPageData = async (showLoadingIndicator = true) => {
     if (showLoadingIndicator) setLoading(true);
     try {
-      const response = await getCollections();
+      const [collectionResponse, cartResponse] = await Promise.allSettled([
+        getCollections(),
+        getCart(),
+      ]);
 
       if (
-        response &&
-        (response.status === "success" || (response as any).success === true)
+        collectionResponse.status === "fulfilled" &&
+        collectionResponse.value
       ) {
-        // Filter out items that don't have a valid nested product object
-        const activeCollections = response.collections.filter(
-          (item) => item && item.product,
-        );
+        const response = collectionResponse.value;
+        if (
+          response.status === "success" ||
+          (response as any).success === true
+        ) {
+          const activeCollections = response.collections.filter(
+            (item) => item && item.product,
+          );
+          setFavoriteItems(activeCollections);
+        }
+      }
 
-        setFavoriteItems(activeCollections);
+      if (cartResponse.status === "fulfilled" && cartResponse.value) {
+        const response = cartResponse.value;
+        if (response.success && response.cart && response.cart.items) {
+          const totalItemsCount = response.cart.items.reduce(
+            (accumulator, item) => accumulator + (item.quantity ?? 0),
+            0,
+          );
+          setCartCount(totalItemsCount);
+        }
       }
     } catch (error) {
-      console.error("Failed to load backend favorites data:", error);
+      console.error("Failed to load backend page datasets:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // Trigger data loader on layout mounting cycle
-  useEffect(() => {
-    fetchCollections(true);
-  }, []);
+  /**
+   * 2. REPLACED useEffect WITH useFocusEffect
+   * This hook runs every single time the user navigates back to this screen,
+   * guaranteeing your badge configurations remain accurate.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      // Fetch fresh totals on screen entry without full-screen layout flashes
+      fetchPageData(favoriteItems.length === 0);
+    }, []),
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchCollections(false);
+    fetchPageData(false);
   }, []);
 
-  // Toggles heart off optimistically and updates the database record status
   const handleToggleFavorite = async (collectionId: number, slug: string) => {
     if (!slug) return;
-
-    // Cache copy of item state context to enable rollbacks on connection errors
     const technicalFallbackItems = [...favoriteItems];
 
-    // 1. Optimistic UI update: Remove immediately from list for zero visual latency
     setFavoriteItems((prevItems) =>
       prevItems.filter(
         (item) => item.id !== collectionId && item.product?.slug !== slug,
@@ -75,14 +96,12 @@ export default function FavoritesPage() {
     );
 
     try {
-      // 2. Transmit toggle packet down through network layer boundaries
       await toggleCollection(slug);
     } catch (error) {
       console.error(
         "Failed to persist layout favorite selection toggles:",
         error,
       );
-      // Rollback optimistic state changes instantly if backend exception rules trigger
       setFavoriteItems(technicalFallbackItems);
     }
   };
@@ -110,12 +129,15 @@ export default function FavoritesPage() {
           </Text>
         </View>
 
-        {/* Action button commonly found on Shopee headers */}
         <TouchableOpacity onPress={handleCartPress} className="p-2 relative">
           <Ionicons name="cart-outline" size={24} color="#034194" />
-          <View className="absolute top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 z-10">
-            <Text className="text-white text-[9px] font-bold">3</Text>
-          </View>
+          {cartCount > 0 && (
+            <View className="absolute top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 z-10 border border-white">
+              <Text className="text-white text-[9px] font-bold">
+                {cartCount > 99 ? "99+" : cartCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -124,25 +146,15 @@ export default function FavoritesPage() {
         data={loading ? [] : favoriteItems}
         renderItem={({ item }) => {
           const product = item.product;
-
           if (!product) return null;
 
-          // 1. Direct alignment mapping from ProductCardResource output payload fields
           const productPrice = Number(product.price ?? 0);
-
-          // 2. SOLD COUNT CHECK
           const productSold = Number(product.sold_count ?? 0);
-
-          // 3. RATING CHECK
           const productRating =
             product.rating !== null && product.rating !== undefined
               ? Number(product.rating)
               : 5;
-
-          // 4. MATCHING STOCK
           const productStock = Number(product.stock ?? 0);
-
-          // 5. MATCHING THE IMAGE FIELD RESOLVED BY THE RESOURCE
           const productImage = product.image ?? "";
 
           return (
@@ -179,7 +191,6 @@ export default function FavoritesPage() {
         contentContainerStyle={{ padding: 4, paddingBottom: 20 }}
         ListHeaderComponent={
           <>
-            {/* SKELETON LOADING STATE */}
             {loading && (
               <View className="flex-row flex-wrap justify-between pt-2 px-1">
                 {[1, 2, 3, 4].map((skeletonId) => (
@@ -194,7 +205,6 @@ export default function FavoritesPage() {
               </View>
             )}
 
-            {/* EMPTY STATE */}
             {!loading && favoriteItems.length === 0 && (
               <View className="items-center justify-center py-20">
                 <View className="bg-slate-200 p-4 rounded-full mb-3">

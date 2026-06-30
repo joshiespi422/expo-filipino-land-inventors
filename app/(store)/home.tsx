@@ -1,5 +1,6 @@
 import { ProductCard } from "@/components/ProductItems";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getCart } from "@/services/cart"; // Import your existing cart API service
 import {
   Category,
   getStoreHome,
@@ -7,7 +8,7 @@ import {
   toggleCollection,
 } from "@/services/productService";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router"; // Added useFocusEffect
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -51,6 +52,9 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [topDeals, setTopDeals] = useState<Product[]>([]);
+
+  // Real-time Cart Count Badge State Tracker
+  const [cartCount, setCartCount] = useState<number>(0);
 
   // Accepts target category parameter overrides and current page context
   const fetchProducts = async (
@@ -109,9 +113,46 @@ export default function HomePage() {
     }
   };
 
+  // Helper method to exclusively poll cart data without causing full product reload flickers
+  const fetchCartCountOnly = async () => {
+    try {
+      const response = await getCart();
+      if (
+        response &&
+        response.success &&
+        response.cart &&
+        response.cart.items
+      ) {
+        // Calculates total individual units inside user cart array
+        const totalItemsCount = response.cart.items.reduce(
+          (accumulator, item) => accumulator + (item.quantity ?? 0),
+          0,
+        );
+        setCartCount(totalItemsCount);
+      }
+    } catch (error) {
+      console.error(
+        "Failed silently to pull modern cart status parameters:",
+        error,
+      );
+    }
+  };
+
+  // Runs once on mounting layout boundaries
   useEffect(() => {
     fetchProducts("All", 1, true);
   }, []);
+
+  /**
+   * DYNAMIC NAVIGATION LISTENER
+   * Listens directly to native transition viewport triggers.
+   * Runs silently when a user presses "Back" to home, ensuring your counts match exactly.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      fetchCartCountOnly();
+    }, []),
+  );
 
   // Reset page iteration and overwrite active product maps on categorical variations
   const handleCategoryPress = (catId: string | number) => {
@@ -124,6 +165,7 @@ export default function HomePage() {
     setRefreshing(true);
     setPage(1);
     fetchProducts(selectedCategory, 1, false);
+    fetchCartCountOnly(); // Sync badge totals alongside pull-to-refresh
   }, [selectedCategory]);
 
   const loadMoreProducts = () => {
@@ -137,7 +179,6 @@ export default function HomePage() {
     return item.name.toLowerCase().includes(search.toLowerCase());
   });
 
-  // FIXED: Explicit structural matching syntax targeting app/products/[slug].tsx layout trees
   const handleProductPress = (slug: string) => {
     if (!slug) {
       console.warn(
@@ -217,7 +258,6 @@ export default function HomePage() {
               sold_count: `${item.sold_count ?? 0} sold`,
               rating: item.rating,
               stock: item.stock,
-              // location: "FISMPC Store",
               category: "",
               isLiked: item.is_liked, // Synced to target backend naming schema
             }}
@@ -273,15 +313,19 @@ export default function HomePage() {
                 />
               </View>
 
-              {/* CART */}
+              {/* CART WITH DYNAMIC BADGE COUNT */}
               <TouchableOpacity
                 onPress={handleCartPress}
                 className="ml-3 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200 relative"
               >
                 <Ionicons name="cart-outline" size={24} color="#034194" />
-                <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1">
-                  <Text className="text-white text-[10px] font-bold">3</Text>
-                </View>
+                {cartCount > 0 && (
+                  <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-white">
+                    <Text className="text-white text-[10px] font-bold">
+                      {cartCount > 99 ? "99+" : cartCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
 
               {/* CHAT */}
@@ -376,7 +420,7 @@ export default function HomePage() {
               </View>
             </View>
 
-            {/* TOP DEALS - DESIGN TOTALLY PRESERVED */}
+            {/* TOP DEALS */}
             {!loading && topDeals.length > 0 && (
               <View className="mb-5 mt-2">
                 <View className="flex-row justify-between items-center px-2 mb-2">
@@ -402,7 +446,6 @@ export default function HomePage() {
                       key={item.id}
                       className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm w-44 relative"
                     >
-                      {/* Top Action Layer split to secure the Heart Badge */}
                       <TouchableOpacity
                         activeOpacity={0.8}
                         onPress={() => handleProductPress(item.slug)}
@@ -423,7 +466,6 @@ export default function HomePage() {
                         </View>
                       </TouchableOpacity>
 
-                      {/* Top Deals Heart Icon Zone */}
                       <TouchableOpacity
                         onPress={() => handleToggleFavorite(item.id, item.slug)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
