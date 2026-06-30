@@ -11,9 +11,7 @@ const normalizeImageUrl = (path: string | null) => {
 };
 
 const normalizeFile = (file: any, fallbackName: string) => {
-  // If there's no uri or the uri is a web URL, it's not a new file to upload
   if (!file?.uri || file.uri.startsWith("http")) return null;
-
   return {
     uri: Platform.OS === "ios" ? file.uri.replace("file://", "") : file.uri,
     name: file.name || fallbackName,
@@ -36,12 +34,8 @@ export const profileService = {
     };
   },
 
-  // @/services/profileService.ts
-
   updateProfile: async (data: any) => {
     const formData = new FormData();
-
-    // 1. Append Text Fields
     Object.keys(data).forEach((key) => {
       const skipKeys = [
         "front_valid_id_picture",
@@ -77,9 +71,7 @@ export const profileService = {
   updateAvatar: async (fileData: any) => {
     const formData = new FormData();
     const fileToUpload = normalizeFile(fileData, "avatar.jpg");
-
     if (!fileToUpload) throw new Error("No new image selected");
-
     // @ts-ignore
     formData.append("avatar", fileToUpload);
 
@@ -90,12 +82,33 @@ export const profileService = {
       },
       transformRequest: (data) => data,
     });
-
     return response.data;
   },
 
   changePassword: async (passwords: any) => {
     const response = await api.patch("/profile/change-password", passwords);
+    return response.data;
+  },
+
+  // --- NEW ADDRESS ENDPOINTS ---
+  getAddresses: async () => {
+    const response = await api.get("/profile/addresses");
+    return response.data.data || [];
+  },
+
+  addAddress: async (addressData: any) => {
+    const response = await api.post("/profile/address", addressData);
+    return response.data;
+  },
+
+  updateAddress: async (id: number, addressData: any) => {
+    // Adjust path matching your API routing setup if necessary
+    const response = await api.put(`/profile/address/${id}`, addressData);
+    return response.data;
+  },
+
+  deleteAddress: async (id: number) => {
+    const response = await api.delete(`/profile/address/${id}`);
     return response.data;
   },
 };

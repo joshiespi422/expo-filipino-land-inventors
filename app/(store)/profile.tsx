@@ -1,28 +1,134 @@
+import { fetchOrdersAPI } from "@/services/order";
+import { profileService } from "@/services/profileService";
+import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
-import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-import UserProfile from "../../assets/images/UserProfile.jpg";
+import UserProfileFallback from "../../assets/images/UserProfile.jpg";
+
+// Matching layout status mapping keys to backend validator options
+const STATUS_MAP: Record<string, string> = {
+  All: "all",
+  "To Pay": "to-pay",
+  "To Ship": "to-ship",
+  "To Receive": "to-receive",
+  Completed: "completed",
+};
+
+// Explicit TypeScript typings matching backend relationship payloads
+interface UserType {
+  id: number;
+  name: string;
+}
+
+interface UserStatus {
+  id: number;
+  name: string;
+}
+
+interface BuyerUserData {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  avatar: string | null;
+  user_type?: UserType;
+  status?: UserStatus;
+}
 
 export default function BuyerProfile() {
   const router = useRouter();
+  const { setUser } = useAuthStore();
 
-  // Static mock calculations for tracking notification badges matching your data layer
-  const orderBadges = {
+  // Component State
+  const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState<BuyerUserData | null>(null);
+  const [orderBadges, setOrderBadges] = useState({
     toPay: 0,
-    toShip: 1,
-    toReceive: 1,
-    toRate: 2,
-  };
+    toShip: 0,
+    toReceive: 0,
+    toRate: 0,
+  });
 
-  // Navigates directly to your order list layout while forcing the correct filter selection
-  const handleTrackOrderPress = (statusFilter: string) => {
+  useEffect(() => {
+    async function loadProfileData() {
+      try {
+        setLoading(true);
+
+        // Load latest profile
+        const profile = await profileService.getProfile();
+        setUser(profile);
+        setUserData(profile);
+
+        // Load order badges
+        const response = await fetchOrdersAPI("all", 1);
+
+        if (response.success && response.data) {
+          setOrderBadges({
+            toPay: response.data.badges?.to_pay || 0,
+            toShip: response.data.badges?.to_ship || 0,
+            toReceive: response.data.badges?.to_receive || 0,
+            toRate: response.data.badges?.to_rate || 0,
+          });
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadProfileData();
+  }, []);
+
+  // Structural evaluation flags matching profile rule sets
+  const userTypeName = userData?.user_type?.name?.toUpperCase() || "";
+  const statusName = userData?.status?.name?.toLowerCase() || "";
+
+  // Map user parameters safely to match string validations expected by Laravel index filters
+  const handleTrackOrderPress = (uiLabel: string) => {
+    const backendStatus = STATUS_MAP[uiLabel] || "all";
     router.push({
       pathname: "/order-list",
-      params: { status: statusFilter },
+      params: { status: backendStatus },
     });
   };
+
+  // Redirect to main editable profile view
+  const handleRedirectToMainProfile = (section?: string) => {
+    if (section) {
+      router.push(`/(main)/profile?edit=${section}`);
+    } else {
+      router.push("/(main)/profile");
+    }
+  };
+
+  // Determine standard colors for the status pill badge wrapper
+  const getStatusColor = (status: string) => {
+    const currentStatus = status?.toLowerCase() || "";
+    if (currentStatus.includes("pending") || currentStatus === "for_approval")
+      return "text-[#C6890F] bg-orange-50";
+    if (currentStatus.includes("active") || currentStatus === "approved")
+      return "text-green-500 bg-green-50";
+    return "text-gray-500 bg-gray-50";
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-slate-50">
+        <ActivityIndicator size="large" color="#034194" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -30,14 +136,14 @@ export default function BuyerProfile() {
       showsVerticalScrollIndicator={false}
     >
       {/* PROFILE CARD HEADER CONTAINER */}
-      <View className="mx-4 bg-blue rounded-3xl my-5 p-5 border border-slate-100 shadow-sm">
+      <View className="mx-4 bg-white rounded-3xl my-5 p-5 border border-slate-100 shadow-sm">
         <View className="flex-row items-center justify-between mb-4">
           <Text className="text-primary text-lg font-bold tracking-tight">
             My Account
           </Text>
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => router.push("/notification")}
+            onPress={() => handleRedirectToMainProfile()}
           >
             <Ionicons name="settings-outline" size={22} color="#034194" />
           </TouchableOpacity>
@@ -45,7 +151,9 @@ export default function BuyerProfile() {
 
         <View className="flex-row items-center mt-1">
           <Image
-            source={UserProfile}
+            source={
+              userData?.avatar ? { uri: userData.avatar } : UserProfileFallback
+            }
             style={{
               width: 68,
               height: 68,
@@ -56,12 +164,15 @@ export default function BuyerProfile() {
           />
           <View className="ml-4 flex-1">
             <Text className="text-primary text-xl font-bold tracking-tight">
-              Juan Dela Cruz
+              {userData?.name}
             </Text>
-            <Text className="text-slate-500 text-xs">@juan_delacruz</Text>
-            <View className="bg-primary self-start px-2 py-1 rounded-2xl mt-3">
-              <Text className="text-white text-[10px] font-bold uppercase tracking-wider">
-                Gold Member
+            <Text className="text-slate-500 text-xs">{userData?.phone}</Text>
+
+            <View
+              className={`self-start px-3 py-1 rounded-2xl mt-3 ${getStatusColor(statusName)}`}
+            >
+              <Text className="text-[10px] font-bold uppercase tracking-wider">
+                {userTypeName || "BASIC"} • {statusName || "ACCOUNT"}
               </Text>
             </View>
           </View>
@@ -167,8 +278,24 @@ export default function BuyerProfile() {
 
       {/* ACCOUNT MANAGE SECTIONS LIST */}
       <View className="mx-4 bg-white rounded-3xl p-2 mt-4 border border-slate-100 shadow-sm mb-6">
+        {/* Account Details Redirection */}
         <TouchableOpacity
           activeOpacity={0.6}
+          onPress={() => handleRedirectToMainProfile("info")}
+          className="flex-row items-center justify-between p-4 border-b border-slate-50"
+        >
+          <View className="flex-row items-center">
+            <Ionicons name="person-outline" size={20} color="#034194" />
+            <Text className="ml-3 text-slate-700 font-medium">
+              Account Information
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.6}
+          onPress={() => router.push("/address")}
           className="flex-row items-center justify-between p-4 border-b border-slate-50"
         >
           <View className="flex-row items-center">
@@ -180,33 +307,9 @@ export default function BuyerProfile() {
           <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
         </TouchableOpacity>
 
-        {/* <TouchableOpacity
-          activeOpacity={0.6}
-          className="flex-row items-center justify-between p-4 border-b border-slate-50"
-        >
-          <View className="flex-row items-center">
-            <Ionicons name="card-outline" size={20} color="#034194" />
-            <Text className="ml-3 text-slate-700 font-medium">
-              Payment Methods
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-        </TouchableOpacity> */}
-
-        {/* <TouchableOpacity
-          activeOpacity={0.6}
-          className="flex-row items-center justify-between p-4"
-        >
-          <View className="flex-row items-center">
-            <Ionicons name="help-circle-outline" size={20} color="#034194" />
-            <Text className="ml-3 text-slate-700 font-medium">Help Center</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-        </TouchableOpacity> */}
-
         <TouchableOpacity
           activeOpacity={0.6}
-          onPress={() => router.push("../(main)")}
+          onPress={() => router.push("/(main)")}
           className="flex-row items-center justify-between p-4"
         >
           <View className="flex-row items-center">

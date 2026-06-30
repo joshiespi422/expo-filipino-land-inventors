@@ -1,0 +1,532 @@
+import { CustomAlert } from "@/components/CustomAlert";
+import { profileService } from "@/services/profileService";
+import { Ionicons } from "@expo/vector-icons";
+import { Picker } from "@react-native-picker/picker";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+export default function ManageAddressesScreen() {
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<number | null>(null);
+
+  // Address Dropdown Data lists
+  const [regions, setRegions] = useState<any[]>([]);
+  const [provinces, setProvinces] = useState<any[]>([]);
+  const [cities, setCities] = useState<any[]>([]);
+  const [barangays, setBarangays] = useState<any[]>([]);
+
+  // Form State
+  const [form, setForm] = useState({
+    label: "home",
+    recipient_name: "",
+    recipient_number: "",
+    region: "",
+    province: "",
+    city: "",
+    barangay: "",
+    street: "",
+    unit_bldg_house: "",
+    postal_code: "",
+    landmark: "",
+    is_default: false,
+  });
+
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  useEffect(() => {
+    loadAddresses();
+    fetchRegions();
+  }, []);
+
+  const loadAddresses = async () => {
+    try {
+      setLoading(true);
+      const data = await profileService.getAddresses();
+      setAddresses(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchRegions = async () => {
+    const res = await fetch("https://psgc.gitlab.io/api/regions/");
+    setRegions(await res.json());
+  };
+
+  const fetchProvinces = async (regionCode: string) => {
+    const res = await fetch(
+      `https://psgc.gitlab.io/api/regions/${regionCode}/provinces/`,
+    );
+    setProvinces(await res.json());
+  };
+
+  const fetchCities = async (provinceCode: string) => {
+    const res = await fetch(
+      `https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities/`,
+    );
+    setCities(await res.json());
+  };
+
+  const fetchBarangays = async (cityCode: string) => {
+    const res = await fetch(
+      `https://psgc.gitlab.io/api/cities-municipalities/${cityCode}/barangays/`,
+    );
+    setBarangays(await res.json());
+  };
+
+  const handleOpenModal = async (address: any = null) => {
+    if (address) {
+      // Setup editing
+      setEditingAddressId(address.id);
+      setForm({
+        label: address.label || "home",
+        recipient_name: address.recipient_name || "",
+        recipient_number: address.recipient_number || "",
+        region: address.region || "",
+        province: address.province || "",
+        city: address.city || "",
+        barangay: address.barangay || "",
+        street: address.street || "",
+        unit_bldg_house: address.unit_bldg_house || "",
+        postal_code: address.postal_code || "",
+        landmark: address.landmark || "",
+        is_default: !!address.is_default,
+      });
+      if (address.region) await fetchProvinces(address.region);
+      if (address.province) await fetchCities(address.province);
+      if (address.city) await fetchBarangays(address.city);
+    } else {
+      // Setup creating new
+      setEditingAddressId(null);
+      setForm({
+        label: "home",
+        recipient_name: "",
+        recipient_number: "",
+        region: "",
+        province: "",
+        city: "",
+        barangay: "",
+        street: "",
+        unit_bldg_house: "",
+        postal_code: "",
+        landmark: "",
+        is_default: addresses.length === 0, // auto default if first address
+      });
+    }
+    setModalVisible(true);
+  };
+
+  const handleSave = async () => {
+    if (
+      !form.recipient_name ||
+      !form.recipient_number ||
+      !form.region ||
+      !form.city ||
+      !form.barangay ||
+      !form.street ||
+      !form.unit_bldg_house ||
+      !form.postal_code
+    ) {
+      setAlert({
+        visible: true,
+        title: "Missing Fields",
+        message: "Please populate all necessary validation markers.",
+      });
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      if (editingAddressId) {
+        await profileService.updateAddress(editingAddressId, form);
+      } else {
+        await profileService.addAddress(form);
+      }
+      setModalVisible(false);
+      loadAddresses();
+    } catch (err) {
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "Failed to save the location details.",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    setActionLoading(true);
+    try {
+      await profileService.deleteAddress(id);
+      loadAddresses();
+    } catch (err) {
+      setAlert({
+        visible: true,
+        title: "Error",
+        message: "Failed to delete address entry.",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSetDefault = async (address: any) => {
+    setActionLoading(true);
+    try {
+      await profileService.updateAddress(address.id, {
+        ...address,
+        is_default: true,
+      });
+      loadAddresses();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="large" color="#034194" />
+      </View>
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-[#F8F9FB]">
+      <ScrollView
+        className="flex-1 px-4 pt-6"
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="flex-row justify-between items-center mb-6">
+          <Text className="text-2xl font-black text-gray-800">
+            My Addresses
+          </Text>
+          <TouchableOpacity
+            onPress={() => handleOpenModal(null)}
+            className="flex-row items-center bg-[#034194] px-4 py-2 rounded-full"
+          >
+            <Ionicons name="add" size={18} color="white" />
+            <Text className="text-white font-bold ml-1">Add New</Text>
+          </TouchableOpacity>
+        </View>
+
+        {addresses.map((item) => (
+          <View
+            key={item.id}
+            className="bg-white p-5 rounded-3xl mb-4 border border-gray-100 shadow-sm"
+          >
+            <View className="flex-row justify-between items-start mb-2">
+              <View className="flex-row items-center">
+                <View
+                  className={`px-3 py-1 rounded-full ${item.label === "home" ? "bg-green-50" : "bg-blue-50"}`}
+                >
+                  <Text
+                    className={`font-bold text-xs capitalize ${item.label === "home" ? "text-green-600" : "text-[#034194]"}`}
+                  >
+                    {item.label}
+                  </Text>
+                </View>
+                {item.is_default && (
+                  <View className="bg-amber-50 px-3 py-1 rounded-full ml-2">
+                    <Text className="text-amber-600 font-bold text-xs">
+                      Default
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View className="flex-row space-x-2">
+                <TouchableOpacity
+                  onPress={() => handleOpenModal(item)}
+                  className="p-1"
+                >
+                  <Ionicons name="create-outline" size={20} color="#4B5563" />
+                </TouchableOpacity>
+                {!item.is_default && (
+                  <TouchableOpacity
+                    onPress={() => handleDelete(item.id)}
+                    className="p-1"
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <Text className="text-gray-800 font-bold text-base mb-1">
+              {item.recipient_name}
+            </Text>
+            <Text className="text-gray-500 font-medium text-sm mb-3">
+              {item.recipient_number}
+            </Text>
+            <Text className="text-gray-600 text-sm leading-relaxed">
+              {item.full_address ||
+                `${item.unit_bldg_house}, ${item.street}, ${item.barangay}, ${item.city}, ${item.province || ""}, ${item.region}, ${item.postal_code}`}
+            </Text>
+
+            {item.landmark && (
+              <Text className="text-gray-400 text-xs mt-2 italic">
+                Landmark: {item.landmark}
+              </Text>
+            )}
+
+            {!item.is_default && (
+              <TouchableOpacity
+                onPress={() => handleSetDefault(item)}
+                className="mt-4 border border-gray-200 py-2 rounded-xl items-center"
+              >
+                <Text className="text-gray-600 font-semibold text-xs">
+                  Set as Default Address
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ))}
+      </ScrollView>
+
+      {/* Input Modal for Add/Edit Form */}
+      <Modal visible={modalVisible} animationType="slide" transparent={false}>
+        <View className="flex-1 bg-white pt-12">
+          <View className="flex-row justify-between items-center px-5 pb-4 border-b border-gray-100">
+            <Text className="text-xl font-bold text-gray-800">
+              {editingAddressId ? "Edit Address" : "New Address"}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setModalVisible(false)}
+              className="p-1"
+            >
+              <Ionicons name="close" size={26} color="#4B5563" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            className="flex-1 px-5 pt-4"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              Label Type
+            </Text>
+            <View className="flex-row space-x-3 mb-4">
+              {["home", "office"].map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  onPress={() => setForm({ ...form, label: type })}
+                  className={`flex-1 py-3 rounded-xl items-center border capitalize ${form.label === type ? "border-[#034194] bg-blue-50/40" : "border-gray-200"}`}
+                >
+                  <Text
+                    className={`font-bold ${form.label === type ? "text-[#034194]" : "text-gray-500"}`}
+                  >
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              Recipient Name
+            </Text>
+            <TextInput
+              value={form.recipient_name}
+              onChangeText={(t) => setForm({ ...form, recipient_name: t })}
+              placeholder="e.g. Juan dela Cruz"
+              className="border border-gray-200 p-4 rounded-2xl mb-4 text-gray-800 font-medium"
+            />
+
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              Contact Number
+            </Text>
+            <TextInput
+              value={form.recipient_number}
+              onChangeText={(t) => setForm({ ...form, recipient_number: t })}
+              placeholder="e.g. 09171234567"
+              keyboardType="phone-pad"
+              className="border border-gray-200 p-4 rounded-2xl mb-4 text-gray-800 font-medium"
+            />
+
+            {/* Region Selector */}
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              Region
+            </Text>
+            <View className="border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden">
+              <Picker
+                selectedValue={form.region}
+                onValueChange={(v) => {
+                  setForm({
+                    ...form,
+                    region: v,
+                    province: "",
+                    city: "",
+                    barangay: "",
+                  });
+                  if (v) fetchProvinces(v);
+                }}
+              >
+                <Picker.Item label="Select Region" value="" />
+                {regions.map((r) => (
+                  <Picker.Item key={r.code} label={r.name} value={r.code} />
+                ))}
+              </Picker>
+            </View>
+
+            {/* Province Selector */}
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              Province
+            </Text>
+            <View className="border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden">
+              <Picker
+                selectedValue={form.province}
+                onValueChange={(v) => {
+                  setForm({ ...form, province: v, city: "", barangay: "" });
+                  if (v) fetchCities(v);
+                }}
+              >
+                <Picker.Item label="Select Province" value="" />
+                {provinces.map((p) => (
+                  <Picker.Item key={p.code} label={p.name} value={p.code} />
+                ))}
+              </Picker>
+            </View>
+
+            {/* City Selector */}
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              City / Municipality
+            </Text>
+            <View className="border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden">
+              <Picker
+                selectedValue={form.city}
+                onValueChange={(v) => {
+                  setForm({ ...form, city: v, barangay: "" });
+                  if (v) fetchBarangays(v);
+                }}
+              >
+                <Picker.Item label="Select City" value="" />
+                {cities.map((c) => (
+                  <Picker.Item key={c.code} label={c.name} value={c.code} />
+                ))}
+              </Picker>
+            </View>
+
+            {/* Barangay Selector */}
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              Barangay
+            </Text>
+            <View className="border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden">
+              <Picker
+                selectedValue={form.barangay}
+                onValueChange={(v) => setForm({ ...form, barangay: v })}
+              >
+                <Picker.Item label="Select Barangay" value="" />
+                {barangays.map((b) => (
+                  <Picker.Item key={b.code} label={b.name} value={b.code} />
+                ))}
+              </Picker>
+            </View>
+
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              Unit / Building / House No.
+            </Text>
+            <TextInput
+              value={form.unit_bldg_house}
+              onChangeText={(t) => setForm({ ...form, unit_bldg_house: t })}
+              placeholder="e.g. Apt 4B, 2nd Flr, Blk 5"
+              className="border border-gray-200 p-4 rounded-2xl mb-4 text-gray-800 font-medium"
+            />
+
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              Street Name
+            </Text>
+            <TextInput
+              value={form.street}
+              onChangeText={(t) => setForm({ ...form, street: t })}
+              placeholder="e.g. 123 Rizal Street"
+              className="border border-gray-200 p-4 rounded-2xl mb-4 text-gray-800 font-medium"
+            />
+
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              Postal Code
+            </Text>
+            <TextInput
+              value={form.postal_code}
+              onChangeText={(t) => setForm({ ...form, postal_code: t })}
+              placeholder="e.g. 2009"
+              keyboardType="number-pad"
+              className="border border-gray-200 p-4 rounded-2xl mb-4 text-gray-800 font-medium"
+            />
+
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+              Landmark (Optional)
+            </Text>
+            <TextInput
+              value={form.landmark}
+              onChangeText={(t) => setForm({ ...form, landmark: t })}
+              placeholder="e.g. Near Barangay Hall, Across Shell Station"
+              className="border border-gray-200 p-4 rounded-2xl mb-4 text-gray-800 font-medium"
+            />
+
+            <View className="flex-row justify-between items-center py-4 border-t border-b border-gray-100 my-4">
+              <View>
+                <Text className="text-gray-800 font-bold text-sm">
+                  Set as Default Address
+                </Text>
+                <Text className="text-gray-400 text-xs">
+                  Makes this your primary transaction address
+                </Text>
+              </View>
+              <Switch
+                value={form.is_default}
+                onValueChange={(v) => setForm({ ...form, is_default: v })}
+                trackColor={{ false: "#E2E8F0", true: "#DBEAFE" }}
+                thumbColor={form.is_default ? "#034194" : "#94A3B8"}
+              />
+            </View>
+            <View className="h-10" />
+          </ScrollView>
+
+          <View className="p-5 bg-white border-t border-gray-100">
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={actionLoading}
+              className="h-14 rounded-2xl justify-center items-center bg-[#034194]"
+            >
+              {actionLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text className="text-white font-bold text-base">
+                  Save Address
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => setAlert({ ...alert, visible: false })}
+      />
+    </View>
+  );
+}
