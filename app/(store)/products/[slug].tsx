@@ -418,7 +418,9 @@ export default function Products() {
               )}
             </View>
             <View className="flex-row gap-3 items-center">
-              <Text className="text-slate-500">1.2k sold</Text>
+              <Text className="text-slate-500">
+                {product.sold_count ?? 0} sold
+              </Text>
               <Text className="text-slate-300">|</Text>
               <Text className="text-slate-500">Stock: {currentStock}</Text>
             </View>
@@ -455,8 +457,11 @@ export default function Products() {
           <View className="mt-5 bg-blue rounded-xl p-4">
             <View className="flex-row justify-between items-center">
               <Text className="font-semibold text-base">
-                <Text className="text-slate-500 pr-3">4.9 ⭐</Text> Customer
-                Feedback
+                <Text className="text-slate-500 pr-3">
+                  {" "}
+                  {product.rating ?? 0} ⭐
+                </Text>{" "}
+                Customer Feedback
               </Text>
               <TouchableOpacity>
                 <Text className="text-primary font-medium">See All</Text>
@@ -550,7 +555,9 @@ export default function Products() {
 
               <View className="flex-row justify-between mt-4">
                 <View>
-                  <Text className="text-center font-semibold">4.8</Text>
+                  <Text className="text-center font-semibold">
+                    {product.store?.rating ?? 0}
+                  </Text>
                   <Text className="text-center text-xs text-slate-500">
                     Rating
                   </Text>
