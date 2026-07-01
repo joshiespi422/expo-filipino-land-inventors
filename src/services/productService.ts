@@ -64,12 +64,14 @@ export interface Store {
   name: string;
   slug: string;
   logo: string | null;
+  rating: number | null;
   is_official: boolean;
 }
 
 export interface DetailedProduct {
   id: number;
   name: string;
+  sold_count: number | null;
   description: string | null;
   is_featured: boolean;
   is_active: boolean;
@@ -108,6 +110,70 @@ export interface CollectionResponse {
   collections: CollectionProduct[];
 }
 
+export interface TopDealsResponse {
+  success: boolean;
+  data: {
+    products: Product[];
+    pagination: Pagination;
+  };
+}
+
+export interface DirectCheckoutSelectPayload {
+  mode: "direct";
+  product_variant_id: number;
+  quantity: number;
+}
+
+export interface DirectCheckoutSelectResponse {
+  success: boolean;
+  message?: string;
+}
+
+// ==========================================
+// SHOP SPECIFIC TYPES (Used by Store.tsx Layout)
+// ==========================================
+export interface ShopDetails {
+  id: number;
+  name: string;
+  slug: string;
+  logo: string | null;
+  banner: string | null;
+  description: string | null;
+  rating: number | null;
+  is_official: boolean;
+  created_at: string;
+}
+
+export interface ShopProduct {
+  id: number;
+  name: string;
+  slug: string;
+  rating: number | null;
+  sold_count: number | null;
+  image: string | null;
+  price: string | number | null;
+  compare_price: string | number | null;
+  stock: number;
+  is_liked: boolean;
+}
+
+export interface ShopPagination {
+  current_page: number;
+  last_page: number;
+  has_more: boolean;
+  total?: number;
+}
+
+export interface StoreProductResponse {
+  success: boolean;
+  message: string;
+  data: {
+    store: ShopDetails;
+    products: ShopProduct[];
+    pagination: ShopPagination;
+  };
+}
+
 /**
  * STORE HOME
  */
@@ -136,17 +202,6 @@ export const getProductShow = async (
 };
 
 /**
- * TOP DEAL
- */
-export interface TopDealsResponse {
-  success: boolean;
-  data: {
-    products: Product[];
-    pagination: Pagination;
-  };
-}
-
-/**
  * MY COLLECTIONS
  */
 export const getCollections = async (): Promise<CollectionResponse> => {
@@ -156,43 +211,27 @@ export const getCollections = async (): Promise<CollectionResponse> => {
 
 /**
  * TOGGLE COLLECTION
- * Expects the product slug string to match Laravel Route Model Binding rules
  */
 export const toggleCollection = async (
   slug: string,
 ): Promise<ToggleCollectionResponse> => {
   const response = await api.post(`/store/collections/${slug}/toggle`);
-
   console.log(
     `TOGGLE COLLECTION (${slug}):`,
     JSON.stringify(response.data, null, 2),
   );
-
   return response.data;
 };
 
+/**
+ * GET TOP DEALS
+ */
 export const getTopDeals = async (
   page: number = 1,
 ): Promise<TopDealsResponse> => {
-  const response = await api.get("/store/top-deals", {
-    params: {
-      page,
-    },
-  });
-
+  const response = await api.get("/store/top-deals", { params: { page } });
   return response.data;
 };
-
-export interface DirectCheckoutSelectPayload {
-  mode: "direct";
-  product_variant_id: number;
-  quantity: number;
-}
-
-export interface DirectCheckoutSelectResponse {
-  success: boolean;
-  message?: string;
-}
 
 /**
  * DIRECT CHECKOUT SELECT VERIFICATION
@@ -201,5 +240,16 @@ export const selectDirectCheckout = async (
   payload: DirectCheckoutSelectPayload,
 ): Promise<DirectCheckoutSelectResponse> => {
   const response = await api.post("/store/checkout/select", payload);
+  return response.data;
+};
+
+/**
+ * GET STORE DETAILS BY SLUG (Fully Dynamic backend endpoint)
+ */
+export const getStore = async (
+  slug: string,
+  page: number = 1,
+): Promise<StoreProductResponse> => {
+  const response = await api.get(`/store/${slug}`, { params: { page } });
   return response.data;
 };

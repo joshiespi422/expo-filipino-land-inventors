@@ -17,7 +17,7 @@ import {
   ShopDetails,
   ShopPagination,
   ShopProduct,
-} from "@/services/shop";
+} from "@/services/productService"; // Updated reference to pull from service file directly
 
 import UserProfile from "../../../assets/images/UserProfile.jpg";
 
@@ -41,7 +41,6 @@ export default function Store() {
 
   // Fetch store data dynamically from API backend
   useEffect(() => {
-    // Prevent fetching if slug is empty, undefined, or still a placeholder
     if (!storeSlug || storeSlug === "undefined" || storeSlug === "[slug]") {
       setLoading(false);
       return;
@@ -50,18 +49,15 @@ export default function Store() {
     const fetchStoreData = async () => {
       try {
         setLoading(true);
-
-        // DEBUG LOG: Check your terminal to see exactly what slug value is passed
         console.log(`📡 Fetching store data for slug: "${storeSlug}"`);
 
         const response = await getStore(storeSlug, 1);
 
         if (response && response.success && response.data) {
           setStoreDetails(response.data.store);
-          setStoreProducts(response.data.products);
+          setStoreProducts(response.data.products || []);
           setPagination(response.data.pagination);
         } else {
-          // Handle cases where response status is 200 but success flag is false
           setStoreDetails(null);
         }
       } catch (error: any) {
@@ -101,7 +97,7 @@ export default function Store() {
           Store Not Found
         </Text>
         <Text className="text-slate-500 text-sm mt-2 text-center">
-          The store with slug {storeSlug} could not be retrieved.
+          The store with slug "{storeSlug}" could not be retrieved.
         </Text>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -164,32 +160,37 @@ export default function Store() {
                   style={{
                     width: 75,
                     height: 75,
-                    borderRadius: 50,
+                    borderRadius: 37.5,
+                    backgroundColor: "#f1f5f9",
                   }}
                 />
 
                 <View className="ml-4 flex-1">
-                  <View className="flex-row items-center">
+                  <View className="flex-row items-center flex-wrap">
                     <Text
-                      className="text-primary text-2xl font-bold"
+                      className="text-primary text-2xl font-bold mr-1"
                       numberOfLines={1}
                     >
                       {storeDetails.name || "Fashion Store"}
                     </Text>
 
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={18}
-                      color="#034194"
-                      style={{
-                        marginLeft: 5,
-                      }}
-                    />
+                    {storeDetails.is_official && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={18}
+                        color="#034194"
+                      />
+                    )}
                   </View>
 
-                  <Text className="text-slate-500">Las Piñas City</Text>
+                  <Text
+                    className="text-slate-500 text-xs mt-1"
+                    numberOfLines={2}
+                  >
+                    {storeDetails.description || "Welcome to our store!"}
+                  </Text>
 
-                  <Text className="text-slate-400 text-sm mt-1">
+                  <Text className="text-slate-400 text-xs mt-1">
                     Online now
                   </Text>
                 </View>
@@ -225,26 +226,29 @@ export default function Store() {
 
               {/* SHOP INFO / METRICS BLOCK */}
               <View className="flex-row justify-between mt-6">
-                <View>
-                  <Text className="font-bold text-center text-lg">4.9 ⭐</Text>
-                  <Text className="text-slate-500">Rating</Text>
-                </View>
-
-                <View>
+                <View className="items-center flex-1">
                   <Text className="font-bold text-center text-lg">
-                    {storeProducts.length}
+                    {storeDetails.rating
+                      ? `${Number(storeDetails.rating).toFixed(1)} ⭐`
+                      : "—"}
                   </Text>
-                  <Text className="text-slate-500">Products</Text>
+                  <Text className="text-slate-500 text-xs mt-1">Rating</Text>
                 </View>
 
-                <View>
-                  <Text className="font-bold text-center text-lg">10.5K</Text>
-                  <Text className="text-slate-500">Followers</Text>
+                <View className="items-center flex-1 border-x border-slate-100">
+                  <Text className="font-bold text-center text-lg">
+                    {pagination?.total !== undefined
+                      ? pagination.total
+                      : storeProducts.length}
+                  </Text>
+                  <Text className="text-slate-500 text-xs mt-1">Products</Text>
                 </View>
 
-                <View>
-                  <Text className="font-bold text-center text-lg">98</Text>
-                  <Text className="text-slate-500">Following</Text>
+                <View className="items-center flex-1">
+                  <Text className="font-bold text-center text-lg text-green-600">
+                    Active
+                  </Text>
+                  <Text className="text-slate-500 text-xs mt-1">Status</Text>
                 </View>
               </View>
             </View>
@@ -263,15 +267,12 @@ export default function Store() {
               id: item.id.toString(),
               name: item.name,
               price: item.price
-                ? `₱${Number(item.price).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}`
+                ? `₱${Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 : "₱0.00",
               image: item.image ?? "",
-              sold: `${item.stock ?? 0} stocks`,
-              rating: "5.0",
-              location: storeDetails.name || "Las Piñas City",
+              sold_count: `${item.sold_count ?? 0} sold`,
+              rating: item.rating,
+              stock: item.stock,
               category: "",
             }}
             onPress={() =>
