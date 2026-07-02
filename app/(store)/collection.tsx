@@ -7,12 +7,13 @@ import {
   toggleCollection,
 } from "@/services/productService";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router"; // 1. Added useFocusEffect import
-import React, { useCallback, useState } from "react"; // Removed unused useEffect
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   FlatList,
   RefreshControl,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -24,6 +25,9 @@ export default function FavoritesPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [favoriteItems, setFavoriteItems] = useState<CollectionProduct[]>([]);
   const [cartCount, setCartCount] = useState<number>(0);
+
+  // Local states for filtering items on-page
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Central data loader for collections and cart badges
   const fetchPageData = async (showLoadingIndicator = true) => {
@@ -68,14 +72,8 @@ export default function FavoritesPage() {
     }
   };
 
-  /**
-   * 2. REPLACED useEffect WITH useFocusEffect
-   * This hook runs every single time the user navigates back to this screen,
-   * guaranteeing your badge configurations remain accurate.
-   */
   useFocusEffect(
     useCallback(() => {
-      // Fetch fresh totals on screen entry without full-screen layout flashes
       fetchPageData(favoriteItems.length === 0);
     }, []),
   );
@@ -114,36 +112,77 @@ export default function FavoritesPage() {
     });
   };
 
-  const handleCartPress = () => {
-    router.push("/cart");
-  };
+  // Live client-side product filtering based on your search entry criteria
+  const displayedItems = favoriteItems.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    return item.product?.name
+      ?.toLowerCase()
+      .includes(searchQuery.toLowerCase());
+  });
 
   return (
-    <View className="flex-1 bg-slate-100">
-      {/* SHOPEE STYLE TOP FIXED HEADER */}
-      <View className="bg-white pt-3 pb-1 px-4 flex-row items-center justify-between border-b border-slate-200">
-        <View className="flex-row items-center">
-          <Text className="text-xl font-bold text-slate-800">My Favorites</Text>
+    <View className="flex-1 bg-slate-50">
+      {/* ACTIONS TOP HEADER CONTAINER */}
+      <View className="bg-white pt-3 pb-3 px-4 border-b border-slate-200">
+        {/* Row 1: Title and Counter */}
+        {/* <View className="flex-row items-center mb-3">
+          <Text className="text-xl font-bold text-slate-800">
+            My Collection
+          </Text>
           <Text className="text-xs text-slate-400 ml-2 bg-slate-100 px-2 py-0.5 rounded-full font-medium">
             {loading ? "..." : favoriteItems.length}
           </Text>
-        </View>
+        </View> */}
 
-        <TouchableOpacity onPress={handleCartPress} className="p-2 relative">
-          <Ionicons name="cart-outline" size={24} color="#034194" />
-          {cartCount > 0 && (
-            <View className="absolute top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 z-10 border border-white">
-              <Text className="text-white text-[9px] font-bold">
-                {cartCount > 99 ? "99+" : cartCount}
-              </Text>
+        {/* Row 2: Direct Search input bar + Functional App Icons */}
+        <View className="flex-row items-center">
+          <View className="flex-1 flex-row items-center bg-slate-100 rounded-2xl px-4 h-12 border border-slate-200">
+            <Ionicons name="search" size={20} color="#64748b" />
+            <TextInput
+              placeholder="Search items in collection..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              className="flex-1 text-slate-800 ml-2 text-sm h-full"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={18} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* CART ICON WITH BADGE COUNTER */}
+          <TouchableOpacity
+            onPress={() => router.push("/cart")}
+            className="ml-3 bg-white h-12 w-12 rounded-2xl items-center justify-center border border-slate-200 relative"
+          >
+            <Ionicons name="cart-outline" size={22} color="#034194" />
+            {cartCount > 0 && (
+              <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-white">
+                <Text className="text-white text-[10px] font-bold">
+                  {cartCount > 99 ? "99+" : cartCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* CHAT REDIRECT ICON */}
+          <TouchableOpacity
+            onPress={() => router.push("/chat-list")}
+            className="ml-2 bg-white h-12 w-12 rounded-2xl items-center justify-center border border-slate-200 relative"
+          >
+            <Ionicons name="chatbubble-outline" size={22} color="#034194" />
+            <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1">
+              <Text className="text-white text-[10px] font-bold">3</Text>
             </View>
-          )}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* PRODUCTS GRID */}
       <FlatList
-        data={loading ? [] : favoriteItems}
+        data={loading ? [] : displayedItems}
         renderItem={({ item }) => {
           const product = item.product;
           if (!product) return null;
@@ -184,15 +223,16 @@ export default function FavoritesPage() {
           item.id ? item.id.toString() : `fav-${item.product_id}-${index}`
         }
         numColumns={2}
-        columnWrapperStyle={{
-          justifyContent: "space-between",
-          paddingHorizontal: 4,
-        }}
-        contentContainerStyle={{ padding: 4, paddingBottom: 20 }}
+        columnWrapperStyle={
+          displayedItems.length > 0
+            ? { justifyContent: "space-between" }
+            : undefined
+        }
+        contentContainerStyle={{ padding: 7, paddingBottom: 20 }}
         ListHeaderComponent={
           <>
             {loading && (
-              <View className="flex-row flex-wrap justify-between pt-2 px-1">
+              <View className="flex-row flex-wrap justify-between pt-2">
                 {[1, 2, 3, 4].map((skeletonId) => (
                   <View
                     key={skeletonId}
@@ -204,6 +244,20 @@ export default function FavoritesPage() {
                 ))}
               </View>
             )}
+
+            {!loading &&
+              favoriteItems.length > 0 &&
+              displayedItems.length === 0 && (
+                <View className="items-center justify-center py-20">
+                  <Ionicons name="search-outline" size={48} color="#94a3b8" />
+                  <Text className="text-slate-500 font-semibold text-base mt-2">
+                    No matching items found
+                  </Text>
+                  <Text className="text-slate-400 text-xs text-center mt-1">
+                    Try adjusting your search criteria keywords.
+                  </Text>
+                </View>
+              )}
 
             {!loading && favoriteItems.length === 0 && (
               <View className="items-center justify-center py-20">
