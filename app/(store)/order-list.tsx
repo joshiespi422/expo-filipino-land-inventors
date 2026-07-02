@@ -101,19 +101,8 @@ export default function OrderList() {
 
   return (
     <View className="flex-1 bg-slate-100">
-      {/* HEADER BAR ROW */}
-      <View className="bg-white px-4 pt-5 pb-3 flex-row items-center border-b border-slate-100">
-        <TouchableOpacity
-          onPress={() => router.push("/home")}
-          className="mr-3 p-1"
-        >
-          <Ionicons name="home-outline" size={22} color="#1e293b" />
-        </TouchableOpacity>
-        <Text className="font-bold text-xl text-slate-800">Return Home</Text>
-      </View>
-
       {/* FILTER TABS SCROLL BAR */}
-      <View className="bg-white py-3 border-b border-slate-200">
+      <View className="bg-white pt-3 border-b-2 border-slate-200">
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -125,14 +114,12 @@ export default function OrderList() {
               <TouchableOpacity
                 key={tab.slug}
                 onPress={() => setSelectedSlug(tab.slug)}
-                className={`mr-2 px-4 py-2 rounded-full border ${
-                  isTabActive
-                    ? "bg-[#034194] border-[#034194]"
-                    : "bg-slate-50 border-slate-200"
+                className={`mx-4 py-2 ${
+                  isTabActive ? "border-b-2 border-[#034194]" : ""
                 }`}
               >
                 <Text
-                  className={`font-medium text-xs ${isTabActive ? "text-white" : "text-slate-600"}`}
+                  className={`text-md px-1 ${isTabActive ? "text-primary font-bold" : "text-slate-600"}`}
                 >
                   {tab.label}
                 </Text>
@@ -162,20 +149,20 @@ export default function OrderList() {
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.1}
           renderItem={({ item }) => (
-            <View className="bg-white rounded-2xl mb-4 p-4 border border-slate-200 shadow-sm">
+            <View className="bg-white rounded-2xl mb-4 p-3 border border-slate-200 shadow-sm">
               {/* SHOP HEADER */}
-              <View className="flex-row justify-between items-center mb-3">
+              <View className="flex-row bg-blue px-2 py-3 rounded-xl justify-between items-center mb-3">
                 <View className="flex-row items-center">
                   <Ionicons
                     name="storefront-outline"
                     size={18}
                     color="#034194"
                   />
-                  <Text className="ml-2 font-bold text-slate-800">
+                  <Text className="ml-2 font-bold text-primary">
                     {item.store_name || "Unknown Shop"}
                   </Text>
                 </View>
-                <Text className="text-[#034194] font-semibold text-xs bg-blue-50 px-2 py-1 rounded-md">
+                <Text className="text-slate-200 text-sm">
                   {item.status_label}
                 </Text>
               </View>
@@ -257,7 +244,7 @@ export default function OrderList() {
                 )}
 
                 <TouchableOpacity
-                  onPress={() => router.push(`/orders/${item.id}`)}
+                  // onPress={() => router.push(`/orders/${item.id}`)}
                   className="bg-[#034194] px-4 py-2 rounded-xl"
                 >
                   <Text className="text-white text-xs font-semibold">
