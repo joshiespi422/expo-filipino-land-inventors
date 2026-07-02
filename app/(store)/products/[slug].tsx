@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
   Image,
   Modal,
   ScrollView,
@@ -15,20 +17,22 @@ import {
 } from "react-native";
 
 import { ProductCard } from "@/components/ProductItems";
+import { addToCart, getCart } from "@/services/cart";
 import {
   DetailedProduct,
   getProductShow,
   getStoreHome,
   Product,
   selectDirectCheckout,
+  toggleCollection,
 } from "@/services/productService";
-
-import { addToCart } from "@/services/cart";
 
 import delivery from "../../../assets/images/icon/deliveryBlueB.png";
 import UserProfile from "../../../assets/images/UserProfile.jpg";
 
 type ActionType = "cart" | "buy_now" | null;
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function Products() {
   const router = useRouter();
@@ -47,6 +51,39 @@ export default function Products() {
   const [quantity, setQuantity] = useState<number>(1);
   const [modal, setModal] = useState<boolean>(false);
   const [modalAction, setModalAction] = useState<ActionType>(null);
+
+  // Real-time Cart Count Tracker matched from homepage
+  const [cartCount, setCartCount] = useState<number>(0);
+
+  // Animation States
+  const [showFlyAnimation, setShowFlyAnimation] = useState<boolean>(false);
+  const flyX = useRef(new Animated.Value(0)).current;
+  const flyY = useRef(new Animated.Value(0)).current;
+  const flyScale = useRef(new Animated.Value(1)).current;
+
+  // Pull modern cart parameters from database context
+  const fetchCartCountOnly = async () => {
+    try {
+      const response = await getCart();
+      if (
+        response &&
+        response.success &&
+        response.cart &&
+        response.cart.items
+      ) {
+        const totalItemsCount = response.cart.items.reduce(
+          (accumulator, item) => accumulator + (item.quantity ?? 0),
+          0,
+        );
+        setCartCount(totalItemsCount);
+      }
+    } catch (error) {
+      console.error(
+        "Failed silently to pull modern cart status parameters:",
+        error,
+      );
+    }
+  };
 
   useEffect(() => {
     if (!slug) {
@@ -71,8 +108,6 @@ export default function Products() {
         }
 
         const initialSelections: Record<string, string> = {};
-
-        // Find standard fallback variant configurations
         const defaultVariant =
           detailedProduct.variants.find((v) => v.is_default) ||
           detailedProduct.variants[0];
@@ -81,7 +116,6 @@ export default function Products() {
           if (defaultVariant.image) {
             initialImage = defaultVariant.image;
           }
-          // Pre-populate selections from default variant to avoid broken state UI
           defaultVariant.attributes.forEach((attr) => {
             initialSelections[attr.name] = attr.value;
           });
@@ -123,6 +157,13 @@ export default function Products() {
     fetchProductData();
   }, [slug]);
 
+  // Handle focus count logic safely
+  useFocusEffect(
+    useCallback(() => {
+      fetchCartCountOnly();
+    }, []),
+  );
+
   // Exact variant match calculation
   const currentVariant =
     product?.variants.find(
@@ -135,7 +176,6 @@ export default function Products() {
   const defaultVariant =
     product?.variants.find((v) => v.is_default) || product?.variants[0];
 
-  // Dynamic values depending on active combinations selected by user
   const displayPrice = currentVariant
     ? currentVariant.price
     : defaultVariant
@@ -147,7 +187,6 @@ export default function Products() {
       ? defaultVariant.compare_price
       : null;
 
-  // Calculate clean stock pools relative to partial or full selections
   const totalDefaultStock =
     product?.variants.reduce((acc, v) => acc + v.stock, 0) || 0;
 
@@ -182,7 +221,6 @@ export default function Products() {
 
   const groupedAttributes = getGroupedAttributes();
 
-  // Look-ahead check to verify if a combination variation is valid and has stock
   const isOptionAvailable = (attributeName: string, optionValue: string) => {
     if (!product) return false;
 
@@ -243,9 +281,66 @@ export default function Products() {
     });
   };
 
+  const handleToggleFavorite = async (
+    productId: number,
+    recommendationSlug: string,
+  ) => {
+    if (!recommendationSlug) return;
+
+    setRecommendations((prevRecs) =>
+      prevRecs.map((p) =>
+        p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
+      ),
+    );
+
+    try {
+      await toggleCollection(recommendationSlug);
+    } catch (error) {
+      console.error("Failed to sync collection endpoint changes:", error);
+      // Rollback UI
+      setRecommendations((prevRecs) =>
+        prevRecs.map((p) =>
+          p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
+        ),
+      );
+    }
+  };
+
   const openPurchaseModal = (action: ActionType) => {
     setModalAction(action);
     setModal(true);
+  };
+
+  const triggerFlyAnimation = () => {
+    flyX.setValue(0);
+    flyY.setValue(0);
+    flyScale.setValue(1);
+    setShowFlyAnimation(true);
+
+    // Precise absolute translation targeted directly to top-right corner floating icon
+    const targetX = SCREEN_WIDTH / 2 - 45;
+    const targetY = -(SCREEN_HEIGHT / 2 - 60);
+
+    Animated.parallel([
+      Animated.timing(flyX, {
+        toValue: targetX,
+        duration: 750,
+        useNativeDriver: true,
+      }),
+      Animated.timing(flyY, {
+        toValue: targetY,
+        duration: 750,
+        useNativeDriver: true,
+      }),
+      Animated.timing(flyScale, {
+        toValue: 0.15,
+        duration: 750,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowFlyAnimation(false);
+      fetchCartCountOnly(); // Automatically pulls absolute totals from database matching home count refresh
+    });
   };
 
   const handleConfirmAction = async () => {
@@ -258,19 +353,19 @@ export default function Products() {
       setSubmitting(true);
 
       if (modalAction === "cart") {
-        const response = await addToCart({
+        await addToCart({
           product_variant_id: currentVariant.id,
           quantity,
         });
 
         setModal(false);
-        Alert.alert("Success", response?.message || "Added to cart.");
-        router.push("/cart");
+        setTimeout(() => {
+          triggerFlyAnimation();
+        }, 300);
         return;
       }
 
       if (modalAction === "buy_now") {
-        // Safe backend verification execution inside your abstraction layer
         const verifyResponse = await selectDirectCheckout({
           mode: "direct",
           product_variant_id: currentVariant.id,
@@ -347,13 +442,31 @@ export default function Products() {
     .filter((url, index, self) => self.indexOf(url) === index);
 
   return (
-    <View className="flex-1 bg-white p-1">
+    <View className="flex-1 bg-white relative">
+      {/* ABSOLUTE FIXED OVERLAY BUTTON CONTAINER (Floating, remains in view when scrolling) */}
+
+      <TouchableOpacity
+        onPress={() => router.push("/cart")}
+        activeOpacity={0.8}
+        style={styles.fixedCartBtn}
+        className="bg-black/40 h-11 w-11 p-2 rounded-full z-20 items-center justify-center relative"
+      >
+        <Ionicons name="cart" size={22} color="#ffffff" />
+        {cartCount > 0 && (
+          <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-white">
+            <Text className="text-white text-[10px] font-bold">
+              {cartCount > 99 ? "99+" : cartCount}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 110 }}
       >
-        {/* MAIN IMAGE */}
-        <View className="p-1 border border-primary/20 shadow-brand rounded-2xl">
+        {/* MAIN IMAGE CONTAINER */}
+        <View className="p-1 mt-2 border border-primary/20 shadow-brand rounded-2xl relative">
           {mainImage || fallbackImageUri ? (
             <Image
               source={{
@@ -604,8 +717,12 @@ export default function Products() {
                     rating: item.rating,
                     stock: item.stock,
                     category: "",
+                    isLiked: item.is_liked,
                   }}
                   onPress={() => handleProductPress(item.slug)}
+                  onFavoritePress={() =>
+                    handleToggleFavorite(item.id, item.slug)
+                  }
                 />
               ))}
               {recommendations.length === 0 && (
@@ -837,15 +954,57 @@ export default function Products() {
           </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
+
+      {/* FLY TO CART ANIMATED CONTAINER */}
+      {showFlyAnimation && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.animatedFlyer,
+            {
+              transform: [
+                { translateX: flyX },
+                { translateY: flyY },
+                { scale: flyScale },
+              ],
+            },
+          ]}
+        >
+          <Image
+            source={{ uri: formatImageUrl(mainImage || fallbackImageUri) }}
+            style={{ width: 70, height: 70, borderRadius: 12 }}
+          />
+        </Animated.View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  fixedCartBtn: {
+    position: "absolute",
+    top: 30,
+    right: 21,
+    zIndex: 30,
+    elevation: 5,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
     justifyContent: "flex-end",
     alignItems: "center",
+  },
+  animatedFlyer: {
+    position: "absolute",
+    top: SCREEN_HEIGHT / 2 - 35,
+    left: SCREEN_WIDTH / 2 - 35,
+    width: 70,
+    height: 70,
+    zIndex: 999,
+    elevation: 11,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
 });
