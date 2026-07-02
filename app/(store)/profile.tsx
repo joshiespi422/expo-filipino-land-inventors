@@ -136,53 +136,58 @@ export default function BuyerProfile() {
       showsVerticalScrollIndicator={false}
     >
       {/* PROFILE CARD HEADER CONTAINER */}
-      <View className="mx-4 bg-white rounded-3xl my-5 p-5 border border-slate-100 shadow-sm">
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-primary text-lg font-bold tracking-tight">
-            My Account
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => handleRedirectToMainProfile()}
-          >
-            <Ionicons name="settings-outline" size={22} color="#034194" />
-          </TouchableOpacity>
-        </View>
-
-        <View className="flex-row items-center mt-1">
-          <Image
-            source={
-              userData?.avatar ? { uri: userData.avatar } : UserProfileFallback
-            }
-            style={{
-              width: 68,
-              height: 68,
-              borderRadius: 34,
-              borderWidth: 3,
-            }}
-            className="border-primary"
-          />
-          <View className="ml-4 flex-1">
-            <Text className="text-primary text-xl font-bold tracking-tight">
-              {userData?.name}
-            </Text>
-            <Text className="text-slate-500 text-xs">{userData?.phone}</Text>
-
-            <View
-              className={`self-start px-3 py-1 rounded-2xl mt-3 ${getStatusColor(statusName)}`}
-            >
-              <Text className="text-[10px] font-bold uppercase tracking-wider">
-                {userTypeName || "BASIC"} • {statusName || "ACCOUNT"}
+      <View className="bg-primary w-full rounded-b-2xl px-10 pt-20 pb-10">
+        <View className="flex-row justify-between items-start pb-5">
+          <View className="flex-row items-center">
+            <Image
+              source={
+                userData?.avatar
+                  ? { uri: userData.avatar }
+                  : UserProfileFallback
+              }
+              style={{
+                width: 68,
+                height: 68,
+                borderRadius: 34,
+                borderWidth: 3,
+              }}
+              className="border-white"
+            />
+            <View className="ml-4">
+              <Text className="text-white text-xl font-bold tracking-tight">
+                {userData?.name}
               </Text>
+              <Text className="text-white text-xs">{userData?.phone}</Text>
+
+              <View
+                className={`self-start px-3 py-1 rounded-2xl mt-3 ${getStatusColor(statusName)}`}
+              >
+                <Text className="text-[10px] font-bold uppercase tracking-wider">
+                  {userTypeName || "BASIC"} • {statusName || "ACCOUNT"}
+                </Text>
+              </View>
             </View>
+          </View>
+
+          <View className="pt-3">
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handleRedirectToMainProfile()}
+            >
+              <Ionicons name="settings-outline" size={22} color="#fff" />
+            </TouchableOpacity>
           </View>
         </View>
       </View>
 
       {/* TRACKING ORDER STATES LAYER */}
-      <View className="mx-4 bg-white rounded-3xl p-4 border border-slate-100 shadow-sm">
+      {/* Negative placement applied via native style object properties to bypass NativeWind limitations */}
+      <View
+        className="mx-4 bg-white rounded-3xl p-4 border border-slate-100 shadow-sm"
+        style={{ marginTop: -20, zIndex: 10 }}
+      >
         <View className="flex-row justify-between items-center border-b border-slate-100 pb-3 mb-4">
-          <Text className="font-bold text-slate-800 text-base tracking-tight">
+          <Text className="font-bold text-primary text-base tracking-tight">
             My Purchases
           </Text>
           <TouchableOpacity
@@ -205,7 +210,7 @@ export default function BuyerProfile() {
             className="items-center justify-center w-16 relative"
           >
             <Ionicons name="wallet-outline" size={24} color="#034194" />
-            <Text className="text-[11px] text-slate-600 font-medium mt-2 text-center">
+            <Text className="text-[11px] text-primary font-medium mt-2 text-center">
               To Pay
             </Text>
             {orderBadges.toPay > 0 && (
@@ -224,7 +229,7 @@ export default function BuyerProfile() {
             className="items-center justify-center w-16 relative"
           >
             <Ionicons name="cube-outline" size={24} color="#034194" />
-            <Text className="text-[11px] text-slate-600 font-medium mt-2 text-center">
+            <Text className="text-[11px] text-primary  font-medium mt-2 text-center">
               To Ship
             </Text>
             {orderBadges.toShip > 0 && (
@@ -243,7 +248,7 @@ export default function BuyerProfile() {
             className="items-center justify-center w-16 relative"
           >
             <Ionicons name="airplane-outline" size={24} color="#034194" />
-            <Text className="text-[11px] text-slate-600 font-medium mt-2 text-center">
+            <Text className="text-[11px] text-primary font-medium mt-2 text-center">
               To Receive
             </Text>
             {orderBadges.toReceive > 0 && (
@@ -262,7 +267,7 @@ export default function BuyerProfile() {
             className="items-center justify-center w-16 relative"
           >
             <Ionicons name="star-outline" size={24} color="#034194" />
-            <Text className="text-[11px] text-slate-600 font-medium mt-2 text-center">
+            <Text className="text-[11px] text-primary  font-medium mt-2 text-center">
               To Rate
             </Text>
             {orderBadges.toRate > 0 && (
@@ -279,7 +284,7 @@ export default function BuyerProfile() {
       {/* ACCOUNT MANAGE SECTIONS LIST */}
       <View className="mx-4 bg-white rounded-3xl p-2 mt-4 border border-slate-100 shadow-sm mb-6">
         {/* Account Details Redirection */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           activeOpacity={0.6}
           onPress={() => handleRedirectToMainProfile("info")}
           className="flex-row items-center justify-between p-4 border-b border-slate-50"
@@ -291,7 +296,7 @@ export default function BuyerProfile() {
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         <TouchableOpacity
           activeOpacity={0.6}
