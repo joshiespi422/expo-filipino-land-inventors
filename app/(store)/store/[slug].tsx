@@ -97,7 +97,8 @@ export default function Store() {
           Store Not Found
         </Text>
         <Text className="text-slate-500 text-sm mt-2 text-center">
-          The store with slug "{storeSlug}" could not be retrieved.
+          The store with slug <Text className="font-bold">{storeSlug}</Text>{" "}
+          could not be retrieved.
         </Text>
         <TouchableOpacity
           onPress={() => router.back()}
