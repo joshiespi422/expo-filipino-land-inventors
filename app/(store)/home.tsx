@@ -261,7 +261,7 @@ export default function HomePage() {
               <TouchableOpacity
                 activeOpacity={0.9}
                 onPress={() => router.push("/search")}
-                className="flex-1 flex-row items-center bg-white rounded-2xl px-4 h-14 border border-slate-200"
+                className="flex-1 flex-row items-center bg-white rounded-2xl px-4 h-12 border border-slate-200"
               >
                 <Ionicons name="search" size={22} color="#64748b" />
                 <Text className="text-slate-400 ml-3 text-sm">
@@ -272,7 +272,7 @@ export default function HomePage() {
               {/* CART */}
               <TouchableOpacity
                 onPress={() => router.push("/cart")}
-                className="ml-3 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200 relative"
+                className="ml-3 bg-white h-12 w-12 rounded-2xl items-center justify-center border border-slate-200 relative"
               >
                 <Ionicons name="cart-outline" size={24} color="#034194" />
                 {cartCount > 0 && (
@@ -287,7 +287,7 @@ export default function HomePage() {
               {/* CHAT */}
               <TouchableOpacity
                 onPress={() => router.push("/chat-list")}
-                className="ml-2 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200 relative"
+                className="ml-2 bg-white h-12 w-12 rounded-2xl items-center justify-center border border-slate-200 relative"
               >
                 <Ionicons name="chatbubble-outline" size={24} color="#034194" />
                 <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1">
