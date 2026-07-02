@@ -185,8 +185,8 @@ export default function SearchPage() {
           className="flex-1"
         >
           {/* ================= SEARCH HEADER BAR ================= */}
-          <View className="p-2 bg-white flex-row">
-            <View className="flex-1 flex-row items-center bg-white rounded-2xl px-4 h-14 border border-slate-200">
+          <View className="p-2 bg-white flex-row border-b border-slate-200">
+            <View className="flex-1 flex-row items-center bg-white rounded-2xl px-4 h-12 border border-slate-200">
               <Ionicons name="search" size={22} color="#64748b" />
               <TextInput
                 ref={inputRef}
