@@ -1,9 +1,19 @@
+import { CustomAlert } from "@/components/CustomAlert";
+import { ProductCard } from "@/components/ProductItems";
+import { addToCart, getCart } from "@/services/cart";
+import {
+  DetailedProduct,
+  getProductShow,
+  getStoreHome,
+  Product,
+  selectDirectCheckout,
+  toggleCollection,
+} from "@/services/productService";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Image,
@@ -16,17 +26,6 @@ import {
   View,
 } from "react-native";
 
-import { ProductCard } from "@/components/ProductItems";
-import { addToCart, getCart } from "@/services/cart";
-import {
-  DetailedProduct,
-  getProductShow,
-  getStoreHome,
-  Product,
-  selectDirectCheckout,
-  toggleCollection,
-} from "@/services/productService";
-
 import delivery from "../../../assets/images/icon/deliveryBlueB.png";
 import UserProfile from "../../../assets/images/UserProfile.jpg";
 
@@ -37,7 +36,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 export default function Products() {
   const router = useRouter();
   const { slug } = useLocalSearchParams<{ slug: string }>();
-
+  const [menuVisible, setMenuVisible] = useState(false);
   const [product, setProduct] = useState<DetailedProduct | null>(null);
   const [recommendations, setRecommendations] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -51,9 +50,14 @@ export default function Products() {
   const [quantity, setQuantity] = useState<number>(1);
   const [modal, setModal] = useState<boolean>(false);
   const [modalAction, setModalAction] = useState<ActionType>(null);
-
-  // Real-time Cart Count Tracker matched from homepage
   const [cartCount, setCartCount] = useState<number>(0);
+
+  // Custom Alert State
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
 
   // Animation States
   const [showFlyAnimation, setShowFlyAnimation] = useState<boolean>(false);
@@ -61,7 +65,6 @@ export default function Products() {
   const flyY = useRef(new Animated.Value(0)).current;
   const flyScale = useRef(new Animated.Value(1)).current;
 
-  // Pull modern cart parameters from database context
   const fetchCartCountOnly = async () => {
     try {
       const response = await getCart();
@@ -157,14 +160,13 @@ export default function Products() {
     fetchProductData();
   }, [slug]);
 
-  // Handle focus count logic safely
   useFocusEffect(
     useCallback(() => {
       fetchCartCountOnly();
     }, []),
   );
 
-  // Exact variant match calculation
+  // Variant matching logics
   const currentVariant =
     product?.variants.find(
       (v) =>
@@ -175,7 +177,6 @@ export default function Products() {
 
   const defaultVariant =
     product?.variants.find((v) => v.is_default) || product?.variants[0];
-
   const displayPrice = currentVariant
     ? currentVariant.price
     : defaultVariant
@@ -186,7 +187,6 @@ export default function Products() {
     : defaultVariant
       ? defaultVariant.compare_price
       : null;
-
   const totalDefaultStock =
     product?.variants.reduce((acc, v) => acc + v.stock, 0) || 0;
 
@@ -205,15 +205,11 @@ export default function Products() {
   const getGroupedAttributes = () => {
     if (!product) return {};
     const grouped: Record<string, string[]> = {};
-
     product.variants.forEach((v) => {
       v.attributes.forEach((attr) => {
-        if (!grouped[attr.name]) {
-          grouped[attr.name] = [];
-        }
-        if (!grouped[attr.name].includes(attr.value)) {
+        if (!grouped[attr.name]) grouped[attr.name] = [];
+        if (!grouped[attr.name].includes(attr.value))
           grouped[attr.name].push(attr.value);
-        }
       });
     });
     return grouped;
@@ -223,32 +219,28 @@ export default function Products() {
 
   const isOptionAvailable = (attributeName: string, optionValue: string) => {
     if (!product) return false;
-
     const testSelections = {
       ...selectedAttributes,
       [attributeName]: optionValue,
     };
-
     return product.variants.some((variant) => {
-      const matchesSelections = Object.entries(testSelections).every(
-        ([key, val]) =>
+      return (
+        Object.entries(testSelections).every(([key, val]) =>
           variant.attributes.some(
             (attr) => attr.name === key && attr.value === val,
           ),
+        ) && variant.stock > 0
       );
-      return matchesSelections && variant.stock > 0;
     });
   };
 
   const handleAttributeSelect = (attributeName: string, value: string) => {
     let updatedSelections = { ...selectedAttributes };
-
     if (updatedSelections[attributeName] === value) {
       delete updatedSelections[attributeName];
     } else {
       updatedSelections[attributeName] = value;
     }
-
     setSelectedAttributes(updatedSelections);
 
     const matchingVariant = product?.variants.find(
@@ -258,27 +250,15 @@ export default function Products() {
         ) && v.attributes.length === Object.keys(updatedSelections).length,
     );
 
-    if (matchingVariant?.image) {
-      setMainImage(matchingVariant.image);
-    }
+    if (matchingVariant?.image) setMainImage(matchingVariant.image);
 
     if (matchingVariant) {
-      if (matchingVariant.stock === 0) {
-        setQuantity(0);
-      } else if (quantity > matchingVariant.stock || quantity === 0) {
+      if (matchingVariant.stock === 0) setQuantity(0);
+      else if (quantity > matchingVariant.stock || quantity === 0)
         setQuantity(matchingVariant.stock);
-      }
     } else {
       setQuantity(currentStock > 0 ? 1 : 0);
     }
-  };
-
-  const handleProductPress = (recommendedSlug: string) => {
-    if (!recommendedSlug) return;
-    router.push({
-      pathname: "/products/[slug]",
-      params: { slug: recommendedSlug },
-    });
   };
 
   const handleToggleFavorite = async (
@@ -286,29 +266,21 @@ export default function Products() {
     recommendationSlug: string,
   ) => {
     if (!recommendationSlug) return;
-
-    setRecommendations((prevRecs) =>
-      prevRecs.map((p) =>
-        p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
+    setRecommendations((p) =>
+      p.map((item) =>
+        item.id === productId ? { ...item, is_liked: !item.is_liked } : item,
       ),
     );
-
     try {
       await toggleCollection(recommendationSlug);
     } catch (error) {
       console.error("Failed to sync collection endpoint changes:", error);
-      // Rollback UI
-      setRecommendations((prevRecs) =>
-        prevRecs.map((p) =>
-          p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
+      setRecommendations((p) =>
+        p.map((item) =>
+          item.id === productId ? { ...item, is_liked: !item.is_liked } : item,
         ),
       );
     }
-  };
-
-  const openPurchaseModal = (action: ActionType) => {
-    setModalAction(action);
-    setModal(true);
   };
 
   const triggerFlyAnimation = () => {
@@ -317,7 +289,6 @@ export default function Products() {
     flyScale.setValue(1);
     setShowFlyAnimation(true);
 
-    // Precise absolute translation targeted directly to top-right corner floating icon
     const targetX = SCREEN_WIDTH / 2 - 45;
     const targetY = -(SCREEN_HEIGHT / 2 - 60);
 
@@ -339,39 +310,39 @@ export default function Products() {
       }),
     ]).start(() => {
       setShowFlyAnimation(false);
-      fetchCartCountOnly(); // Automatically pulls absolute totals from database matching home count refresh
+      fetchCartCountOnly();
+      // Open the success custom alert container
+      setAlert({
+        visible: true,
+        title: "Success",
+        message: "Product successfully added to your cart!",
+      });
     });
   };
 
   const handleConfirmAction = async () => {
     if (!currentVariant) {
-      Alert.alert("Variant Required", "Please select all product options.");
+      setAlert({
+        visible: true,
+        title: "Variant Required",
+        message: "Please select all product options.",
+      });
       return;
     }
-
     try {
       setSubmitting(true);
-
       if (modalAction === "cart") {
-        await addToCart({
-          product_variant_id: currentVariant.id,
-          quantity,
-        });
-
+        await addToCart({ product_variant_id: currentVariant.id, quantity });
         setModal(false);
-        setTimeout(() => {
-          triggerFlyAnimation();
-        }, 300);
+        setTimeout(() => triggerFlyAnimation(), 300);
         return;
       }
-
       if (modalAction === "buy_now") {
         const verifyResponse = await selectDirectCheckout({
           mode: "direct",
           product_variant_id: currentVariant.id,
-          quantity: quantity,
+          quantity,
         });
-
         if (verifyResponse.success) {
           setModal(false);
           router.push({
@@ -379,7 +350,7 @@ export default function Products() {
             params: {
               mode: "direct",
               product_variant_id: currentVariant.id,
-              quantity: quantity,
+              quantity,
             },
           });
         }
@@ -387,11 +358,13 @@ export default function Products() {
       }
     } catch (error: any) {
       console.error(error);
-      Alert.alert(
-        "Checkout Error",
-        error?.response?.data?.message ||
+      setAlert({
+        visible: true,
+        title: "Checkout Error",
+        message:
+          error?.response?.data?.message ||
           "Something went wrong while executing request.",
-      );
+      });
     } finally {
       setSubmitting(false);
     }
@@ -431,7 +404,6 @@ export default function Products() {
   }
 
   const fallbackImageUri = product.images?.[0]?.url || "";
-
   const dynamicGalleryUrls = (product.images || [])
     .map((img) => img.url)
     .concat(
@@ -443,265 +415,45 @@ export default function Products() {
 
   return (
     <View className="flex-1 bg-white relative">
-      {/* ABSOLUTE FIXED OVERLAY BUTTON CONTAINER (Floating, remains in view when scrolling) */}
-
-      <TouchableOpacity
-        onPress={() => router.push("/cart")}
-        activeOpacity={0.8}
-        style={styles.fixedCartBtn}
-        className="bg-black/40 h-11 w-11 p-2 rounded-full z-20 items-center justify-center relative"
-      >
-        <Ionicons name="cart" size={22} color="#ffffff" />
-        {cartCount > 0 && (
-          <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-white">
-            <Text className="text-white text-[10px] font-bold">
-              {cartCount > 99 ? "99+" : cartCount}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
+      <HeaderSection
+        router={router}
+        cartCount={cartCount}
+        menuVisible={menuVisible}
+        setMenuVisible={setMenuVisible}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 110 }}
       >
-        {/* MAIN IMAGE CONTAINER */}
-        <View className="p-1 mt-2 border border-primary/20 shadow-brand rounded-2xl relative">
-          {mainImage || fallbackImageUri ? (
-            <Image
-              source={{
-                uri: formatImageUrl(mainImage || fallbackImageUri),
-              }}
-              className="rounded-xl"
-              style={{ width: "100%", height: 350 }}
-            />
-          ) : (
-            <View
-              style={{ width: "100%", height: 350 }}
-              className="bg-slate-100 items-center border border-green-900 justify-center rounded-xl"
-            >
-              <Ionicons name="image-outline" size={48} color="#94a3b8" />
-            </View>
-          )}
-        </View>
+        <GallerySection
+          mainImage={mainImage}
+          fallbackImageUri={fallbackImageUri}
+          dynamicGalleryUrls={dynamicGalleryUrls}
+          formatImageUrl={formatImageUrl}
+          setMainImage={setMainImage}
+        />
 
-        {/* IMAGE GALLERY */}
-        {dynamicGalleryUrls.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            className="mt-4 px-2"
-          >
-            {dynamicGalleryUrls.map((imgUrl, index) => (
-              <TouchableOpacity
-                key={`gallery-img-${index}`}
-                onPress={() => setMainImage(imgUrl)}
-                className={`mr-3 rounded-md overflow-hidden border-2 ${
-                  mainImage === imgUrl ? "border-primary" : "border-slate-200"
-                }`}
-              >
-                <Image
-                  source={{ uri: formatImageUrl(imgUrl) }}
-                  style={{ width: 70, height: 70 }}
-                />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        <ProductInfoSection
+          product={product}
+          displayPrice={displayPrice}
+          displayComparePrice={displayComparePrice}
+          currentStock={currentStock}
+        />
+
+        {product.store && (
+          <MerchantPartnerSection product={product} router={router} />
         )}
 
-        {/* CONTAINER INFO */}
-        <View className="py-4 px-3">
-          <View className="flex-row pb-4 items-end justify-between">
-            <View className="flex-row items-center gap-2">
-              <Text className="text-[#D70127] text-2xl font-semibold mt-2">
-                ₱
-                {Number(displayPrice).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </Text>
-              {displayComparePrice && (
-                <Text className="text-slate-400 line-through text-sm mt-3">
-                  ₱
-                  {Number(displayComparePrice).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </Text>
-              )}
-            </View>
-            <View className="flex-row gap-3 items-center">
-              <Text className="text-slate-500">
-                {product.sold_count ?? 0} sold
-              </Text>
-              <Text className="text-slate-300">|</Text>
-              <Text className="text-slate-500">Stock: {currentStock}</Text>
-            </View>
-          </View>
-
-          <Text className="text-2xl font-semibold text-primary">
-            {product.name}
-          </Text>
-          <Text className="text-slate-700 text-lg mt-2">
-            {product.description || "No product description provided."}
-          </Text>
-
-          {/* SHIPPING METRICS */}
-          <View className="mt-5 bg-blue rounded-xl p-3">
-            <View className="flex-row gap-3 items-center">
-              <Image
-                source={delivery}
-                className="rounded-xl"
-                style={{ width: 80, height: 40, resizeMode: "contain" }}
-              />
-              <View className="flex-1">
-                <View className="bg-primary self-start px-5 py-1 rounded-full">
-                  <Text className="text-white text-[13px]">Fast Delivery</Text>
-                </View>
-                <Text className="text-slate-600 mt-1 text-[12px]">
-                  Fast, reliable, and always on time because you deserve
-                  delivery that moves at your speed.
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* CUSTOMER REVIEWS */}
-          <View className="mt-5 bg-blue rounded-xl p-4">
-            <View className="flex-row justify-between items-center">
-              <Text className="font-semibold text-base">
-                <Text className="text-slate-500 pr-3">
-                  {" "}
-                  {product.rating ?? 0} ⭐
-                </Text>{" "}
-                Customer Feedback
-              </Text>
-              <TouchableOpacity>
-                <Text className="text-primary font-medium">See All</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View className="mt-3 gap-3">
-              {[
-                {
-                  name: "Juan Dela Cruz",
-                  rating: 5,
-                  comment: "Very good product, fast delivery!",
-                },
-                {
-                  name: "Maria Santos",
-                  rating: 5,
-                  comment: "Item is exactly what I expected.",
-                },
-              ].map((review, index) => (
-                <View key={index} className="bg-white rounded-xl p-3">
-                  <View className="flex-row justify-between items-start">
-                    <View className="flex-row items-center flex-1">
-                      <Image
-                        source={UserProfile}
-                        style={{ width: 45, height: 45, borderRadius: 100 }}
-                      />
-                      <View className="ml-3 flex-1">
-                        <Text className="font-semibold">{review.name}</Text>
-                        <Text className="text-slate-500">
-                          ⭐ {review.rating}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Text className="text-slate-600 mt-3">{review.comment}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* MERCHANT PARTNER */}
-          {product.store && (
-            <View className="mt-5 border-2 border-blue rounded-xl p-4">
-              <View className="flex-row justify-between">
-                <View className="flex-row items-center gap-2">
-                  <Image
-                    source={
-                      product.store.logo
-                        ? { uri: product.store.logo }
-                        : UserProfile
-                    }
-                    style={{ width: 45, height: 45, borderRadius: 100 }}
-                  />
-                  <View>
-                    <Text
-                      className="text-primary text-xl font-semibold"
-                      style={{ lineHeight: 24 }}
-                    >
-                      {product.store.name} {product.store.is_official && "🛡️"}
-                    </Text>
-                    <Text
-                      className="text-slate-500"
-                      style={{ lineHeight: 16, marginTop: -2 }}
-                    >
-                      Merchant Partner
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log("Store:", product.store);
-
-                    if (!product.store?.slug) {
-                      console.warn("Store slug is missing.");
-                      return;
-                    }
-
-                    router.push({
-                      pathname: "/store/[slug]",
-                      params: {
-                        slug: product.store.slug,
-                      },
-                    });
-                  }}
-                >
-                  <View className="bg-blue py-1 px-5 border border-primary rounded-lg">
-                    <Text className="text-primary font-semibold">Visit</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              <View className="flex-row justify-between mt-4">
-                <View>
-                  <Text className="text-center font-semibold">
-                    {product.store?.rating ?? 0}
-                  </Text>
-                  <Text className="text-center text-xs text-slate-500">
-                    Rating
-                  </Text>
-                </View>
-                <View>
-                  <Text className="text-center font-semibold">Official</Text>
-                  <Text className="text-center text-xs text-slate-500">
-                    Store Status
-                  </Text>
-                </View>
-                <View>
-                  <Text className="text-center font-semibold">100%</Text>
-                  <Text className="text-center text-xs text-slate-500">
-                    Chat Response
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* RECOMMENDATIONS LIST */}
+        {/* RECOMMENDATIONS SECTION */}
         <View className="pt-3">
-          <View className="w-full h-[10px] bg-slate-300"></View>
+          <View className="w-full h-[10px] bg-slate-300" />
           <View className="py-4 px-3">
             <View className="bg-blue py-2.5 rounded-md mb-4">
               <Text className="text-primary text-center font-bold text-xl">
                 Products you may like
               </Text>
             </View>
-
             <View className="flex-row flex-wrap justify-between">
               {recommendations.map((item) => (
                 <ProductCard
@@ -719,7 +471,13 @@ export default function Products() {
                     category: "",
                     isLiked: item.is_liked,
                   }}
-                  onPress={() => handleProductPress(item.slug)}
+                  onPress={() =>
+                    item.slug &&
+                    router.push({
+                      pathname: "/products/[slug]",
+                      params: { slug: item.slug },
+                    })
+                  }
                   onFavoritePress={() =>
                     handleToggleFavorite(item.id, item.slug)
                   }
@@ -747,9 +505,11 @@ export default function Products() {
               Chat
             </Text>
           </TouchableOpacity>
-
           <TouchableOpacity
-            onPress={() => openPurchaseModal("cart")}
+            onPress={() => {
+              setModalAction("cart");
+              setModal(true);
+            }}
             className="flex-1 p-1.5 bg-primary rounded-xl items-center justify-center"
           >
             <Ionicons name="cart-outline" size={24} color="#fff" />
@@ -757,9 +517,11 @@ export default function Products() {
               Add to cart
             </Text>
           </TouchableOpacity>
-
           <TouchableOpacity
-            onPress={() => openPurchaseModal("buy_now")}
+            onPress={() => {
+              setModalAction("buy_now");
+              setModal(true);
+            }}
             className="flex-1 p-1.5 bg-[#D70127] rounded-xl items-center justify-center"
           >
             <Text className="text-white font-semibold text-base">Buy Now</Text>
@@ -773,187 +535,25 @@ export default function Products() {
         </View>
       </View>
 
-      {/* VARIANT PICKER MODAL */}
-      <Modal
-        visible={modal}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setModal(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.modalOverlay}
-          onPress={() => setModal(false)}
-        >
-          <TouchableWithoutFeedback>
-            <View className="bg-white rounded-t-3xl max-h-[85%] w-full flex-col">
-              <View className="flex-row p-5 border-b border-slate-100">
-                <Image
-                  source={{
-                    uri: formatImageUrl(mainImage || fallbackImageUri),
-                  }}
-                  style={{ width: 90, height: 90 }}
-                  className="rounded-xl border border-slate-200"
-                />
-
-                <View className="ml-4 flex-1 justify-center">
-                  <Text
-                    className="text-lg font-bold text-slate-800"
-                    numberOfLines={1}
-                  >
-                    {product.name}
-                  </Text>
-                  <Text className="text-[#D70127] text-xl font-bold mt-1">
-                    ₱
-                    {Number(displayPrice).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
-                  </Text>
-                  <View className="flex-row items-center gap-1.5 mt-1 flex-wrap">
-                    <Text className="text-slate-500 text-xs">
-                      Selected:{" "}
-                      {Object.entries(selectedAttributes)
-                        .map(([k, v]) => `${k}: ${v}`)
-                        .join(", ") || "None"}
-                    </Text>
-                    <Text className="text-slate-300 text-xs">|</Text>
-                    <Text className="text-slate-500 text-xs font-medium">
-                      Stock: {currentStock}
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setModal(false)}
-                  className="p-1"
-                >
-                  <Ionicons name="close-circle" size={26} color="#cbd5e1" />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView className="p-5" showsVerticalScrollIndicator={false}>
-                {Object.keys(groupedAttributes).map((attributeName) => (
-                  <View key={attributeName} className="mb-5">
-                    <Text className="font-bold text-slate-700 mb-2.5">
-                      {attributeName}
-                    </Text>
-                    <View className="flex-row flex-wrap">
-                      {groupedAttributes[attributeName].map((optionValue) => {
-                        const isCurrentlySelected =
-                          selectedAttributes[attributeName] === optionValue;
-
-                        const isAvailable = isOptionAvailable(
-                          attributeName,
-                          optionValue,
-                        );
-
-                        return (
-                          <TouchableOpacity
-                            key={optionValue}
-                            disabled={!isAvailable && !isCurrentlySelected}
-                            onPress={() =>
-                              handleAttributeSelect(attributeName, optionValue)
-                            }
-                            className={`flex-row items-center px-3 py-2 rounded-xl border mr-2 mb-2 ${
-                              isCurrentlySelected
-                                ? "bg-blue-50 border-primary"
-                                : !isAvailable
-                                  ? "border-slate-100 bg-slate-100 opacity-40"
-                                  : "border-slate-200 bg-slate-50"
-                            }`}
-                          >
-                            <Text
-                              className={`text-sm ${
-                                isCurrentlySelected
-                                  ? "text-primary font-semibold"
-                                  : !isAvailable
-                                    ? "text-slate-400"
-                                    : "text-slate-700"
-                              }`}
-                            >
-                              {optionValue}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-                ))}
-
-                <View className="flex-row justify-between items-center pt-4 border-t border-slate-100">
-                  <Text className="font-bold text-slate-700">Quantity</Text>
-                  <View className="flex-row items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
-                    <TouchableOpacity
-                      onPress={() =>
-                        setQuantity(
-                          Math.max(currentStock > 0 ? 1 : 0, quantity - 1),
-                        )
-                      }
-                      className="px-4 py-2 bg-slate-100 active:bg-slate-200"
-                    >
-                      <Text className="text-lg font-bold text-slate-600">
-                        -
-                      </Text>
-                    </TouchableOpacity>
-                    <Text className="px-5 font-semibold text-base text-slate-800">
-                      {quantity}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        setQuantity(Math.min(currentStock, quantity + 1))
-                      }
-                      className="px-4 py-2 bg-slate-100 active:bg-slate-200"
-                    >
-                      <Text className="text-lg font-bold text-slate-600">
-                        +
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </ScrollView>
-
-              <View className="w-full p-5 bg-white border-t border-slate-200">
-                <TouchableOpacity
-                  onPress={handleConfirmAction}
-                  disabled={
-                    submitting ||
-                    currentStock === 0 ||
-                    quantity === 0 ||
-                    Object.keys(selectedAttributes).length !==
-                      Object.keys(groupedAttributes).length
-                  }
-                  className={`h-16 rounded-2xl justify-center items-center ${
-                    submitting ||
-                    currentStock === 0 ||
-                    quantity === 0 ||
-                    Object.keys(selectedAttributes).length !==
-                      Object.keys(groupedAttributes).length
-                      ? "bg-slate-300"
-                      : modalAction === "buy_now"
-                        ? "bg-[#D70127]"
-                        : "bg-primary"
-                  }`}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text className="text-white font-bold text-lg">
-                      {Object.keys(selectedAttributes).length !==
-                      Object.keys(groupedAttributes).length
-                        ? "Select Options"
-                        : currentStock === 0
-                          ? "Out of Stock"
-                          : modalAction === "buy_now"
-                            ? "Buy Now"
-                            : "Add to Cart"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
-      </Modal>
+      <VariantPickerModal
+        modal={modal}
+        setModal={setModal}
+        product={product}
+        mainImage={mainImage}
+        fallbackImageUri={fallbackImageUri}
+        displayPrice={displayPrice}
+        selectedAttributes={selectedAttributes}
+        currentStock={currentStock}
+        groupedAttributes={groupedAttributes}
+        quantity={quantity}
+        setQuantity={setQuantity}
+        submitting={submitting}
+        modalAction={modalAction}
+        isOptionAvailable={isOptionAvailable}
+        handleAttributeSelect={handleAttributeSelect}
+        handleConfirmAction={handleConfirmAction}
+        formatImageUrl={formatImageUrl}
+      />
 
       {/* FLY TO CART ANIMATED CONTAINER */}
       {showFlyAnimation && (
@@ -976,18 +576,497 @@ export default function Products() {
           />
         </Animated.View>
       )}
+
+      {/* CUSTOM GLOBAL DIALOG ALERT CONTROLLER */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => setAlert({ ...alert, visible: false })}
+      />
     </View>
   );
 }
 
+// ================= SUB-COMPONENTS TO DRILL DOWN COMPONENT LENGTH =================
+
+const HeaderSection = ({
+  router,
+  cartCount,
+  menuVisible,
+  setMenuVisible,
+}: any) => (
+  <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
+    <View className="flex-row justify-between items-center w-full px-6">
+      <View className="w-[31px]">
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={28} color="white" />
+        </TouchableOpacity>
+      </View>
+      <View className="flex-row items-center gap-1">
+        <TouchableOpacity
+          onPress={() => router.push("/cart")}
+          activeOpacity={0.8}
+          className="h-11 w-11 p-2 relative"
+        >
+          <Ionicons name="cart-outline" size={26} color="#ffffff" />
+          {cartCount > 0 && (
+            <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-white">
+              <Text className="text-white text-[10px] font-bold">
+                {cartCount > 99 ? "99+" : cartCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <View className="relative">
+          <TouchableOpacity
+            activeOpacity={0.8}
+            className="p-2"
+            onPress={() => setMenuVisible(!menuVisible)}
+          >
+            <Ionicons name="ellipsis-vertical" size={26} color="#ffffff" />
+          </TouchableOpacity>
+          {menuVisible && (
+            <>
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => setMenuVisible(false)}
+                className="absolute"
+                style={{
+                  position: "absolute",
+                  top: -1000,
+                  left: -1000,
+                  width: 3000,
+                  height: 3000,
+                  zIndex: 998,
+                }}
+              />
+              <View
+                className="absolute top-12 right-0 bg-white rounded-xl border border-slate-200 w-52 overflow-hidden"
+                style={{ elevation: 10, zIndex: 999 }}
+              >
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  className="flex-row items-center px-4 py-3"
+                  onPress={() => {
+                    setMenuVisible(false);
+                    router.replace("/home");
+                  }}
+                >
+                  <Ionicons name="home-outline" size={20} color="#475569" />
+                  <Text className="ml-3 text-slate-700 font-medium">
+                    Return Home
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    </View>
+  </View>
+);
+
+const GallerySection = ({
+  mainImage,
+  fallbackImageUri,
+  dynamicGalleryUrls,
+  formatImageUrl,
+  setMainImage,
+}: any) => (
+  <View>
+    <View className="p-1 mt-2 border border-primary/20 shadow-brand rounded-2xl relative mx-3">
+      {mainImage || fallbackImageUri ? (
+        <Image
+          source={{ uri: formatImageUrl(mainImage || fallbackImageUri) }}
+          className="rounded-xl"
+          style={{ width: "100%", height: 350 }}
+        />
+      ) : (
+        <View
+          style={{ width: "100%", height: 350 }}
+          className="bg-slate-100 items-center border border-green-900 justify-center rounded-xl"
+        >
+          <Ionicons name="image-outline" size={48} color="#94a3b8" />
+        </View>
+      )}
+    </View>
+    {dynamicGalleryUrls.length > 0 && (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="mt-4 px-2"
+      >
+        {dynamicGalleryUrls.map((imgUrl: string, index: number) => (
+          <TouchableOpacity
+            key={`gallery-img-${index}`}
+            onPress={() => setMainImage(imgUrl)}
+            className={`mr-3 rounded-md overflow-hidden border-2 ${mainImage === imgUrl ? "border-primary" : "border-slate-200"}`}
+          >
+            <Image
+              source={{ uri: formatImageUrl(imgUrl) }}
+              style={{ width: 70, height: 70 }}
+            />
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    )}
+  </View>
+);
+
+const ProductInfoSection = ({
+  product,
+  displayPrice,
+  displayComparePrice,
+  currentStock,
+}: any) => (
+  <View className="py-4 px-3">
+    <View className="flex-row pb-4 items-end justify-between">
+      <View className="flex-row items-center gap-2">
+        <Text className="text-[#D70127] text-2xl font-semibold mt-2">
+          ₱
+          {Number(displayPrice).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+        </Text>
+        {displayComparePrice && (
+          <Text className="text-slate-400 line-through text-sm mt-3">
+            ₱
+            {Number(displayComparePrice).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </Text>
+        )}
+      </View>
+      <View className="flex-row gap-3 items-center">
+        <Text className="text-slate-500">{product.sold_count ?? 0} sold</Text>
+        <Text className="text-slate-300">|</Text>
+        <Text className="text-slate-500">Stock: {currentStock}</Text>
+      </View>
+    </View>
+
+    <Text className="text-2xl font-semibold text-primary">{product.name}</Text>
+    <Text className="text-slate-700 text-lg mt-2">
+      {product.description || "No product description provided."}
+    </Text>
+
+    {/* SHIPPING METRICS */}
+    <View className="mt-5 bg-blue rounded-xl p-3">
+      <View className="flex-row gap-3 items-center">
+        <Image
+          source={delivery}
+          className="rounded-xl"
+          style={{ width: 80, height: 40, resizeMode: "contain" }}
+        />
+        <View className="flex-1">
+          <View className="bg-primary self-start px-5 py-1 rounded-full">
+            <Text className="text-white text-[13px]">Fast Delivery</Text>
+          </View>
+          <Text className="text-slate-600 mt-1 text-[12px]">
+            Fast, reliable, and always on time because you deserve delivery that
+            moves at your speed.
+          </Text>
+        </View>
+      </View>
+    </View>
+
+    {/* CUSTOMER REVIEWS */}
+    <View className="mt-5 bg-blue rounded-xl p-4">
+      <View className="flex-row justify-between items-center">
+        <Text className="font-semibold text-base">
+          <Text className="text-slate-500 pr-3"> {product.rating ?? 0} ⭐</Text>{" "}
+          Customer Feedback
+        </Text>
+        <TouchableOpacity>
+          <Text className="text-primary font-medium">See All</Text>
+        </TouchableOpacity>
+      </View>
+      <View className="mt-3 gap-3">
+        {[
+          {
+            name: "Juan Dela Cruz",
+            rating: 5,
+            comment: "Very good product, fast delivery!",
+          },
+          {
+            name: "Maria Santos",
+            rating: 5,
+            comment: "Item is exactly what I expected.",
+          },
+        ].map((review, index) => (
+          <View key={index} className="bg-white rounded-xl p-3">
+            <View className="flex-row justify-between items-start">
+              <View className="flex-row items-center flex-1">
+                <Image
+                  source={UserProfile}
+                  style={{ width: 45, height: 45, borderRadius: 100 }}
+                />
+                <View className="ml-3 flex-1">
+                  <Text className="font-semibold">{review.name}</Text>
+                  <Text className="text-slate-500">⭐ {review.rating}</Text>
+                </View>
+              </View>
+            </View>
+            <Text className="text-slate-600 mt-3">{review.comment}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  </View>
+);
+
+const MerchantPartnerSection = ({ product, router }: any) => (
+  <View className="px-3 pb-4">
+    <View className="border-2 border-blue rounded-xl p-4">
+      <View className="flex-row justify-between">
+        <View className="flex-row items-center gap-2">
+          <Image
+            source={
+              product.store.logo ? { uri: product.store.logo } : UserProfile
+            }
+            style={{ width: 45, height: 45, borderRadius: 100 }}
+          />
+          <View>
+            <Text
+              className="text-primary text-xl font-semibold"
+              style={{ lineHeight: 24 }}
+            >
+              {product.store.name} {product.store.is_official && "🛡️"}
+            </Text>
+            <Text
+              className="text-slate-500"
+              style={{ lineHeight: 16, marginTop: -2 }}
+            >
+              Merchant Partner
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          onPress={() => {
+            if (!product.store?.slug) return;
+            router.push({
+              pathname: "/store/[slug]",
+              params: { slug: product.store.slug },
+            });
+          }}
+        >
+          <View className="bg-blue py-1 px-5 border border-primary rounded-lg">
+            <Text className="text-primary font-semibold">Visit</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+      <View className="flex-row justify-between mt-4">
+        <View>
+          <Text className="text-center font-semibold">
+            {product.store?.rating ?? 0}
+          </Text>
+          <Text className="text-center text-xs text-slate-500">Rating</Text>
+        </View>
+        <View>
+          <Text className="text-center font-semibold">Official</Text>
+          <Text className="text-center text-xs text-slate-500">
+            Store Status
+          </Text>
+        </View>
+        <View>
+          <Text className="text-center font-semibold">100%</Text>
+          <Text className="text-center text-xs text-slate-500">
+            Chat Response
+          </Text>
+        </View>
+      </View>
+    </View>
+  </View>
+);
+
+const VariantPickerModal = ({
+  modal,
+  setModal,
+  product,
+  mainImage,
+  fallbackImageUri,
+  displayPrice,
+  selectedAttributes,
+  currentStock,
+  groupedAttributes,
+  quantity,
+  setQuantity,
+  submitting,
+  modalAction,
+  isOptionAvailable,
+  handleAttributeSelect,
+  handleConfirmAction,
+  formatImageUrl,
+}: any) => (
+  <Modal
+    visible={modal}
+    transparent
+    animationType="slide"
+    statusBarTranslucent
+    onRequestClose={() => setModal(false)}
+  >
+    <TouchableOpacity
+      activeOpacity={1}
+      style={styles.modalOverlay}
+      onPress={() => setModal(false)}
+    >
+      <TouchableWithoutFeedback>
+        <View className="bg-white rounded-t-3xl max-h-[85%] w-full flex-col">
+          <View className="flex-row p-5 border-b border-slate-100">
+            <Image
+              source={{ uri: formatImageUrl(mainImage || fallbackImageUri) }}
+              style={{ width: 90, height: 90 }}
+              className="rounded-xl border border-slate-200"
+            />
+            <View className="ml-4 flex-1 justify-center">
+              <Text
+                className="text-lg font-bold text-slate-800"
+                numberOfLines={1}
+              >
+                {product.name}
+              </Text>
+              <Text className="text-[#D70127] text-xl font-bold mt-1">
+                ₱
+                {Number(displayPrice).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+              </Text>
+              <View className="flex-row items-center gap-1.5 mt-1 flex-wrap">
+                <Text className="text-slate-500 text-xs">
+                  Selected:{" "}
+                  {Object.entries(selectedAttributes)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(", ") || "None"}
+                </Text>
+                <Text className="text-slate-300 text-xs">|</Text>
+                <Text className="text-slate-500 text-xs font-medium">
+                  Stock: {currentStock}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setModal(false)} className="p-1">
+              <Ionicons name="close-circle" size={26} color="#cbd5e1" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView className="p-5" showsVerticalScrollIndicator={false}>
+            {Object.keys(groupedAttributes).map((attributeName) => (
+              <View key={attributeName} className="mb-5">
+                <Text className="font-bold text-slate-700 mb-2.5">
+                  {attributeName}
+                </Text>
+                <View className="flex-row flex-wrap">
+                  {groupedAttributes[attributeName].map(
+                    (optionValue: string) => {
+                      const isCurrentlySelected =
+                        selectedAttributes[attributeName] === optionValue;
+                      const isAvailable = isOptionAvailable(
+                        attributeName,
+                        optionValue,
+                      );
+                      return (
+                        <TouchableOpacity
+                          key={optionValue}
+                          disabled={!isAvailable && !isCurrentlySelected}
+                          onPress={() =>
+                            handleAttributeSelect(attributeName, optionValue)
+                          }
+                          className={`flex-row items-center px-3 py-2 rounded-xl border mr-2 mb-2 ${
+                            isCurrentlySelected
+                              ? "bg-blue-50 border-primary"
+                              : !isAvailable
+                                ? "border-slate-100 bg-slate-100 opacity-40"
+                                : "border-slate-200 bg-slate-50"
+                          }`}
+                        >
+                          <Text
+                            className={`text-sm ${isCurrentlySelected ? "text-primary font-semibold" : !isAvailable ? "text-slate-400" : "text-slate-700"}`}
+                          >
+                            {optionValue}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    },
+                  )}
+                </View>
+              </View>
+            ))}
+
+            <View className="flex-row justify-between items-center pt-4 border-t border-slate-100">
+              <Text className="font-bold text-slate-700">Quantity</Text>
+              <View className="flex-row items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                <TouchableOpacity
+                  onPress={() =>
+                    setQuantity(
+                      Math.max(currentStock > 0 ? 1 : 0, quantity - 1),
+                    )
+                  }
+                  className="px-4 py-2 bg-slate-100 active:bg-slate-200"
+                >
+                  <Text className="text-lg font-bold text-slate-600">-</Text>
+                </TouchableOpacity>
+                <Text className="px-5 font-semibold text-base text-slate-800">
+                  {quantity}
+                </Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    setQuantity(Math.min(currentStock, quantity + 1))
+                  }
+                  className="px-4 py-2 bg-slate-100 active:bg-slate-200"
+                >
+                  <Text className="text-lg font-bold text-slate-600">+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+
+          <View className="w-full p-5 bg-white border-t border-slate-200">
+            <TouchableOpacity
+              onPress={handleConfirmAction}
+              disabled={
+                submitting ||
+                currentStock === 0 ||
+                quantity === 0 ||
+                Object.keys(selectedAttributes).length !==
+                  Object.keys(groupedAttributes).length
+              }
+              className={`h-16 rounded-2xl justify-center items-center ${
+                submitting ||
+                currentStock === 0 ||
+                quantity === 0 ||
+                Object.keys(selectedAttributes).length !==
+                  Object.keys(groupedAttributes).length
+                  ? "bg-slate-300"
+                  : modalAction === "buy_now"
+                    ? "bg-[#D70127]"
+                    : "bg-primary"
+              }`}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text className="text-white font-bold text-lg">
+                  {Object.keys(selectedAttributes).length !==
+                  Object.keys(groupedAttributes).length
+                    ? "Select Options"
+                    : currentStock === 0
+                      ? "Out of Stock"
+                      : modalAction === "buy_now"
+                        ? "Buy Now"
+                        : "Add to Cart"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </TouchableOpacity>
+  </Modal>
+);
+
 const styles = StyleSheet.create({
-  fixedCartBtn: {
-    position: "absolute",
-    top: 30,
-    right: 21,
-    zIndex: 30,
-    elevation: 5,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
@@ -996,8 +1075,8 @@ const styles = StyleSheet.create({
   },
   animatedFlyer: {
     position: "absolute",
-    top: SCREEN_HEIGHT / 2 - 35,
-    left: SCREEN_WIDTH / 2 - 35,
+    top: SCREEN_HEIGHT / 2 - 30,
+    left: SCREEN_WIDTH / 2 - 65,
     width: 70,
     height: 70,
     zIndex: 999,
