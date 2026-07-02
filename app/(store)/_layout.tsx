@@ -50,7 +50,7 @@ export default function RootLayout() {
   const isOrrderList = pathname === "/order-list";
   const isChatList = pathname === "/chat-list";
   const isChatSeller = pathname === "/chat-seller";
-  const isProducts = pathname === "/products";
+  const isProducts = pathname.startsWith("/products/");
   const isShop = pathname === "/store";
 
   useEffect(() => {
@@ -79,42 +79,18 @@ export default function RootLayout() {
           className="flex-1"
         >
           {/* HEADER */}
+          {!isProfile && !isProducts && (
+            <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
+              <View className="flex-row justify-between items-center w-full px-6">
+                <View className="w-[31px]">
+                  <TouchableOpacity onPress={() => router.back()}>
+                    <Ionicons name="chevron-back" size={28} color="white" />
+                  </TouchableOpacity>
+                </View>
 
-          <View
-            className="
-            bg-primary
-            w-full
-            items-center
-            rounded-b-2xl
-            pt-14
-            pb-4
-            "
-          >
-            <View
-              className="
-              flex-row
-              justify-between
-              items-center
-              w-full
-              px-6
-              "
-            >
-              <View className="w-[31px]">
-                <TouchableOpacity onPress={() => router.back()}>
-                  <Ionicons name="chevron-back" size={28} color="white" />
-                </TouchableOpacity>
-              </View>
-
-              <Text
-                className="
-                text-white
-                text-2xl
-                font-bold
-                "
-              >
                 <Text className="text-white text-2xl font-bold">
                   {isCart
-                    ? "Shopping Cart"
+                    ? "My Shopping Cart"
                     : isCheckout
                       ? "Checkout"
                       : isOrrderList
@@ -123,17 +99,15 @@ export default function RootLayout() {
                           ? "Messages"
                           : isChatSeller
                             ? "Seller"
-                            : isProducts
-                              ? "Product"
-                              : isShop
-                                ? "Store Shop"
-                                : "   FISMPC Online Store"}
+                            : isShop
+                              ? "Store Shop"
+                              : "FISMPC Online Store"}
                 </Text>
-              </Text>
 
-              <View className="w-[31px]" />
+                <View className="w-[31px]" />
+              </View>
             </View>
-          </View>
+          )}
 
           {/* CONTENT */}
 
@@ -150,6 +124,8 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="index" />
+              <Stack.Screen name="(store)/cart" />
+              <Stack.Screen name="(store)/profile" />
             </Stack>
           </View>
 
