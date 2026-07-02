@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import {
   Address,
   CheckoutItem,
@@ -7,11 +8,11 @@ import {
   placeOrderAPI,
 } from "@/services/checkout";
 import { Ionicons } from "@expo/vector-icons";
+import { useIsFocused } from "@react-navigation/native"; // Added to detect screen focus returns
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   Text,
@@ -23,6 +24,7 @@ import {
 export default function Checkout() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const isFocused = useIsFocused(); // Tracks whether the screen is active/focused
 
   console.log("🔍 [CHECKOUT MOUNT/UPDATE] Raw Route Params:", params);
 
@@ -32,6 +34,51 @@ export default function Checkout() {
     ? Number(params.product_variant_id)
     : null;
   const quantity = params.quantity ? Number(params.quantity) : 1;
+
+  // View Layout States
+  const [loading, setLoading] = useState<boolean>(true);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+
+  // Custom Alert State
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    onClose: () => void;
+    onConfirm?: () => void;
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    onClose: () => {},
+  });
+
+  // Helper function to trigger the custom modal alert easily
+  const showAlert = (
+    title: string,
+    message: string,
+    onClose: () => void = () => {},
+    onConfirm?: () => void,
+    confirmText?: string,
+  ) => {
+    setAlertConfig({
+      visible: true,
+      title,
+      message,
+      confirmText,
+      onClose: () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+        onClose();
+      },
+      onConfirm: onConfirm
+        ? () => {
+            setAlertConfig((prev) => ({ ...prev, visible: false }));
+            onConfirm();
+          }
+        : undefined,
+    });
+  };
 
   // Compute clean numeric array from route params if mode is cart
   const cartItemIds = useMemo<number[]>(() => {
@@ -52,10 +99,6 @@ export default function Checkout() {
     return parsed;
   }, [rawCartItemIds, mode]);
 
-  // View Layout States
-  const [loading, setLoading] = useState<boolean>(true);
-  const [submitting, setSubmitting] = useState<boolean>(false);
-
   // Dynamic Model Data Arrays
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
@@ -67,17 +110,20 @@ export default function Checkout() {
   const [note, setNote] = useState<string>("");
 
   useEffect(() => {
+    // If the screen is hidden/blurred, stop processing execution.
+    if (!isFocused) return;
+
     console.log(
-      `🚀 [EFFECT TRIGGER] Checking configurations. Mode: ${mode}, Cart Items: ${cartItemIds.length}, Direct Variant: ${productVariantId}`,
+      `🚀 [EFFECT TRIGGER] Screen Focused. Checking configs. Mode: ${mode}, Cart Items: ${cartItemIds.length}, Direct Variant: ${productVariantId}`,
     );
 
     if (mode === "cart" && cartItemIds.length === 0) {
       console.log(
         "🛑 [EFFECT HALT] Blocking fetch, cartItemIds list is completely empty.",
       );
-      Alert.alert("Error", "No items selected for checkout.", [
-        { text: "Go Back", onPress: () => router.back() },
-      ]);
+      showAlert("Error", "No items selected for checkout.", () =>
+        router.back(),
+      );
       return;
     }
 
@@ -85,9 +131,9 @@ export default function Checkout() {
       console.log(
         "🛑 [EFFECT HALT] Blocking fetch, direct buy variant is missing.",
       );
-      Alert.alert("Error", "Invalid checkout options configuration.", [
-        { text: "Go Back", onPress: () => router.back() },
-      ]);
+      showAlert("Error", "Invalid checkout options configuration.", () =>
+        router.back(),
+      );
       return;
     }
 
@@ -121,7 +167,7 @@ export default function Checkout() {
           setItems(data.items);
           setSummary(data.summary);
 
-          // Auto select default address profile
+          // Auto select default or updated address profile setup
           const defaultAddr =
             data.addresses.find((addr) => addr.is_default) || data.addresses[0];
           setSelectedAddress(defaultAddr || null);
@@ -146,18 +192,18 @@ export default function Checkout() {
           "❌ [API ERROR] Network breakdown or backend rejection:",
           error,
         );
-        Alert.alert(
+        showAlert(
           "Error",
           error?.response?.data?.message || "Failed to load checkout details.",
+          () => router.back(),
         );
-        router.back();
       } finally {
         setLoading(false);
       }
     };
 
     loadCheckoutData();
-  }, [rawCartItemIds, productVariantId, quantity, mode]);
+  }, [rawCartItemIds, productVariantId, quantity, mode, isFocused]); // Added isFocused as a dependent rule
 
   // Group items by store vendor block sections
   const groupedItems = useMemo(() => {
@@ -176,11 +222,11 @@ export default function Checkout() {
 
   const handlePlaceOrder = async () => {
     if (!selectedAddress) {
-      Alert.alert("Validation Error", "Please choose a delivery address.");
+      showAlert("Validation Error", "Please choose a delivery address.");
       return;
     }
     if (!selectedPaymentMethod) {
-      Alert.alert("Validation Error", "Please select a payment method.");
+      showAlert("Validation Error", "Please select a payment method.");
       return;
     }
 
@@ -207,16 +253,17 @@ export default function Checkout() {
       console.log("📥 [ORDER SUBMIT RESPONSE]:", result);
 
       if (result.success) {
-        Alert.alert("Success", result.message || "Order placed successfully!", [
-          {
-            text: "OK",
-            onPress: () => router.replace("/order-list"),
+        showAlert(
+          "Success",
+          result.message || "Order placed successfully!",
+          () => {
+            router.replace("/order-list");
           },
-        ]);
+        );
       }
     } catch (error: any) {
       console.error("❌ [ORDER PLACEMENT REJECTION] Request failure:", error);
-      Alert.alert(
+      showAlert(
         "Order Failure",
         error?.response?.data?.message ||
           "Something went wrong processing your transaction.",
@@ -250,12 +297,10 @@ export default function Checkout() {
               <Ionicons name="location-outline" size={24} color="#034194" />
               <Text className="ml-2 font-bold text-lg">Delivery Address</Text>
             </View>
-            <TouchableOpacity
-              onPress={() =>
-                Alert.alert("Address Selection", "Feature coming soon.")
-              }
-            >
-              <Text className="text-[#034194] font-semibold">Change</Text>
+            <TouchableOpacity onPress={() => router.push("/address")}>
+              <Text className="text-[#034194] font-semibold">
+                {selectedAddress ? "Change" : "Add"}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -302,7 +347,6 @@ export default function Checkout() {
                     ?.map((attr) => `${attr.name}: ${attr.value}`)
                     .join(" • ") || "";
 
-                // Dynamic fallbacks for image processing strings
                 const cleanImgUrl = item.product.image?.startsWith("http")
                   ? item.product.image
                   : `http://192.168.1.46:8000${item.product.image || ""}`;
@@ -344,6 +388,21 @@ export default function Checkout() {
           ))}
         </View>
 
+        {/* MESSAGE */}
+        <View className="bg-white rounded-2xl p-4 mb-3">
+          <Text className="font-bold mb-2 text-slate-800">
+            Message to Seller (Optional)
+          </Text>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder="Add note for seller..."
+            multiline
+            className="bg-slate-100 rounded-xl px-4 py-3 text-slate-700"
+            style={{ height: 90, textAlignVertical: "top" }}
+          />
+        </View>
+
         {/* PAYMENT METHODS */}
         <View className="bg-white rounded-2xl p-4 mb-3">
           <Text className="font-bold text-lg mb-3">Payment Method</Text>
@@ -377,42 +436,27 @@ export default function Checkout() {
             ))}
         </View>
 
-        {/* MESSAGE */}
-        <View className="bg-white rounded-2xl p-4 mb-3">
-          <Text className="font-bold mb-2 text-slate-800">
-            Message to Seller (Optional)
-          </Text>
-          <TextInput
-            value={note}
-            onChangeText={setNote}
-            placeholder="Add note for seller..."
-            multiline
-            className="bg-slate-100 rounded-xl px-4 py-3 text-slate-700"
-            style={{ height: 90, textAlignVertical: "top" }}
-          />
-        </View>
-
         {/* SUMMARY */}
         {summary && (
           <View className="bg-white rounded-2xl p-4 mb-3">
             <Text className="font-bold text-lg mb-3">Order Summary</Text>
 
             <View className="flex-row justify-between mb-2">
-              <Text className="text-slate-500">Subtotal</Text>
+              <Text className="text-slate-500">Merchandise Subtotal</Text>
               <Text className="text-slate-800 font-medium">
                 ₱{Number(summary.subtotal).toLocaleString()}
               </Text>
             </View>
 
             <View className="flex-row justify-between mb-2">
-              <Text className="text-slate-500">Discount</Text>
-              <Text className="text-red-500 font-medium">
+              <Text className="text-slate-500">Cooperative Discount</Text>
+              <Text className="text-[#D70127] font-medium">
                 -₱{Number(summary.discount).toLocaleString()}
               </Text>
             </View>
 
             <View className="flex-row justify-between mb-2">
-              <Text className="text-slate-500">Estimated Shipping</Text>
+              <Text className="text-slate-500">Shipping Subtotal</Text>
               <Text className="text-slate-800 font-medium">
                 ₱{Number(summary.shipping_fee).toLocaleString()}
               </Text>
@@ -444,6 +488,16 @@ export default function Checkout() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Global Custom Alert Renderer */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText={alertConfig.confirmText}
+        onClose={alertConfig.onClose}
+        onConfirm={alertConfig.onConfirm}
+      />
     </View>
   );
 }
