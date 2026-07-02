@@ -271,7 +271,7 @@ export default function ManageAddressesScreen() {
             <View className="flex-row justify-between items-start mb-2">
               <View className="flex-row items-center">
                 <View
-                  className={`px-3 py-1 rounded-full ${item.label === "home" ? "bg-green-50" : "bg-blue-50"}`}
+                  className={`px-3 py-1 rounded-full ${item.label === "home" ? "bg-green-50" : "bg-blue"}`}
                 >
                   <Text
                     className={`font-bold text-xs capitalize ${item.label === "home" ? "text-green-600" : "text-[#034194]"}`}
@@ -364,7 +364,7 @@ export default function ManageAddressesScreen() {
                 <TouchableOpacity
                   key={type}
                   onPress={() => setForm({ ...form, label: type })}
-                  className={`flex-1 py-3 rounded-xl items-center border capitalize ${form.label === type ? "border-[#034194] bg-blue-50/40" : "border-gray-200"}`}
+                  className={`flex-1 py-3 rounded-xl items-center border capitalize ${form.label === type ? "border-[#034194] bg-blue/40" : "border-gray-200"}`}
                 >
                   <Text
                     className={`font-bold ${form.label === type ? "text-[#034194]" : "text-gray-500"}`}
