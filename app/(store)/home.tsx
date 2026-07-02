@@ -1,6 +1,6 @@
 import { ProductCard } from "@/components/ProductItems";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getCart } from "@/services/cart"; // Import your existing cart API service
+import { getCart } from "@/services/cart";
 import {
   Category,
   getStoreHome,
@@ -8,7 +8,7 @@ import {
   toggleCollection,
 } from "@/services/productService";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router"; // Added useFocusEffect
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,7 +18,6 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -28,11 +27,9 @@ import image from "../../assets/images/vector/FISMPC.png";
 export default function HomePage() {
   const router = useRouter();
 
-  // Track state using the dynamic IDs/Strings
   const [selectedCategory, setSelectedCategory] = useState<string | number>(
     "All",
   );
-  const [search, setSearch] = useState("");
 
   // --- SMOOTH ANIMATION CONFIGURATION ---
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -56,7 +53,6 @@ export default function HomePage() {
   // Real-time Cart Count Badge State Tracker
   const [cartCount, setCartCount] = useState<number>(0);
 
-  // Accepts target category parameter overrides and current page context
   const fetchProducts = async (
     catId: string | number = "All",
     targetPage = 1,
@@ -73,7 +69,6 @@ export default function HomePage() {
 
       console.log("STORE RESPONSE:", response);
 
-      // Inject default fallback "All" into the array returned by database on initial load
       if (targetPage === 1 && response?.data?.categories) {
         setCategories([
           { id: "All", name: "All", slug: "all" },
@@ -85,14 +80,12 @@ export default function HomePage() {
         setTopDeals(response?.data?.productsTopDeals ?? []);
         setProducts(response?.data?.productsDiscover ?? []);
       } else {
-        // Append next chunk of items to existing state arrays
         setProducts((prev) => [
           ...prev,
           ...(response?.data?.productsDiscover ?? []),
         ]);
       }
 
-      // Track backend pagination configuration structures
       const pagination = response?.data?.pagination;
       if (pagination) {
         setPage(pagination.current_page);
@@ -113,7 +106,6 @@ export default function HomePage() {
     }
   };
 
-  // Helper method to exclusively poll cart data without causing full product reload flickers
   const fetchCartCountOnly = async () => {
     try {
       const response = await getCart();
@@ -123,7 +115,6 @@ export default function HomePage() {
         response.cart &&
         response.cart.items
       ) {
-        // Calculates total individual units inside user cart array
         const totalItemsCount = response.cart.items.reduce(
           (accumulator, item) => accumulator + (item.quantity ?? 0),
           0,
@@ -138,23 +129,16 @@ export default function HomePage() {
     }
   };
 
-  // Runs once on mounting layout boundaries
   useEffect(() => {
     fetchProducts("All", 1, true);
   }, []);
 
-  /**
-   * DYNAMIC NAVIGATION LISTENER
-   * Listens directly to native transition viewport triggers.
-   * Runs silently when a user presses "Back" to home, ensuring your counts match exactly.
-   */
   useFocusEffect(
     useCallback(() => {
       fetchCartCountOnly();
     }, []),
   );
 
-  // Reset page iteration and overwrite active product maps on categorical variations
   const handleCategoryPress = (catId: string | number) => {
     setSelectedCategory(catId);
     setPage(1);
@@ -165,7 +149,7 @@ export default function HomePage() {
     setRefreshing(true);
     setPage(1);
     fetchProducts(selectedCategory, 1, false);
-    fetchCartCountOnly(); // Sync badge totals alongside pull-to-refresh
+    fetchCartCountOnly();
   }, [selectedCategory]);
 
   const loadMoreProducts = () => {
@@ -175,15 +159,9 @@ export default function HomePage() {
     }
   };
 
-  const filteredProducts = (products ?? []).filter((item) => {
-    return item.name.toLowerCase().includes(search.toLowerCase());
-  });
-
   const handleProductPress = (slug: string) => {
     if (!slug) {
-      console.warn(
-        "Cannot navigate: Selected product item slug is missing or undefined.",
-      );
+      console.warn("Cannot navigate: Selected product item slug is missing.");
       return;
     }
     router.push({
@@ -192,14 +170,9 @@ export default function HomePage() {
     });
   };
 
-  // Dynamic state toggle handler for Collection / Wishlist updates with backend API triggering
   const handleToggleFavorite = async (productId: number, slug: string) => {
-    if (!slug) {
-      console.warn("Cannot toggle favorite: Missing product slug value.");
-      return;
-    }
+    if (!slug) return;
 
-    // 1. Optimistic UI update: Toggle state instantly for an responsive feel
     setProducts((prevProducts) =>
       prevProducts.map((p) =>
         p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
@@ -213,19 +186,15 @@ export default function HomePage() {
     );
 
     try {
-      // 2. Dispatch network bundle trigger payload to your Laravel route model binding endpoint
-      const result = await toggleCollection(slug);
-      console.log(`Backend sync complete for [${slug}]:`, result.message);
+      await toggleCollection(slug);
     } catch (error) {
       console.error("Failed to sync collection endpoint changes:", error);
-
-      // Rollback optimistic UI changes if backend execution breaks down
+      // Rollback UI
       setProducts((prevProducts) =>
         prevProducts.map((p) =>
           p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
         ),
       );
-
       setTopDeals((prevDeals) =>
         prevDeals.map((d) =>
           d.id === productId ? { ...d, is_liked: !d.is_liked } : d,
@@ -234,18 +203,10 @@ export default function HomePage() {
     }
   };
 
-  const handleCartPress = () => {
-    router.push("/cart");
-  };
-
-  const handleChatPress = () => {
-    router.push("/chat-list");
-  };
-
   return (
     <View className="flex-1 bg-slate-50">
       <FlatList
-        data={loading ? [] : filteredProducts}
+        data={loading ? [] : products}
         renderItem={({ item }) => (
           <ProductCard
             item={{
@@ -259,7 +220,7 @@ export default function HomePage() {
               rating: item.rating,
               stock: item.stock,
               category: "",
-              isLiked: item.is_liked, // Synced to target backend naming schema
+              isLiked: item.is_liked,
             }}
             onPress={() => handleProductPress(item.slug)}
             onFavoritePress={() => handleToggleFavorite(item.id, item.slug)}
@@ -268,9 +229,7 @@ export default function HomePage() {
         keyExtractor={(item, index) => `${item.id.toString()}-${index}`}
         numColumns={2}
         columnWrapperStyle={
-          filteredProducts.length > 0
-            ? { justifyContent: "space-between" }
-            : undefined
+          products.length > 0 ? { justifyContent: "space-between" } : undefined
         }
         contentContainerStyle={{
           padding: 7,
@@ -285,10 +244,6 @@ export default function HomePage() {
               <Text className="text-slate-700 text-base font-semibold mt-4 text-center">
                 No Products Found
               </Text>
-              <Text className="text-slate-400 text-sm mt-1 text-center">
-                We couldn&apos;t find anything matching your selection or search
-                criteria.
-              </Text>
             </View>
           ) : null
         }
@@ -301,21 +256,22 @@ export default function HomePage() {
         }
         ListHeaderComponent={
           <>
-            {/* SEARCH */}
+            {/* SEARCH CONTAINER BAR LINKING TO SEARCH SCREEN */}
             <View className="flex-row items-center mb-3">
-              <View className="flex-1 flex-row items-center bg-white rounded-2xl px-4 h-14 border border-slate-200">
-                <Ionicons name="search" size={22} color="#64748b" />
-                <TextInput
-                  placeholder="Search products.."
-                  value={search}
-                  onChangeText={setSearch}
-                  className="flex-1 ml-3"
-                />
-              </View>
-
-              {/* CART WITH DYNAMIC BADGE COUNT */}
               <TouchableOpacity
-                onPress={handleCartPress}
+                activeOpacity={0.9}
+                onPress={() => router.push("/search")}
+                className="flex-1 flex-row items-center bg-white rounded-2xl px-4 h-14 border border-slate-200"
+              >
+                <Ionicons name="search" size={22} color="#64748b" />
+                <Text className="text-slate-400 ml-3 text-sm">
+                  Search products..
+                </Text>
+              </TouchableOpacity>
+
+              {/* CART */}
+              <TouchableOpacity
+                onPress={() => router.push("/cart")}
                 className="ml-3 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200 relative"
               >
                 <Ionicons name="cart-outline" size={24} color="#034194" />
@@ -330,7 +286,7 @@ export default function HomePage() {
 
               {/* CHAT */}
               <TouchableOpacity
-                onPress={handleChatPress}
+                onPress={() => router.push("/chat-list")}
                 className="ml-2 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200 relative"
               >
                 <Ionicons name="chatbubble-outline" size={24} color="#034194" />
@@ -437,9 +393,7 @@ export default function HomePage() {
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{
-                    gap: 12,
-                  }}
+                  contentContainerStyle={{ gap: 12 }}
                 >
                   {topDeals.map((item) => (
                     <View
@@ -452,9 +406,7 @@ export default function HomePage() {
                       >
                         <View className="relative">
                           <Image
-                            source={{
-                              uri: item.image ?? "",
-                            }}
+                            source={{ uri: item.image ?? "" }}
                             className="w-full h-36"
                             resizeMode="cover"
                           />
@@ -489,7 +441,6 @@ export default function HomePage() {
                         >
                           {item.name}
                         </Text>
-
                         <View className="flex-row items-center mt-2">
                           <Text className="text-primary font-bold text-base">
                             ₱
@@ -520,17 +471,10 @@ export default function HomePage() {
               Discover
             </Text>
 
-            {/* SKELETON CARDS LOADING */}
             {loading && (
               <View className="flex-row flex-wrap justify-between">
                 {[1, 2, 3, 4].map((item) => (
-                  <View
-                    key={item}
-                    style={{
-                      width: "48%",
-                    }}
-                    className="mb-4"
-                  >
+                  <View key={item} style={{ width: "48%" }} className="mb-4">
                     <Skeleton className="h-[220px] rounded-3xl" />
                   </View>
                 ))}
