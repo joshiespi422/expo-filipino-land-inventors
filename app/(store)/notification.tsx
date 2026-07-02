@@ -1,6 +1,7 @@
+import { getCart } from "@/services/cart";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import { FlatList, Text, TouchableOpacity, View } from "react-native";
 
 // Static Notifications Mock Database
@@ -48,6 +49,38 @@ const notificationTabs = ["All", "Promos", "Updates"];
 export default function NotificationsPage() {
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState("All");
+  const [cartCount, setCartCount] = useState<number>(0);
+
+  // Sync Cart badge values dynamically matching the Collection calculations logic block
+  const fetchCartBadgeCount = async () => {
+    try {
+      const response = await getCart();
+      if (
+        response &&
+        response.success &&
+        response.cart &&
+        response.cart.items
+      ) {
+        const calculatedQuantities = response.cart.items.reduce(
+          (accumulator, item) => accumulator + (item.quantity ?? 0),
+          0,
+        );
+        const finalCount =
+          calculatedQuantities > 0
+            ? calculatedQuantities
+            : response.cart.items.length;
+        setCartCount(finalCount);
+      }
+    } catch (e) {
+      console.error("Failed syncing notification view context badges:", e);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCartBadgeCount();
+    }, []),
+  );
 
   // Filter listings completely statically based on current selected tab state
   const filteredNotifications = STATIC_NOTIFICATIONS.filter((notif) => {
@@ -58,57 +91,43 @@ export default function NotificationsPage() {
 
   return (
     <View className="flex-1 bg-slate-100">
-      {/* FIXED HEADER */}
-      <View className="bg-white pt-3 pb-1 px-4 flex-row items-center justify-between border-b border-slate-200">
+      <View className="bg-white pt-3 pb-3 px-4 border-b border-slate-200">
         <View className="flex-row items-center">
-          <Text className="text-xl font-bold text-slate-800">
-            Notifications
-          </Text>
-          <Text className="text-xs text-white ml-2 bg-[#D70127] px-2 py-0.5 rounded-full font-semibold">
-            2 New
-          </Text>
-        </View>
+          <View className="flex-1 flex-row items-center justify-center bg-blue rounded-2xl px-4 h-12">
+            <Text className="text-primary text-2xl font-bold text-center">
+              Notifications
+            </Text>
+          </View>
 
-        <TouchableOpacity className="py-2 px-1">
-          <Text className="text-xs font-semibold text-[#034194]">
-            Mark all as read
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* HORIZONTAL CATEGORY SUB-TABS */}
-      <View className="bg-white border-b border-slate-200">
-        <FlatList
-          horizontal
-          data={notificationTabs}
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10 }}
-          renderItem={({ item }) => {
-            const isActive = selectedTab === item;
-            return (
-              <TouchableOpacity
-                onPress={() => setSelectedTab(item)}
-                className={`mr-2 px-5 py-1.5 rounded-full border ${
-                  isActive
-                    ? "bg-[#034194] border-[#034194]"
-                    : "bg-slate-50 border-slate-200"
-                }`}
-              >
-                <Text
-                  className={`font-medium text-xs ${
-                    isActive ? "text-white" : "text-slate-600"
-                  }`}
-                >
-                  {item}
+          {/* CART */}
+          <TouchableOpacity
+            onPress={() => router.push("/cart")}
+            className="ml-3 bg-white h-12 w-12 rounded-2xl items-center justify-center border border-slate-200 relative"
+          >
+            <Ionicons name="cart-outline" size={24} color="#034194" />
+            {cartCount > 0 && (
+              <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-white">
+                <Text className="text-white text-[10px] font-bold">
+                  {cartCount > 99 ? "99+" : cartCount}
                 </Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* CHAT */}
+          <TouchableOpacity
+            onPress={() => router.push("/chat-list")}
+            className="ml-2 bg-white h-12 w-12 rounded-2xl items-center justify-center border border-slate-200 relative"
+          >
+            <Ionicons name="chatbubble-outline" size={24} color="#034194" />
+            <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1">
+              <Text className="text-white text-[10px] font-bold">3</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* STATIC NOTIFICATIONS LIST */}
+      {/* STATIC NOTIFICATIONS LIST (DESIGN PRESERVED EXCLUSIVELY) */}
       <FlatList
         data={filteredNotifications}
         keyExtractor={(item) => item.id}
