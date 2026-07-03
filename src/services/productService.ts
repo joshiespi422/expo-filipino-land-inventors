@@ -64,6 +64,7 @@ export interface Store {
   name: string;
   slug: string;
   logo: string | null;
+  banner: string | null;
   rating: number | null;
   is_official: boolean;
 }

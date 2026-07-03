@@ -256,7 +256,7 @@ export default function SearchPage() {
                           <TouchableOpacity
                             activeOpacity={0.7}
                             onPress={() => handleSelectRecommendation(item)}
-                            className={`px-4 py-4 flex-row items-center justify-between ${
+                            className={`p-4 flex-row items-center justify-between ${
                               index !== recommendations.length - 1
                                 ? "border-b border-slate-100"
                                 : ""
@@ -292,7 +292,7 @@ export default function SearchPage() {
             {!isSearching && (
               <>
                 {loading ? (
-                  <View className="flex-row flex-wrap justify-between mt-2 px-4 pt-3">
+                  <View className="flex-row flex-wrap justify-between mt-2 px-2">
                     {[1, 2, 3, 4].map((item) => (
                       <View
                         key={item}
@@ -336,14 +336,10 @@ export default function SearchPage() {
                       products.length > 0
                         ? {
                             justifyContent: "space-between",
-                            paddingHorizontal: 16,
                           }
                         : undefined
                     }
-                    contentContainerStyle={{
-                      paddingTop: 16,
-                      paddingBottom: 40,
-                    }}
+                    className="p-2"
                     onEndReached={handleLoadMore}
                     onEndReachedThreshold={0.3}
                     keyboardShouldPersistTaps="handled"

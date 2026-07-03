@@ -180,7 +180,7 @@ export default function OrderList() {
                         product.product_image &&
                         product.product_image.startsWith("http")
                           ? product.product_image
-                          : `http://192.168.1.46:8000${product.product_image || ""}`,
+                          : `http://192.168.1.53:8000${product.product_image || ""}`,
                     }}
                     style={{
                       width: 75,

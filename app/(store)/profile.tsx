@@ -131,201 +131,203 @@ export default function BuyerProfile() {
   }
 
   return (
-    <ScrollView
-      className="flex-1 bg-slate-50"
-      showsVerticalScrollIndicator={false}
-    >
-      {/* PROFILE CARD HEADER CONTAINER */}
-      <View className="bg-primary w-full rounded-b-2xl px-10 pt-20 pb-10">
-        <View className="flex-row justify-between items-start pb-5">
-          <View className="flex-row items-center">
-            <Image
-              source={
-                userData?.avatar
-                  ? { uri: userData.avatar }
-                  : UserProfileFallback
-              }
-              style={{
-                width: 68,
-                height: 68,
-                borderRadius: 34,
-                borderWidth: 3,
-              }}
-              className="border-white"
-            />
-            <View className="ml-4">
-              <Text className="text-white text-xl font-bold tracking-tight">
-                {userData?.name}
-              </Text>
-              <Text className="text-white text-xs">{userData?.phone}</Text>
-
-              <View
-                className={`self-start px-3 py-1 rounded-2xl mt-3 ${getStatusColor(statusName)}`}
-              >
-                <Text className="text-[10px] font-bold uppercase tracking-wider">
-                  {userTypeName || "BASIC"} • {statusName || "ACCOUNT"}
+    <View className="flex-1 bg-slate-50">
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        {/* PROFILE CARD HEADER CONTAINER */}
+        <View className="bg-primary w-full rounded-b-2xl px-10 pt-20 pb-10">
+          <View className="flex-row justify-between items-start pb-5">
+            <View className="flex-row items-center">
+              <Image
+                source={
+                  userData?.avatar
+                    ? { uri: userData.avatar }
+                    : UserProfileFallback
+                }
+                style={{
+                  width: 68,
+                  height: 68,
+                  borderRadius: 34,
+                  borderWidth: 3,
+                }}
+                className="border-white"
+              />
+              <View className="ml-4">
+                <Text className="text-white text-xl font-bold tracking-tight">
+                  {userData?.name}
                 </Text>
+                <Text className="text-white text-xs">{userData?.phone}</Text>
+
+                <View
+                  className={`self-start px-3 py-1 rounded-2xl mt-3 ${getStatusColor(statusName)}`}
+                >
+                  <Text className="text-[10px] font-bold uppercase tracking-wider">
+                    {userTypeName || "BASIC"} • {statusName || "ACCOUNT"}
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          <View className="pt-3">
+            <View className="pt-3">
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => handleRedirectToMainProfile()}
+              >
+                <Ionicons name="settings-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* TRACKING ORDER STATES LAYER */}
+        {/* Negative placement applied via native style object properties to bypass NativeWind limitations */}
+        <View
+          className="mx-4 bg-white rounded-3xl p-4 border border-slate-100 shadow-sm"
+          style={{ marginTop: -20, zIndex: 10 }}
+        >
+          <View className="flex-row justify-between items-center border-b border-slate-100 pb-3 mb-4">
+            <Text className="font-bold text-primary text-base tracking-tight">
+              My Purchases
+            </Text>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => handleRedirectToMainProfile()}
+              className="flex-row items-center"
+              onPress={() => handleTrackOrderPress("All")}
             >
-              <Ionicons name="settings-outline" size={22} color="#fff" />
+              <Text className="text-xs text-slate-400 font-medium mr-1">
+                View Order History
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
+            </TouchableOpacity>
+          </View>
+
+          <View className="flex-row justify-between items-center px-1">
+            {/* TO PAY SELECTION */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handleTrackOrderPress("To Pay")}
+              className="items-center justify-center w-16 relative"
+            >
+              <Ionicons name="wallet-outline" size={24} color="#034194" />
+              <Text className="text-[11px] text-primary font-medium mt-2 text-center">
+                To Pay
+              </Text>
+              {orderBadges.toPay > 0 && (
+                <View className="absolute -top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 border border-white">
+                  <Text className="text-white text-[9px] font-bold">
+                    {orderBadges.toPay}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* TO SHIP SELECTION */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handleTrackOrderPress("To Ship")}
+              className="items-center justify-center w-16 relative"
+            >
+              <Ionicons name="cube-outline" size={24} color="#034194" />
+              <Text className="text-[11px] text-primary  font-medium mt-2 text-center">
+                To Ship
+              </Text>
+              {orderBadges.toShip > 0 && (
+                <View className="absolute -top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 border border-white">
+                  <Text className="text-white text-[9px] font-bold">
+                    {orderBadges.toShip}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* TO RECEIVE SELECTION */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handleTrackOrderPress("To Receive")}
+              className="items-center justify-center w-16 relative"
+            >
+              <Ionicons name="airplane-outline" size={24} color="#034194" />
+              <Text className="text-[11px] text-primary font-medium mt-2 text-center">
+                To Receive
+              </Text>
+              {orderBadges.toReceive > 0 && (
+                <View className="absolute -top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 border border-white">
+                  <Text className="text-white text-[9px] font-bold">
+                    {orderBadges.toReceive}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* TO RATE SELECTION */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handleTrackOrderPress("Completed")}
+              className="items-center justify-center w-16 relative"
+            >
+              <Ionicons name="star-outline" size={24} color="#034194" />
+              <Text className="text-[11px] text-primary  font-medium mt-2 text-center">
+                To Rate
+              </Text>
+              {orderBadges.toRate > 0 && (
+                <View className="absolute -top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 border border-white">
+                  <Text className="text-white text-[9px] font-bold">
+                    {orderBadges.toRate}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
-      </View>
 
-      {/* TRACKING ORDER STATES LAYER */}
-      {/* Negative placement applied via native style object properties to bypass NativeWind limitations */}
-      <View
-        className="mx-4 bg-white rounded-3xl p-4 border border-slate-100 shadow-sm"
-        style={{ marginTop: -20, zIndex: 10 }}
-      >
-        <View className="flex-row justify-between items-center border-b border-slate-100 pb-3 mb-4">
-          <Text className="font-bold text-primary text-base tracking-tight">
-            My Purchases
-          </Text>
+        {/* ACCOUNT MANAGE SECTIONS LIST */}
+        <View className="mx-4 bg-white rounded-3xl p-2 mt-4 border border-slate-100 shadow-sm mb-6">
           <TouchableOpacity
-            activeOpacity={0.7}
-            className="flex-row items-center"
-            onPress={() => handleTrackOrderPress("All")}
+            activeOpacity={0.6}
+            onPress={() => router.push("/address")}
+            className="flex-row items-center justify-between p-4 border-b border-slate-50"
           >
-            <Text className="text-xs text-slate-400 font-medium mr-1">
-              View Order History
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
+            <View className="flex-row items-center">
+              <Ionicons name="location-outline" size={20} color="#034194" />
+              <Text className="ml-3 text-slate-700 font-medium">
+                Shipping Address
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.6}
+            onPress={() => router.push("/(main)")}
+            className="flex-row items-center justify-between p-4"
+          >
+            <View className="flex-row items-center">
+              <Ionicons name="storefront-outline" size={20} color="#034194" />
+              <Text className="ml-3 text-slate-700 font-medium">
+                Return to FISMPC
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
           </TouchableOpacity>
         </View>
+      </ScrollView>
 
-        <View className="flex-row justify-between items-center px-1">
-          {/* TO PAY SELECTION */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => handleTrackOrderPress("To Pay")}
-            className="items-center justify-center w-16 relative"
-          >
-            <Ionicons name="wallet-outline" size={24} color="#034194" />
-            <Text className="text-[11px] text-primary font-medium mt-2 text-center">
-              To Pay
-            </Text>
-            {orderBadges.toPay > 0 && (
-              <View className="absolute -top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 border border-white">
-                <Text className="text-white text-[9px] font-bold">
-                  {orderBadges.toPay}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* TO SHIP SELECTION */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => handleTrackOrderPress("To Ship")}
-            className="items-center justify-center w-16 relative"
-          >
-            <Ionicons name="cube-outline" size={24} color="#034194" />
-            <Text className="text-[11px] text-primary  font-medium mt-2 text-center">
-              To Ship
-            </Text>
-            {orderBadges.toShip > 0 && (
-              <View className="absolute -top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 border border-white">
-                <Text className="text-white text-[9px] font-bold">
-                  {orderBadges.toShip}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* TO RECEIVE SELECTION */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => handleTrackOrderPress("To Receive")}
-            className="items-center justify-center w-16 relative"
-          >
-            <Ionicons name="airplane-outline" size={24} color="#034194" />
-            <Text className="text-[11px] text-primary font-medium mt-2 text-center">
-              To Receive
-            </Text>
-            {orderBadges.toReceive > 0 && (
-              <View className="absolute -top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 border border-white">
-                <Text className="text-white text-[9px] font-bold">
-                  {orderBadges.toReceive}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* TO RATE SELECTION */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => handleTrackOrderPress("Completed")}
-            className="items-center justify-center w-16 relative"
-          >
-            <Ionicons name="star-outline" size={24} color="#034194" />
-            <Text className="text-[11px] text-primary  font-medium mt-2 text-center">
-              To Rate
-            </Text>
-            {orderBadges.toRate > 0 && (
-              <View className="absolute -top-1 right-1 bg-[#D70127] rounded-full min-w-[16px] h-[16px] items-center justify-center px-1 border border-white">
-                <Text className="text-white text-[9px] font-bold">
-                  {orderBadges.toRate}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* ACCOUNT MANAGE SECTIONS LIST */}
-      <View className="mx-4 bg-white rounded-3xl p-2 mt-4 border border-slate-100 shadow-sm mb-6">
-        {/* Account Details Redirection */}
-        {/* <TouchableOpacity
-          activeOpacity={0.6}
-          onPress={() => handleRedirectToMainProfile("info")}
-          className="flex-row items-center justify-between p-4 border-b border-slate-50"
-        >
-          <View className="flex-row items-center">
-            <Ionicons name="person-outline" size={20} color="#034194" />
-            <Text className="ml-3 text-slate-700 font-medium">
-              Account Information
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-        </TouchableOpacity> */}
-
+      {/* ABSOLUTE START SELLING BUTTON AT SCREEN BOTTOM (100VH VIEWPORT BASE) */}
+      <View className="absolute bottom-0 left-0 mx-4 mb-10 right-0">
         <TouchableOpacity
-          activeOpacity={0.6}
-          onPress={() => router.push("/address")}
-          className="flex-row items-center justify-between p-4 border-b border-slate-50"
+          activeOpacity={0.8}
+          onPress={() => router.push("/register-seller")}
+          className="bg-primary w-full py-4 rounded-2xl items-center justify-center shadow-lg"
         >
-          <View className="flex-row items-center">
-            <Ionicons name="location-outline" size={20} color="#034194" />
-            <Text className="ml-3 text-slate-700 font-medium">
-              Shipping Address
-            </Text>
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="storefront-outline" size={20} color="#fff" />
+            <Text className="text-white font-bold text-xl">Start Selling?</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.6}
-          onPress={() => router.push("/(main)")}
-          className="flex-row items-center justify-between p-4"
-        >
-          <View className="flex-row items-center">
-            <Ionicons name="storefront-outline" size={20} color="#034194" />
-            <Text className="ml-3 text-slate-700 font-medium">
-              Return to FISMPC
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </View>
   );
 }

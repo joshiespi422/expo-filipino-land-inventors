@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  ImageBackground,
   Text,
   TextInput,
   TouchableOpacity,
@@ -123,7 +124,7 @@ export default function Store() {
         keyExtractor={(item) => item.id.toString()}
         columnWrapperStyle={{
           justifyContent: "space-between",
-          paddingHorizontal: 8,
+          paddingHorizontal: 0,
         }}
         contentContainerStyle={{
           padding: 8,
@@ -152,107 +153,194 @@ export default function Store() {
             </View>
 
             {/* SHOP HEADER */}
-            <View className="bg-white rounded-3xl p-5 mb-4 border border-slate-200">
-              <View className="flex-row items-center">
-                <Image
-                  source={
-                    storeDetails.logo ? { uri: storeDetails.logo } : UserProfile
-                  }
-                  style={{
-                    width: 75,
-                    height: 75,
-                    borderRadius: 37.5,
-                    backgroundColor: "#f1f5f9",
-                  }}
-                />
 
-                <View className="ml-4 flex-1">
-                  <View className="flex-row items-center flex-wrap">
+            {/* SHOP HEADER */}
+            <ImageBackground
+              source={
+                storeDetails.banner ? { uri: storeDetails.banner } : { uri: "" }
+              }
+              resizeMode="cover"
+              className={`rounded-3xl mb-4 overflow-hidden border border-slate-200 ${
+                storeDetails.banner ? "bg-transparent" : "bg-white"
+              }`}
+            >
+              {/* BLACK OPACITY LAYER - Only shows if there is a banner image */}
+              {storeDetails.banner && (
+                <View className="absolute inset-0 bg-black/50" />
+              )}
+
+              {/* MAIN CONTENT CONTAINER */}
+              <View className="p-5">
+                <View className="flex-row items-center">
+                  <Image
+                    source={
+                      storeDetails.logo
+                        ? { uri: storeDetails.logo }
+                        : UserProfile
+                    }
+                    style={{
+                      width: 75,
+                      height: 75,
+                      borderRadius: 37.5,
+                      backgroundColor: "#f1f5f9",
+                    }}
+                    className="border border-slate-200"
+                  />
+
+                  <View className="ml-4 flex-1">
+                    <View className="flex-row items-center flex-wrap">
+                      <Text
+                        className={`text-2xl font-bold mr-1 ${
+                          storeDetails.banner ? "text-white" : "text-primary"
+                        }`}
+                        numberOfLines={1}
+                      >
+                        {storeDetails.name || "Fashion Store"}
+                      </Text>
+
+                      {storeDetails.is_official && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={18}
+                          color={storeDetails.banner ? "#38bdf8" : "#034194"}
+                        />
+                      )}
+                    </View>
+
                     <Text
-                      className="text-primary text-2xl font-bold mr-1"
-                      numberOfLines={1}
+                      className={`text-xs mt-1 ${
+                        storeDetails.banner
+                          ? "text-slate-200"
+                          : "text-slate-500"
+                      }`}
+                      numberOfLines={2}
                     >
-                      {storeDetails.name || "Fashion Store"}
+                      {storeDetails.description || "Welcome to our store!"}
                     </Text>
 
-                    {storeDetails.is_official && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={18}
-                        color="#034194"
-                      />
-                    )}
+                    {/* <Text
+                      className={`text-xs mt-1 font-medium ${
+                        storeDetails.banner
+                          ? "text-green-400"
+                          : "text-slate-400"
+                      }`}
+                    >
+                      Online now
+                    </Text> */}
                   </View>
-
-                  <Text
-                    className="text-slate-500 text-xs mt-1"
-                    numberOfLines={2}
-                  >
-                    {storeDetails.description || "Welcome to our store!"}
-                  </Text>
-
-                  <Text className="text-slate-400 text-xs mt-1">
-                    Online now
-                  </Text>
                 </View>
-              </View>
 
-              {/* FOLLOW + CHAT BUTTON */}
-              <View className="flex-row mt-5 gap-3">
-                <TouchableOpacity
-                  onPress={() => setFollow(!follow)}
-                  className={`flex-1 py-3 rounded-xl items-center border ${
-                    follow
-                      ? "bg-primary border-primary"
-                      : "bg-white border-primary"
-                  }`}
-                >
-                  <Text
-                    className={`font-bold ${
-                      follow ? "text-white" : "text-primary"
+                {/* FOLLOW + CHAT BUTTON */}
+                <View className="flex-row mt-5 gap-3">
+                  <TouchableOpacity
+                    onPress={() => setFollow(!follow)}
+                    className={`flex-1 py-3 rounded-xl items-center border ${
+                      storeDetails.banner
+                        ? follow
+                          ? "bg-white border-white"
+                          : "bg-transparent border-white"
+                        : follow
+                          ? "bg-primary border-primary"
+                          : "bg-white border-primary"
                     }`}
                   >
-                    {follow ? "Following" : "Follow"}
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      className={`font-bold ${
+                        storeDetails.banner
+                          ? follow
+                            ? "text-slate-900"
+                            : "text-white"
+                          : follow
+                            ? "text-white"
+                            : "text-primary"
+                      }`}
+                    >
+                      {follow ? "Following" : "Follow"}
+                    </Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => router.push("/chat-seller")}
-                  className="flex-1 py-3 bg-green-500 rounded-xl flex-row justify-center items-center"
+                  <TouchableOpacity
+                    onPress={() => router.push("/chat-seller")}
+                    className="flex-1 py-3 bg-green-500 rounded-xl flex-row justify-center items-center"
+                  >
+                    <Ionicons name="chatbubble" size={18} color="white" />
+                    <Text className="text-white font-bold ml-2">Chat</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* SHOP INFO / METRICS BLOCK */}
+                <View
+                  className={`flex-row justify-between mt-6 pt-4 border-t ${
+                    storeDetails.banner ? "border-white" : "border-slate-200"
+                  }`}
                 >
-                  <Ionicons name="chatbubble" size={18} color="white" />
-                  <Text className="text-white font-bold ml-2">Chat</Text>
-                </TouchableOpacity>
+                  <View className="items-center flex-1">
+                    <Text
+                      className={`font-bold text-center text-lg ${
+                        storeDetails.banner ? "text-white" : "text-slate-900"
+                      }`}
+                    >
+                      {storeDetails.rating
+                        ? `${Number(storeDetails.rating).toFixed(1)} ⭐`
+                        : "—"}
+                    </Text>
+                    <Text
+                      className={`text-xs mt-1 ${
+                        storeDetails.banner
+                          ? "text-slate-300"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      Rating
+                    </Text>
+                  </View>
+
+                  <View
+                    className={`items-center flex-1 border-x ${
+                      storeDetails.banner ? "border-white" : "border-slate-200"
+                    }`}
+                  >
+                    <Text
+                      className={`font-bold text-center text-lg ${
+                        storeDetails.banner ? "text-white" : "text-slate-900"
+                      }`}
+                    >
+                      {pagination?.total !== undefined
+                        ? pagination.total
+                        : storeProducts.length}
+                    </Text>
+                    <Text
+                      className={`text-xs mt-1 ${
+                        storeDetails.banner
+                          ? "text-slate-300"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      Products
+                    </Text>
+                  </View>
+
+                  <View className="items-center flex-1">
+                    <Text
+                      className={`font-bold text-center text-lg ${
+                        storeDetails.banner ? "text-white" : "text-slate-900"
+                      }`}
+                    >
+                      Active
+                    </Text>
+                    <Text
+                      className={`text-xs mt-1 ${
+                        storeDetails.banner
+                          ? "text-slate-300"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      Status
+                    </Text>
+                  </View>
+                </View>
               </View>
-
-              {/* SHOP INFO / METRICS BLOCK */}
-              <View className="flex-row justify-between mt-6">
-                <View className="items-center flex-1">
-                  <Text className="font-bold text-center text-lg">
-                    {storeDetails.rating
-                      ? `${Number(storeDetails.rating).toFixed(1)} ⭐`
-                      : "—"}
-                  </Text>
-                  <Text className="text-slate-500 text-xs mt-1">Rating</Text>
-                </View>
-
-                <View className="items-center flex-1 border-x border-slate-100">
-                  <Text className="font-bold text-center text-lg">
-                    {pagination?.total !== undefined
-                      ? pagination.total
-                      : storeProducts.length}
-                  </Text>
-                  <Text className="text-slate-500 text-xs mt-1">Products</Text>
-                </View>
-
-                <View className="items-center flex-1">
-                  <Text className="font-bold text-center text-lg text-green-600">
-                    Active
-                  </Text>
-                  <Text className="text-slate-500 text-xs mt-1">Status</Text>
-                </View>
-              </View>
-            </View>
+            </ImageBackground>
 
             {/* PRODUCTS TITLE CONTAINER */}
             <View className="bg-blue rounded-xl py-3 mb-4">
