@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
-import { Stack, usePathname, useRouter } from "expo-router";
+import { Stack, useFocusEffect, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect } from "react";
 import {
+  AppState,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -53,20 +54,33 @@ export default function RootLayout() {
   const isProducts = pathname.startsWith("/products/");
   const isShop = pathname === "/store";
 
+  const hideNavigationBar = async () => {
+    if (Platform.OS !== "android") return;
+
+    try {
+      await NavigationBar.setBehaviorAsync("sticky-immersive" as any);
+      await NavigationBar.setVisibilityAsync("hidden");
+    } catch (e) {
+      console.log("NavigationBar error:", e);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      hideNavigationBar();
+    }, []),
+  );
+
   useEffect(() => {
-    const hideNavBar = async () => {
-      if (Platform.OS === "android") {
-        try {
-          await NavigationBar.setBehaviorAsync("sticky-immersive" as any);
+    hideNavigationBar();
 
-          await NavigationBar.setVisibilityAsync("hidden");
-        } catch (e) {
-          console.log("NavigationBar error:", e);
-        }
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        hideNavigationBar();
       }
-    };
+    });
 
-    hideNavBar();
+    return () => subscription.remove();
   }, []);
 
   return (
@@ -110,14 +124,11 @@ export default function RootLayout() {
           )}
 
           {/* CONTENT */}
-
           <View className="flex-1">
             <Stack
               screenOptions={{
                 headerShown: false,
-
                 animation: "fade",
-
                 contentStyle: {
                   backgroundColor: "transparent",
                 },
@@ -125,33 +136,22 @@ export default function RootLayout() {
             >
               <Stack.Screen name="index" />
               <Stack.Screen name="(store)/cart" />
+              <Stack.Screen name="/products/" />
               <Stack.Screen name="(store)/profile" />
             </Stack>
           </View>
 
           {/* FOOTER */}
-
           {showFooter && (
             <View
-              className="
-  
-                pb-4
-                pt-3
-                w-full
-                bg-blue
-                justify-center
-                "
+              style={{
+                width: "100%",
+                height: 80,
+              }}
+              className="bg-blue justify-center"
             >
-              <View
-                className="
-                  flex-row
-                  items-center
-                  justify-around
-                  w-full
-                  "
-              >
+              <View className="flex-row items-center justify-around w-full">
                 {/* FOR YOU */}
-
                 <TouchableOpacity
                   className="items-center flex-1"
                   onPress={() => router.push("/home")}
@@ -177,7 +177,6 @@ export default function RootLayout() {
                 </TouchableOpacity>
 
                 {/* COLLECTION */}
-
                 <TouchableOpacity
                   className="items-center flex-1"
                   onPress={() => router.push("/collection")}
@@ -203,7 +202,6 @@ export default function RootLayout() {
                 </TouchableOpacity>
 
                 {/* NOTIFICATION */}
-
                 <TouchableOpacity
                   className="items-center flex-1"
                   onPress={() => router.push("/notification")}
@@ -229,7 +227,6 @@ export default function RootLayout() {
                 </TouchableOpacity>
 
                 {/* PROFILE */}
-
                 <TouchableOpacity
                   className="items-center flex-1"
                   onPress={() => router.push("/(store)/profile")}
