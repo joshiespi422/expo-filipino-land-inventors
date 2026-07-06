@@ -28,6 +28,7 @@ export const profileService = {
     return {
       id: rawData.id,
       ...attrs,
+      is_seller: !!attrs.is_seller,
       avatar: normalizeImageUrl(attrs.avatar),
       front_valid_id_picture: normalizeImageUrl(attrs.front_valid_id_picture),
       back_valid_id_picture: normalizeImageUrl(attrs.back_valid_id_picture),

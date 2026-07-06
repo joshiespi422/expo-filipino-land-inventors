@@ -7,6 +7,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Linking,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -41,6 +42,7 @@ interface BuyerUserData {
   email: string;
   phone: string | null;
   avatar: string | null;
+  is_seller: boolean;
   user_type?: UserType;
   status?: UserStatus;
 }
@@ -317,16 +319,43 @@ export default function BuyerProfile() {
 
       {/* ABSOLUTE START SELLING BUTTON AT SCREEN BOTTOM (100VH VIEWPORT BASE) */}
       <View className="absolute bottom-0 left-0 mx-4 mb-10 right-0">
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => router.push("/register-seller")}
-          className="bg-primary w-full py-4 rounded-2xl items-center justify-center shadow-lg"
-        >
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="storefront-outline" size={20} color="#fff" />
-            <Text className="text-white font-bold text-xl">Start Selling?</Text>
-          </View>
-        </TouchableOpacity>
+        {userData?.is_seller ? (
+          /* IF USER IS A SELLER: Redirects them to the external web dashboard */
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={async () => {
+              const url = "https://www.fismulticoop.org/login";
+              const supported = await Linking.canOpenURL(url);
+              if (supported) {
+                await Linking.openURL(url); // This automatically acts like target="_blank"
+              } else {
+                console.error("Don't know how to open this URL: " + url);
+              }
+            }}
+            className="bg-primary w-full py-4 rounded-2xl items-center justify-center shadow-lg"
+          >
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="earth-outline" size={20} color="#fff" />
+              <Text className="text-white font-bold text-xl">
+                Go to Seller Dashboard
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          /* IF USER IS NOT A SELLER: Keeps them in-app to register */
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push("/register-seller")}
+            className="bg-primary w-full py-4 rounded-2xl items-center justify-center shadow-lg"
+          >
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="storefront-outline" size={20} color="#fff" />
+              <Text className="text-white font-bold text-xl">
+                Start Selling
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
