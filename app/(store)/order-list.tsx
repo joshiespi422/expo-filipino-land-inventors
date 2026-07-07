@@ -57,7 +57,7 @@ export default function OrderList() {
           setPagination(response.data.pagination);
         }
       } catch (error) {
-        console.error("❌ [FETCH_ORDERS_ERROR]:", error);
+        console.error("[FETCH_ORDERS_ERROR]:", error);
       } finally {
         setIsLoading(false);
         setIsLoadingMore(false);
