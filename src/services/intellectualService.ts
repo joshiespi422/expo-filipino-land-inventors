@@ -19,7 +19,7 @@ export const getIntellectualProperties = async (params?: any) => {
 
 export const getIntellectualProperty = async (id: number | string) => {
   const res = await api.get(
-    `/intellectual-properties/${id}?include=claims,documents,schedules,status,settings,payments`,
+    `/intellectual-properties/${id}?include=claims,documents,schedules,status,settings,payments,conversation`,
   );
 
   return {
