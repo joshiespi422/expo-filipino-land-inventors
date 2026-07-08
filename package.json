@@ -13,6 +13,7 @@
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
     "@react-native-community/datetimepicker": "^8.1.1",
+    "@react-native-community/netinfo": "11.5.2",
     "@react-native-picker/picker": "2.11.4",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
@@ -44,8 +45,10 @@
     "expo-symbols": "~55.0.5",
     "expo-system-ui": "~55.0.10",
     "expo-web-browser": "~55.0.10",
+    "laravel-echo": "^2.3.7",
     "lucide-react-native": "^1.8.0",
     "nativewind": "^4.2.5",
+    "pusher-js": "^8.5.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.6",
