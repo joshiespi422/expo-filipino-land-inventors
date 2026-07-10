@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Eye,
   Layers,
+  MessageSquare,
   Plus,
   Smartphone,
   Trash2,
@@ -78,7 +79,10 @@ export default function DetailsPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [hasSchedules, setHasSchedules] = useState(false);
 
-  // ✅ CUSTOM ALERT STATE (FIXED)
+  // Track extracted relationship ID to pass to your chat interface route
+  const [conversationId, setConversationId] = useState<string | null>(null);
+
+  // CUSTOM ALERT STATE
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
@@ -117,10 +121,19 @@ export default function DetailsPage() {
 
       const res = await getIntellectualProperty(id as string);
 
+      // JSON:API top-level response parsing
       const ip = res.data;
       const included = res.included || [];
 
       setData(ip);
+
+      // Extract conversation tracking block from payload relationships mapping
+      const extractedConvoId =
+        ip.relationships?.conversation?.data?.id ||
+        ip.attributes?.conversation_id ||
+        null;
+
+      setConversationId(extractedConvoId ? String(extractedConvoId) : null);
 
       // Check if schedules exist in relationships
       const schedulesRefs = ip.relationships?.schedules?.data || [];
@@ -178,7 +191,7 @@ export default function DetailsPage() {
       setAlert({
         visible: true,
         title: "Error",
-        message: "Failed to load details.",
+        message: "Failed to load details payload.",
       });
     } finally {
       setLoading(false);
@@ -188,7 +201,9 @@ export default function DetailsPage() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchDetails();
+      if (id) {
+        fetchDetails();
+      }
     }, [id]),
   );
 
@@ -204,7 +219,7 @@ export default function DetailsPage() {
       setAlert({
         visible: true,
         title: "Required",
-        message: "Complete current claim first.",
+        message: "Complete current claim text field first.",
       });
       return;
     }
@@ -243,7 +258,6 @@ export default function DetailsPage() {
 
       if (result.canceled) return;
 
-      // Check if any of the picked files exceed 8MB limit
       const oversizedFile = result.assets.find(
         (asset) => (asset.size || 0) > TOTAL_MAX_UPLOAD_SIZE,
       );
@@ -257,7 +271,6 @@ export default function DetailsPage() {
         return;
       }
 
-      // If all files pass validation, map them to state
       const validFiles: Attachment[] = result.assets.map((asset) => ({
         id: `new-${Date.now()}-${Math.random()}`,
         uri: asset.uri,
@@ -272,7 +285,7 @@ export default function DetailsPage() {
       setAlert({
         visible: true,
         title: "Error",
-        message: "Failed to pick file.",
+        message: "Failed to access storage documents.",
       });
     }
   };
@@ -328,7 +341,7 @@ export default function DetailsPage() {
       setAlert({
         visible: true,
         title: "Success",
-        message: "Updated successfully.",
+        message: "Updated details successfully.",
       });
     } catch {
       setAlert({
@@ -355,8 +368,6 @@ export default function DetailsPage() {
   }
 
   const attr = data?.attributes ?? {};
-
-  // Display payment action if status is waiting_for_payment OR if they already have schedules set up
   const showPaymentButton =
     attr.form_type === "payment" &&
     (attr.status?.toLowerCase() === "waiting_for_payment" || hasSchedules);
@@ -380,7 +391,7 @@ export default function DetailsPage() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          {/* Header Section */}
+          {/* Status Header Area */}
           <View className="p-6 bg-white border-b border-slate-100 rounded-b-[40px] shadow-sm">
             <View className="flex-row flex-wrap justify-between items-center gap-3">
               <View className="flex-row flex-wrap gap-2 flex-1 min-w-[60%]">
@@ -426,7 +437,44 @@ export default function DetailsPage() {
           </View>
 
           <View className="p-5">
-            {/* PAYMENT BUTTON */}
+            {/* HELPDESK CHAT CARD LINKAGE */}
+            {conversationId && (
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: "/chat-intellectual",
+                    params: {
+                      conversationId: conversationId,
+                      title: form.title || "Helpdesk Chat",
+                    },
+                  })
+                }
+                className="bg-emerald-600 rounded-3xl p-5 mb-6 shadow-lg shadow-emerald-600/20 active:opacity-90"
+              >
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-1 pr-4">
+                    <Text className="text-white text-lg font-extrabold mb-1 tracking-wide">
+                      Message Intellectual Support
+                    </Text>
+                    <Text className="text-white/80 text-xs font-medium leading-relaxed">
+                      Have any concerns regarding this registration? Open your
+                      ongoing discussion thread with our verification agents.
+                    </Text>
+                  </View>
+
+                  <View className="bg-white/15 p-3.5 rounded-2xl flex-row items-center gap-1">
+                    <MessageSquare size={24} color="white" />
+                    <ChevronRight
+                      size={18}
+                      color="white"
+                      className="opacity-80"
+                    />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* PAYMENT LOGS LINKAGE */}
             {showPaymentButton && (
               <TouchableOpacity
                 onPress={() =>
@@ -438,7 +486,6 @@ export default function DetailsPage() {
                 className="bg-primary rounded-3xl p-5 mb-6 shadow-lg shadow-primary/30 active:opacity-90"
               >
                 <View className="flex-row items-center justify-between">
-                  {/* Text Block */}
                   <View className="flex-1 pr-4">
                     <Text className="text-white text-xl font-extrabold mb-1 tracking-wide">
                       {hasSchedules
@@ -452,7 +499,6 @@ export default function DetailsPage() {
                     </Text>
                   </View>
 
-                  {/* Action Icons */}
                   <View className="bg-white/15 p-3.5 rounded-2xl flex-row items-center gap-1">
                     <Wallet size={24} color="white" />
                     <ChevronRight
@@ -465,10 +511,10 @@ export default function DetailsPage() {
               </TouchableOpacity>
             )}
 
-            {/* Main Content Card */}
+            {/* Content Display Form Container */}
             <View className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 mb-6">
               <Text className="text-slate-400 text-[10px] font-black uppercase mb-2">
-                Property Title
+                Property Title || {conversationId || "Hello"}
               </Text>
 
               {isEditing ? (
@@ -501,7 +547,7 @@ export default function DetailsPage() {
               )}
             </View>
 
-            {/* Claims Section */}
+            {/* Claims Context Layout */}
             <View className="mb-6">
               <View className="flex-row justify-between items-center mb-4 px-2">
                 <Text className="text-slate-900 text-lg font-black">
@@ -535,7 +581,7 @@ export default function DetailsPage() {
                           className="flex-1 text-slate-700"
                           value={c.description}
                           onChangeText={(t) => updateClaim(t, i)}
-                          placeholder="Describe claim..."
+                          placeholder="Describe claim criteria..."
                         />
 
                         <TouchableOpacity
@@ -555,7 +601,7 @@ export default function DetailsPage() {
               ))}
             </View>
 
-            {/* Attachments Section */}
+            {/* Attachments Section View */}
             <View className="mb-6">
               <View className="flex-row justify-between items-center mb-4 px-2">
                 <Text className="text-slate-900 text-lg font-black">
@@ -568,7 +614,6 @@ export default function DetailsPage() {
                     className="flex-row items-center bg-slate-100 px-4 py-2 rounded-full"
                   >
                     <Upload size={16} color="#64748b" />
-
                     <Text className="text-slate-600 font-bold text-xs ml-2">
                       Upload
                     </Text>
@@ -617,7 +662,7 @@ export default function DetailsPage() {
               </View>
             </View>
 
-            {/* Applicability Section */}
+            {/* Industrial Applicability Context Card */}
             <View className="bg-primary/5 rounded-[32px] p-6 border border-primary/10">
               <Text className="text-primary font-black text-[10px] uppercase mb-2">
                 Industrial Applicability
@@ -628,12 +673,7 @@ export default function DetailsPage() {
                   multiline
                   className="bg-white p-4 rounded-xl border border-slate-200 text-slate-700"
                   value={form.applicability}
-                  onChangeText={(t) =>
-                    setForm({
-                      ...form,
-                      applicability: t,
-                    })
-                  }
+                  onChangeText={(t) => setForm({ ...form, applicability: t })}
                 />
               ) : (
                 <Text className="text-slate-700 text-sm italic">
@@ -644,7 +684,7 @@ export default function DetailsPage() {
           </View>
         </ScrollView>
 
-        {/* Action Bar */}
+        {/* Global Interaction Base Bar */}
         <View className="w-full p-5 bg-white border-t border-slate-200">
           {isEditable(data) && !isEditing ? (
             <TouchableOpacity
@@ -683,7 +723,7 @@ export default function DetailsPage() {
           )}
         </View>
 
-        {/* Full Image Preview Modal */}
+        {/* Media Preview Modal Overlay */}
         <Modal visible={previewVisible} transparent={true} animationType="fade">
           <View className="flex-1 bg-black justify-center items-center">
             <TouchableOpacity
@@ -696,10 +736,7 @@ export default function DetailsPage() {
             {selectedImage && (
               <Image
                 source={{ uri: selectedImage }}
-                style={{
-                  width: width,
-                  height: height * 0.7,
-                }}
+                style={{ width: width, height: height * 0.7 }}
                 resizeMode="contain"
               />
             )}
@@ -712,17 +749,12 @@ export default function DetailsPage() {
           </View>
         </Modal>
 
-        {/* CUSTOM ALERT */}
+        {/* alert component context handler */}
         <CustomAlert
           visible={alert.visible}
           title={alert.title}
           message={alert.message}
-          onClose={() =>
-            setAlert({
-              ...alert,
-              visible: false,
-            })
-          }
+          onClose={() => setAlert({ ...alert, visible: false })}
         />
       </View>
     </KeyboardAvoidingView>
