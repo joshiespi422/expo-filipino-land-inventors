@@ -3,8 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
 import { Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   KeyboardAvoidingView,
   Platform,
   Text,
@@ -12,6 +13,8 @@ import {
   View,
 } from "react-native";
 
+import api from "@/services/api";
+import echo from "@/services/echo";
 import "../../global.css";
 
 const queryClient = new QueryClient();
@@ -19,7 +22,22 @@ const queryClient = new QueryClient();
 export default function RootLayout() {
   const pathname = usePathname();
   const isChat = pathname === "/chat-intellectual";
+  const isChatList = pathname === "/chat-list";
   const router = useRouter();
+
+  // 1. Use a ref to track if we are in the chat without causing re-renders/re-subscriptions
+  const isChatRef = useRef(isChat);
+  useEffect(() => {
+    isChatRef.current = isChat;
+  }, [isChat]);
+
+  // Notification & Global Unread Badging States
+  const [userId, setUserId] = useState<number | null>(null);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [notification, setNotification] = useState<any>(null);
+  const slideAnim = useRef(new Animated.Value(-100)).current;
+
+  // 2. Hide Navigation Bar (Android)
   useEffect(() => {
     const hideNavBar = async () => {
       if (Platform.OS === "android") {
@@ -34,6 +52,119 @@ export default function RootLayout() {
     hideNavBar();
   }, []);
 
+  // 3. Fetch Current User ID & Initial Unread Message Count
+  useEffect(() => {
+    api
+      .get("/profile")
+      .then((res) => {
+        const rawData = res.data?.data;
+        const id = rawData?.id || res.data?.id || res.data?.user?.id;
+
+        if (id) {
+          console.log("✅ Layout User ID fetched for notifications:", id);
+          setUserId(id);
+          // Sync initial unread counts across threads
+          fetchUnreadCount();
+        } else {
+          console.log("⚠️ Could not find User ID in response:", res.data);
+        }
+      })
+      .catch((err) =>
+        console.error("❌ Failed to fetch user profile for notifications", err),
+      );
+  }, []);
+
+  // Re-fetch counts when navigating back onto generic screens to keep values flawless
+  useEffect(() => {
+    if (userId && !isChat && !isChatList) {
+      fetchUnreadCount();
+    }
+  }, [pathname, userId]);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await api.get("/conversations");
+      const data = res.data?.data || res.data || [];
+      const total = data.reduce(
+        (sum: number, item: any) => sum + (item.unread_count || 0),
+        0,
+      );
+      setUnreadCount(total);
+    } catch (err) {
+      console.error("Failed to fetch initial unread count inside layout:", err);
+    }
+  };
+
+  // 4. Subscribe to Real-time Notifications
+  useEffect(() => {
+    if (!userId || !echo) return;
+
+    const channelName = `App.Models.User.${userId}`;
+    const channel = echo.private(channelName);
+
+    channel.subscribed(() => {
+      console.log(
+        `✅ Subscribed to global notification channel: ${channelName}`,
+      );
+    });
+
+    channel.notification((notificationData: any) => {
+      console.log("🔔 New Notification Received:", notificationData);
+
+      // Increment global unread state value dynamically
+      setUnreadCount((prev) => prev + 1);
+
+      // Prevent showing the banner if they are already inside the chat screen
+      if (isChatRef.current) {
+        console.log("🔕 User is currently in the chat screen, ignoring toast.");
+        return;
+      }
+
+      setNotification(notificationData);
+
+      // Animate In
+      Animated.spring(slideAnim, {
+        toValue: 50,
+        useNativeDriver: true,
+      }).start();
+
+      // Auto-hide after 5 seconds
+      setTimeout(() => {
+        closeNotification();
+      }, 5000);
+    });
+
+    return () => {
+      if (echo) {
+        echo.leave(channelName);
+        console.log(`👋 Left notification channel: ${channelName}`);
+      }
+    };
+  }, [userId]);
+
+  const closeNotification = () => {
+    Animated.timing(slideAnim, {
+      toValue: -100,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => setNotification(null));
+  };
+
+  const handleNotificationPress = () => {
+    if (!notification?.conversation_id) return;
+
+    const convoId = notification.conversation_id;
+    closeNotification();
+
+    router.push({
+      pathname: "/chat-intellectual",
+      params: {
+        conversationId: convoId,
+        title: "Chat Support",
+      },
+    });
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar hidden={true} />
@@ -43,27 +174,105 @@ export default function RootLayout() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           className="flex-1"
         >
+          {/* --- NOTIFICATION TOAST --- */}
+          {notification && (
+            <Animated.View
+              style={{
+                transform: [{ translateY: slideAnim }],
+                position: "absolute",
+                top: 0,
+                left: 16,
+                right: 16,
+                zIndex: 999,
+              }}
+            >
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={handleNotificationPress}
+                className="bg-white rounded-2xl p-4 shadow-lg flex-row items-center border border-slate-100"
+                style={{
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 12,
+                  elevation: 5,
+                }}
+              >
+                <View className="bg-[#0084FF]/10 w-10 h-10 rounded-full items-center justify-center mr-3">
+                  <Ionicons
+                    name="chatbubble-ellipses"
+                    size={20}
+                    color="#034194"
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-slate-900 font-bold text-sm">
+                    New Message
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    className="text-slate-500 text-xs mt-0.5"
+                  >
+                    {notification.body || "You received a new message."}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={closeNotification} className="p-2">
+                  <Ionicons name="close" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
           {/* --- GLOBAL HEADER --- */}
           {!isChat && (
-            <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
-              <View className="flex-row justify-between w-full px-6">
-                <View>
+            <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4 z-10">
+              <View className="flex-row justify-between items-center w-full px-6">
+                {/* Left Side: Back Arrow */}
+                <View className="w-10">
                   <TouchableOpacity onPress={() => router.back()}>
                     <Ionicons name="chevron-back" size={28} color="white" />
                   </TouchableOpacity>
                 </View>
-                <View>
-                  <Text className="text-white text-2xl font-bold">
+
+                {/* Center Title Layout */}
+                <View className="flex-1">
+                  <Text className="text-white text-center text-xl font-bold">
                     Intellectual Property
                   </Text>
-                  <Text className="text-white text-center text-2xl font-bold">
+                  <Text className="text-white text-center text-xl font-bold">
                     Assistance
                   </Text>
                 </View>
-                <View></View>
+
+                {/* Right Side: Message Icon with Unread Red Dot Count */}
+                <View className="w-10 items-end">
+                  {!isChatList ? (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => router.push("/chat-list")}
+                      className="relative p-1"
+                    >
+                      <Ionicons
+                        name="chatbubbles-outline"
+                        size={26}
+                        color="white"
+                      />
+                      {unreadCount > 0 && (
+                        <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-primary">
+                          <Text className="text-white text-[10px] font-extrabold text-center">
+                            {unreadCount > 9 ? "9+" : unreadCount}
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ) : (
+                    <View className="w-6" /> // Empty placeholder balancing layout if already on list
+                  )}
+                </View>
               </View>
             </View>
           )}
+
           {/* --- MAIN CONTENT AREA --- */}
           <View className="flex-1">
             <Stack
