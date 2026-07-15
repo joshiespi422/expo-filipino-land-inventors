@@ -1,8 +1,9 @@
 // app/(intellectual)/chat-intellectual.tsx
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
 import * as NavigationBar from "expo-navigation-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
@@ -57,6 +58,7 @@ function ChatIntellectualPageInner() {
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(
     null,
   );
+  const [imageRefresh, setImageRefresh] = useState(0); // Force image refresh
 
   const flatListRef = useRef<FlatList>(null);
   const channelRef = useRef<any>(null);
@@ -67,6 +69,29 @@ function ChatIntellectualPageInner() {
     NavigationBar.setBehaviorAsync("inset-touch").catch(() => {});
   }, []);
 
+  // Force image refresh when messages update to fix blank image issue
+  useEffect(() => {
+    if (messages.length > 0) {
+      const timer = setTimeout(() => {
+        setImageRefresh((prev) => prev + 1);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [messages]);
+
+  const requestFilePermissions = useCallback(async () => {
+    if (Platform.OS !== "android") return true;
+
+    try {
+      // For Android 6.0+, request runtime permissions
+      const permission = await Promise.resolve(true); // Placeholder - permissions should be in app.json
+      return permission;
+    } catch (error) {
+      console.warn("Permission request failed:", error);
+      return false;
+    }
+  }, []);
+
   const normalizePath = useCallback((attachment: any): string => {
     const rawPath =
       attachment.path ||
@@ -74,7 +99,12 @@ function ChatIntellectualPageInner() {
       attachment.url ||
       attachment.uri ||
       "";
-    if (!rawPath) return "";
+
+    if (!rawPath) {
+      console.warn("No path found in attachment:", attachment);
+      return "";
+    }
+
     if (
       rawPath.startsWith("http") ||
       rawPath.startsWith("file://") ||
@@ -84,7 +114,9 @@ function ChatIntellectualPageInner() {
 
     const apiBaseUrl = api.defaults.baseURL || "";
     const domainUrl = apiBaseUrl.replace(/\/api\/?$/, "");
-    return `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
+    const finalUrl = `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
+    console.log("Normalized path:", { rawPath, finalUrl });
+    return finalUrl;
   }, []);
 
   const handleOpenImage = (selectedUri: string) => {
@@ -97,6 +129,10 @@ function ChatIntellectualPageInner() {
     setViewerUri(null);
   };
 
+  // ==========================================
+  // DOWNLOAD FILE - FOR ATTACHMENTS ONLY
+  // (Similar to QR code download pattern)
+  // ==========================================
   const handleDownloadFile = async (attachment: any) => {
     const finalUrl = normalizePath(attachment);
     const fileName =
@@ -109,24 +145,125 @@ function ChatIntellectualPageInner() {
 
     try {
       setDownloadingFileId(attachment.id);
+      console.log("🔄 Starting download for:", fileName);
 
-      const localUri = `${FileSystem.documentDirectory ?? ""}${Date.now()}-${fileName}`;
+      // Request permissions
+      const hasPermission = await requestFilePermissions();
+      if (!hasPermission) {
+        Alert.alert(
+          "Permission Required",
+          "File storage permission is required to download files.",
+        );
+        setDownloadingFileId(null);
+        return;
+      }
+
+      // Try multiple directory options with fallbacks
+      let baseDir: string | null = null;
+
+      console.log("FileSystem directories:", {
+        cacheDirectory: FileSystem.cacheDirectory,
+        documentDirectory: FileSystem.documentDirectory,
+        temporaryDirectory: FileSystem.temporaryDirectory,
+      });
+
+      if (FileSystem.cacheDirectory && FileSystem.cacheDirectory.length > 0) {
+        baseDir = FileSystem.cacheDirectory;
+      } else if (
+        FileSystem.documentDirectory &&
+        FileSystem.documentDirectory.length > 0
+      ) {
+        baseDir = FileSystem.documentDirectory;
+      } else if (
+        FileSystem.temporaryDirectory &&
+        FileSystem.temporaryDirectory.length > 0
+      ) {
+        baseDir = FileSystem.temporaryDirectory;
+      }
+
+      if (!baseDir || baseDir.length === 0) {
+        console.error("All FileSystem directories are unavailable");
+        throw new Error(
+          "No writable directory available. Try saving to gallery instead.",
+        );
+      }
+
+      // Ensure directory path ends with /
+      if (!baseDir.endsWith("/")) {
+        baseDir = baseDir + "/";
+      }
+
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(7);
+      const safeFileName = fileName
+        .replace(/[^a-zA-Z0-9.-]/g, "_")
+        .substring(0, 50);
+      const localUri = `${baseDir}download_${timestamp}_${randomSuffix}_${safeFileName}`;
+
+      console.log("Download starting:", {
+        url: finalUrl,
+        savePath: localUri,
+        usedDir: baseDir,
+      });
+
       const { uri } = await FileSystem.downloadAsync(finalUrl, localUri);
 
-      setDownloadingFileId(null);
+      console.log("✓ Download completed:", uri);
 
+      // Share file or show success
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri);
+        console.log("📤 Sharing file...");
+        await Sharing.shareAsync(uri, {
+          mimeType: attachment.mime_type || "application/octet-stream",
+          dialogTitle: `Share ${fileName}`,
+        });
       } else {
-        Alert.alert("Success", `File downloaded successfully to: ${uri}`);
+        Alert.alert("Success", `${fileName} downloaded successfully`);
       }
-    } catch (error) {
+
       setDownloadingFileId(null);
-      console.error("Failed downloading attachment:", error);
-      Alert.alert(
-        "Download Error",
-        "Could not complete downloading this file.",
-      );
+    } catch (error) {
+      console.error("❌ Primary download failed:", error);
+
+      // FALLBACK: Try to download directly to gallery using MediaLibrary
+      try {
+        console.log("🔄 Attempting fallback: Save to Media Library...");
+
+        const mediaPermission = await MediaLibrary.requestPermissionsAsync();
+
+        if (mediaPermission.status !== "granted") {
+          throw new Error("Media Library permission denied");
+        }
+
+        // Try downloading to a temporary cache location first
+        const tempUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}temp_${Date.now()}_${fileName}`;
+
+        console.log("📥 Downloading to temp:", tempUri);
+
+        const downloadResult = await FileSystem.downloadAsync(
+          finalUrl,
+          tempUri,
+        );
+
+        if (downloadResult.status === 200) {
+          console.log("✓ Download succeeded, saving to gallery...");
+
+          // Save to media library
+          const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+          await MediaLibrary.createAlbumAsync("Downloads", asset, false);
+
+          Alert.alert("Success", `${fileName} saved to your gallery`);
+          setDownloadingFileId(null);
+          return;
+        }
+      } catch (fallbackError) {
+        console.error("❌ Fallback also failed:", fallbackError);
+      }
+
+      setDownloadingFileId(null);
+      const errorMsg =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      Alert.alert("Download Error", "Could not download file. " + errorMsg);
     }
   };
 
@@ -401,19 +538,31 @@ function ChatIntellectualPageInner() {
           : "") ||
         "Attachment File";
 
+      // ==========================================
+      // IMAGE RENDERING - VIEW ONLY (NO DOWNLOAD)
+      // ==========================================
       if (isImage) {
         return (
           <TouchableOpacity
-            key={attachment.id || Math.random().toString()}
+            key={`${attachment.id}-${imageRefresh}` || Math.random().toString()}
             activeOpacity={0.9}
             onPress={() => handleOpenImage(finalPathValue)}
             style={[styles.mediaBubbleBox, isTemp && { opacity: 0.7 }]}
           >
             <Image
-              key={finalPathValue}
-              source={{ uri: finalPathValue }}
+              key={`img-${finalPathValue}-${imageRefresh}`}
+              source={{ uri: `${finalPathValue}?t=${imageRefresh}` }}
               style={styles.media}
               resizeMode="cover"
+              onLoad={() => {
+                console.log("✓ Image loaded successfully:", finalPathValue);
+              }}
+              onError={(error) => {
+                console.error("✗ Image load error:", {
+                  path: finalPathValue,
+                  error: error.nativeEvent,
+                });
+              }}
             />
             <Text
               style={[
@@ -423,12 +572,15 @@ function ChatIntellectualPageInner() {
               numberOfLines={2}
               ellipsizeMode="tail"
             >
-              📄 {displayName}
+              🖼️ {displayName}
             </Text>
           </TouchableOpacity>
         );
       }
 
+      // ==========================================
+      // ATTACHMENT RENDERING - DOWNLOADABLE ONLY
+      // ==========================================
       const isDownloadingThis = downloadingFileId === attachment.id;
 
       return (
@@ -482,7 +634,7 @@ function ChatIntellectualPageInner() {
         </TouchableOpacity>
       );
     },
-    [normalizePath, downloadingFileId],
+    [normalizePath, downloadingFileId, imageRefresh],
   );
 
   const renderItem = useCallback(
@@ -715,6 +867,9 @@ function ChatIntellectualPageInner() {
         </View>
       </KeyboardAvoidingView>
 
+      {/* ==========================================
+          IMAGE VIEWER MODAL - VIEW ONLY
+          ========================================== */}
       <Modal
         visible={viewerVisible}
         transparent={true}
