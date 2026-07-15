@@ -67,7 +67,7 @@ export const sendMessage = async (
       },
     },
   );
-  return res.data;
+  return res.data.data;
 };
 
 /**
