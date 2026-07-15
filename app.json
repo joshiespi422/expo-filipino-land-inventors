@@ -56,7 +56,8 @@
           "photosPermission": "Allow Filipino Land Inventors to save QR codes to your gallery.",
           "savePhotosPermission": "Allow Filipino Land Inventors to save QR codes to your gallery."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

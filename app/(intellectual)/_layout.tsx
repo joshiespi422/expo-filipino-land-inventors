@@ -237,16 +237,13 @@ export default function RootLayout() {
                 {/* Center Title Layout */}
                 <View className="flex-1">
                   <Text className="text-white text-center text-xl font-bold">
-                    Intellectual Property
-                  </Text>
-                  <Text className="text-white text-center text-xl font-bold">
-                    Assistance
+                    Intellectual Property Assistance
                   </Text>
                 </View>
 
                 {/* Right Side: Message Icon with Unread Red Dot Count */}
-                <View className="w-10 items-end">
-                  {!isChatList ? (
+                {!isChatList ? (
+                  <View className="w-10 items-end">
                     <TouchableOpacity
                       activeOpacity={0.7}
                       onPress={() => router.push("/chat-list")}
@@ -265,10 +262,10 @@ export default function RootLayout() {
                         </View>
                       )}
                     </TouchableOpacity>
-                  ) : (
-                    <View className="w-6" /> // Empty placeholder balancing layout if already on list
-                  )}
-                </View>
+                  </View>
+                ) : (
+                  <View className="" />
+                )}
               </View>
             </View>
           )}
