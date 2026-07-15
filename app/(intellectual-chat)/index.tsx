@@ -4,7 +4,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import * as NavigationBar from "expo-navigation-bar";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -46,19 +46,6 @@ function ChatIntellectualPageInner() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS === "android") {
-        NavigationBar.setVisibilityAsync("hidden").catch(() => {});
-      }
-      return () => {
-        if (Platform.OS === "android") {
-          NavigationBar.setVisibilityAsync("visible").catch(() => {});
-        }
-      };
-    }, []),
-  );
-
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -73,6 +60,12 @@ function ChatIntellectualPageInner() {
 
   const flatListRef = useRef<FlatList>(null);
   const channelRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    NavigationBar.setVisibilityAsync("hidden").catch(() => {});
+    NavigationBar.setBehaviorAsync("inset-touch").catch(() => {});
+  }, []);
 
   const normalizePath = useCallback((attachment: any): string => {
     const rawPath =
@@ -632,8 +625,8 @@ function ChatIntellectualPageInner() {
       <StatusBar hidden={true} />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined} // Use undefined for Android
         style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity
@@ -679,7 +672,10 @@ function ChatIntellectualPageInner() {
         />
 
         <View
-          style={{ backgroundColor: "#FFFFFF", paddingBottom: insets.bottom }}
+          style={{
+            paddingBottom: Math.min(insets.bottom, 10),
+            backgroundColor: "#FFFFFF",
+          }}
         >
           <View style={styles.composer}>
             <TouchableOpacity

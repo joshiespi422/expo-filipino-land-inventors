@@ -442,33 +442,24 @@ export default function DetailsPage() {
               <TouchableOpacity
                 onPress={() =>
                   router.push({
-                    pathname: "/chat-intellectual",
+                    pathname: "/(intellectual-chat)/",
                     params: {
                       conversationId: conversationId,
-                      title: form.title || "Helpdesk Chat",
+                      title: form.title,
                     },
                   })
                 }
-                className="bg-emerald-600 rounded-3xl p-5 mb-6 shadow-lg shadow-emerald-600/20 active:opacity-90"
+                className="bg-primary rounded-3xl p-4 mb-6 shadow-lg shadow-emerald-600/20 active:opacity-90"
               >
                 <View className="flex-row items-center justify-between">
-                  <View className="flex-1 pr-4">
+                  <View className="flex-1">
                     <Text className="text-white text-lg font-extrabold mb-1 tracking-wide">
                       Message Intellectual Support
-                    </Text>
-                    <Text className="text-white/80 text-xs font-medium leading-relaxed">
-                      Have any concerns regarding this registration? Open your
-                      ongoing discussion thread with our verification agents.
                     </Text>
                   </View>
 
                   <View className="bg-white/15 p-3.5 rounded-2xl flex-row items-center gap-1">
                     <MessageSquare size={24} color="white" />
-                    <ChevronRight
-                      size={18}
-                      color="white"
-                      className="opacity-80"
-                    />
                   </View>
                 </View>
               </TouchableOpacity>
