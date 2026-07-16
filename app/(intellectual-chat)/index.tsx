@@ -100,23 +100,16 @@ function ChatIntellectualPageInner() {
       attachment.uri ||
       "";
 
-    if (!rawPath) {
-      console.warn("No path found in attachment:", attachment);
-      return "";
-    }
-
-    if (
-      rawPath.startsWith("http") ||
-      rawPath.startsWith("file://") ||
-      rawPath.startsWith("content://")
-    )
-      return rawPath;
+    // If it's already a full URL, trust it
+    if (rawPath.startsWith("http")) return rawPath;
+    if (rawPath.startsWith("file://")) return rawPath;
 
     const apiBaseUrl = api.defaults.baseURL || "";
     const domainUrl = apiBaseUrl.replace(/\/api\/?$/, "");
-    const finalUrl = `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
-    console.log("Normalized path:", { rawPath, finalUrl });
-    return finalUrl;
+    const final = `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
+
+    console.log("DEBUG PATH:", { rawPath, final }); // <--- CHECK THIS IN YOUR CONSOLE
+    return final;
   }, []);
 
   const handleOpenImage = (selectedUri: string) => {
@@ -298,36 +291,39 @@ function ChatIntellectualPageInner() {
     if (!conversationId || !echo) return;
 
     const channelName = `conversation.${conversationId}`;
+
     try {
       channelRef.current = echo.private(channelName);
+
+      // Inside your useEffect for echo:
       channelRef.current.listen(".message.sent", (e: any) => {
-        if (!e || !e.id) return;
-        if (userId && String(e.sender_id) === String(userId)) return;
+        const messageData = e.message || e;
+        if (!messageData || !messageData.id) return;
 
-        const incomingAttachments = Array.isArray(e.attachments)
-          ? e.attachments.map((att: any) => ({
+        // IMPORTANT: Ensure attachments are properly formatted for the renderer
+        const processedMessage = {
+          ...messageData,
+          attachments:
+            messageData.attachments?.map((att: any) => ({
               ...att,
-              id: att.id || `att-${Date.now()}-${Math.random()}`,
-            }))
-          : [];
-
-        const newMessage: Message = {
-          id: e.id,
-          conversation_id: Number(e.conversation_id),
-          sender_id: e.sender_id,
-          body: e.body,
-          created_at: e.created_at || new Date().toISOString(),
-          sender: e.sender,
-          attachments: incomingAttachments,
+              id: att.id || `att-${Date.now()}`,
+            })) || [],
         };
 
         setMessages((prev) => {
-          const exists = prev.some(
-            (m) => String(m.id) === String(newMessage.id),
-          );
-          if (exists) return prev;
+          if (prev.some((m) => String(m.id) === String(messageData.id)))
+            return prev;
+
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          return [...prev, newMessage];
+
+          // Replace temp if exists, otherwise append
+          const hasTemp = prev.some((m) => String(m.id).startsWith("temp-"));
+          if (hasTemp) {
+            return prev.map((m) =>
+              String(m.id).startsWith("temp-") ? processedMessage : m,
+            );
+          }
+          return [...prev, processedMessage];
         });
       });
     } catch (err) {
@@ -339,7 +335,7 @@ function ChatIntellectualPageInner() {
       channelRef.current?.stopListening(".message.sent");
       echo.leave(channelName);
     };
-  }, [conversationId, userId]);
+  }, [conversationId, echo]);
 
   const processMessagePayload = async (
     payload: FormData | { body: string },
@@ -349,19 +345,12 @@ function ChatIntellectualPageInner() {
     setSending(true);
 
     try {
-      const createdMessage = await sendMessage(
-        conversationId as string,
-        payload,
-      );
-      if (createdMessage) {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setMessages((prev) =>
-          prev.map((m) => (String(m.id) === tempId ? createdMessage : m)),
-        );
-      }
+      // Only send the message; do NOT update state here
+      await sendMessage(conversationId as string, payload);
     } catch (err) {
       console.error("Upload error details:", err);
       Alert.alert("Delivery Fail", "We couldn't deliver this message.");
+      // Only remove the temp message if the API call actually fails
       setMessages((prev) => prev.filter((m) => String(m.id) !== tempId));
     } finally {
       setSending(false);
@@ -522,70 +511,46 @@ function ChatIntellectualPageInner() {
 
   const renderAttachment = useCallback(
     (attachment: any, isTemp: boolean, isMe: boolean) => {
+      // Get the normalized path
       const finalPathValue = normalizePath(attachment);
+
+      // Determine type
       const mimeType = attachment.mime_type || attachment.type || "";
       const isImage =
         mimeType.startsWith("image/") ||
         /\.(jpg|jpeg|png|webp|gif)$/i.test(finalPathValue);
 
       const displayName =
-        attachment.original_name ||
-        attachment.name ||
-        attachment.file_name ||
-        attachment.filename ||
-        (typeof finalPathValue === "string"
-          ? finalPathValue.split("/").pop()
-          : "") ||
-        "Attachment File";
+        attachment.original_name || attachment.name || "Attachment File";
 
-      // ==========================================
-      // IMAGE RENDERING - VIEW ONLY (NO DOWNLOAD)
-      // ==========================================
+      // IMAGE RENDERING
       if (isImage) {
         return (
           <TouchableOpacity
-            key={`${attachment.id}-${imageRefresh}` || Math.random().toString()}
+            key={`touch-${attachment.id}`}
             activeOpacity={0.9}
-            onPress={() => handleOpenImage(finalPathValue)}
+            onPress={() => finalPathValue && handleOpenImage(finalPathValue)}
             style={[styles.mediaBubbleBox, isTemp && { opacity: 0.7 }]}
           >
             <Image
-              key={`img-${finalPathValue}-${imageRefresh}`}
-              source={{ uri: `${finalPathValue}?t=${imageRefresh}` }}
+              // This is the key fix: include the path in the key
+              key={`img-${attachment.id}-${finalPathValue}`}
+              source={{ uri: finalPathValue }}
               style={styles.media}
               resizeMode="cover"
-              onLoad={() => {
-                console.log("✓ Image loaded successfully:", finalPathValue);
-              }}
-              onError={(error) => {
-                console.error("✗ Image load error:", {
-                  path: finalPathValue,
-                  error: error.nativeEvent,
-                });
-              }}
+              onLoad={() => console.log("Loaded:", finalPathValue)}
+              onError={(e) => console.log("Error:", e.nativeEvent.error)}
             />
-            <Text
-              style={[
-                styles.imagePathText,
-                { color: isMe ? "rgba(255,255,255,0.85)" : COLORS.inkDim },
-              ]}
-              numberOfLines={2}
-              ellipsizeMode="tail"
-            >
-              🖼️ {displayName}
-            </Text>
+            {/* ... Text ... */}
           </TouchableOpacity>
         );
       }
 
-      // ==========================================
-      // ATTACHMENT RENDERING - DOWNLOADABLE ONLY
-      // ==========================================
+      // ATTACHMENT RENDERING
       const isDownloadingThis = downloadingFileId === attachment.id;
-
       return (
         <TouchableOpacity
-          key={attachment.id || Math.random().toString()}
+          key={`doc-${attachment.id}`}
           activeOpacity={0.7}
           onPress={() => handleDownloadFile(attachment)}
           style={[
@@ -615,26 +580,20 @@ function ChatIntellectualPageInner() {
                 { color: isMe ? COLORS.bubbleOutText : COLORS.ink },
               ]}
               numberOfLines={1}
-              ellipsizeMode="middle"
             >
               {displayName}
             </Text>
-            {attachment.size ? (
-              <Text
-                style={{
-                  color: isMe ? "rgba(255,255,255,0.7)" : COLORS.inkDim,
-                  fontSize: 9,
-                  marginTop: 1,
-                }}
-              >
-                {(attachment.size / 1024).toFixed(1)} KB
-              </Text>
-            ) : null}
           </View>
         </TouchableOpacity>
       );
     },
-    [normalizePath, downloadingFileId, imageRefresh],
+    [
+      normalizePath,
+      downloadingFileId,
+      imageRefresh,
+      handleOpenImage,
+      handleDownloadFile,
+    ],
   );
 
   const renderItem = useCallback(
