@@ -541,7 +541,6 @@ function ChatIntellectualPageInner() {
               onLoad={() => console.log("Loaded:", finalPathValue)}
               onError={(e) => console.log("Error:", e.nativeEvent.error)}
             />
-            {/* ... Text ... */}
           </TouchableOpacity>
         );
       }
