@@ -153,12 +153,6 @@ export const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: "#f1f5f9",
   },
-  imagePathText: {
-    fontSize: 11,
-    marginTop: 5,
-    paddingHorizontal: 2,
-    fontFamily: mono,
-  },
   docContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -254,16 +248,23 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000000",
     justifyContent: "space-between",
+    position: "relative",
+    zIndex: 0,
   },
   // No hardcoded top padding (was 60/40) — insets.top is applied
   // dynamically by the screen component so this adapts automatically
   // per device instead of relying on a guessed constant.
   viewerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    // flexDirection: "row",
+    // justifyContent: "space-between",
+    // alignItems: "center",
+    // paddingHorizontal: 16,
+    // paddingBottom: 10,
+    // paddingTop: 10,
+    position: "absolute",
+    top: 20,
+    right: 20,
+    zIndex: 1,
   },
   viewerCloseBtn: {
     width: 40,
@@ -283,6 +284,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: 10,
   },
   viewerFullImage: {
     width: SCREEN_WIDTH,

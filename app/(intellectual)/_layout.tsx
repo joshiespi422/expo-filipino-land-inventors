@@ -157,7 +157,7 @@ export default function RootLayout() {
     closeNotification();
 
     router.push({
-      pathname: "/chat-intellectual",
+      pathname: "/(intellectual-chat)/",
       params: {
         conversationId: convoId,
         title: "Chat Support",
