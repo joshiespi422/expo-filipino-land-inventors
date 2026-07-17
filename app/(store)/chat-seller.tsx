@@ -1,226 +1,781 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+// app/(store)/chat-seller.tsx
+import { Feather, Ionicons } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
+import * as NavigationBar from "expo-navigation-bar";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Sharing from "expo-sharing";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
+  LayoutAnimation,
+  Modal,
   Platform,
-  ScrollView,
+  StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from "react-native";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
-import UserProfile from "../../assets/images/UserProfile.jpg";
+import { COLORS, styles } from "@/components/chat-design";
+import api from "@/services/api";
+import {
+  findConversationByShop,
+  getShopConversation,
+  getShopConversations,
+  Message,
+  sendShopMessage,
+  ShopConversation,
+  startShopConversation,
+} from "@/services/chatShopService";
+import echo from "@/services/echo";
 
-const SELLER_INFO = {
-  name: "Fashion Store",
-  status: "Online",
-  avatar: UserProfile,
-};
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
-export default function ChatSeller() {
+function ChatSellerPageInner() {
+  const { storeId, storeName, productId } = useLocalSearchParams<{
+    storeId: string;
+    storeName: string;
+    productId?: string;
+  }>();
   const router = useRouter();
-  const scrollViewRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
 
-  const [message, setMessage] = useState("");
+  const [conversation, setConversation] = useState<ShopConversation | null>(
+    null,
+  );
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [userId, setUserId] = useState<string | number | null>(null);
 
-  const [messages, setMessages] = useState([
-    {
-      id: "1",
-      text: "Hi there! Welcome to Fashion Store. How can we help you today?",
-      sender: "seller",
-      time: "10:30 AM",
-    },
-    {
-      id: "2",
-      text: "Hello! Is the Premium T-Shirt Oversized Cotton Casual Wear still available?",
-      sender: "user",
-      time: "10:32 AM",
-    },
-    {
-      id: "3",
-      text: "Yes, it is! We still have stocks available.",
-      sender: "seller",
-      time: "10:33 AM",
-    },
-  ]);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [downloadingFileId, setDownloadingFileId] = useState<
+    string | number | null
+  >(null);
+  const [imageRefresh, setImageRefresh] = useState(0);
 
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({
-        animated: true,
-      });
-    }, 100);
-  };
+  const flatListRef = useRef<FlatList>(null);
+  const channelRef = useRef<any>(null);
+  const conversationIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    scrollToBottom();
+    if (Platform.OS !== "android") return;
+    NavigationBar.setVisibilityAsync("hidden").catch(() => {});
+    NavigationBar.setBehaviorAsync("inset-touch").catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      const timer = setTimeout(() => setImageRefresh((p) => p + 1), 500);
+      return () => clearTimeout(timer);
+    }
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (!message.trim()) return;
+  const normalizePath = useCallback((attachment: any): string => {
+    const rawPath =
+      attachment.path ||
+      attachment.file_path ||
+      attachment.url ||
+      attachment.uri ||
+      "";
 
-    const newMsg = {
-      id: Date.now().toString(),
+    if (rawPath.startsWith("http")) return rawPath;
+    if (rawPath.startsWith("file://")) return rawPath;
 
-      text: message.trim(),
+    const apiBaseUrl = api.defaults.baseURL || "";
+    const domainUrl = apiBaseUrl.replace(/\/api\/?$/, "");
+    return `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
+  }, []);
 
-      sender: "user",
+  const handleOpenImage = (uri: string) => {
+    setViewerUri(uri);
+    setViewerVisible(true);
+  };
 
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+  const handleCloseViewer = () => {
+    setViewerVisible(false);
+    setViewerUri(null);
+  };
+
+  const handleDownloadFile = async (attachment: any) => {
+    const finalUrl = normalizePath(attachment);
+    const fileName =
+      attachment.original_name || attachment.name || "downloaded-file";
+
+    if (!finalUrl.startsWith("http")) {
+      Alert.alert("Error", "Cannot download a local file.");
+      return;
+    }
+
+    try {
+      setDownloadingFileId(attachment.id);
+
+      let baseDir: string | null =
+        FileSystem.cacheDirectory ||
+        FileSystem.documentDirectory ||
+        FileSystem.temporaryDirectory ||
+        null;
+
+      if (!baseDir) {
+        throw new Error("No writable directory available.");
+      }
+      if (!baseDir.endsWith("/")) baseDir += "/";
+
+      const safeFileName = fileName
+        .replace(/[^a-zA-Z0-9.-]/g, "_")
+        .substring(0, 50);
+      const localUri = `${baseDir}download_${Date.now()}_${safeFileName}`;
+
+      const { uri } = await FileSystem.downloadAsync(finalUrl, localUri);
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: attachment.mime_type || "application/octet-stream",
+          dialogTitle: `Share ${fileName}`,
+        });
+      } else {
+        Alert.alert("Success", `${fileName} downloaded successfully`);
+      }
+      setDownloadingFileId(null);
+    } catch (error) {
+      console.error("Primary download failed:", error);
+      try {
+        const mediaPermission = await MediaLibrary.requestPermissionsAsync();
+        if (mediaPermission.status !== "granted") {
+          throw new Error("Media Library permission denied");
+        }
+        const tempUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}temp_${Date.now()}_${fileName}`;
+        const downloadResult = await FileSystem.downloadAsync(
+          finalUrl,
+          tempUri,
+        );
+        if (downloadResult.status === 200) {
+          const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+          await MediaLibrary.createAlbumAsync("Downloads", asset, false);
+          Alert.alert("Success", `${fileName} saved to your gallery`);
+          setDownloadingFileId(null);
+          return;
+        }
+      } catch (fallbackError) {
+        console.error("Fallback also failed:", fallbackError);
+      }
+      setDownloadingFileId(null);
+      const msg =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      Alert.alert("Download Error", "Could not download file. " + msg);
+    }
+  };
+
+  // ===== INITIAL LOAD =====
+  useEffect(() => {
+    const init = async () => {
+      try {
+        try {
+          const userRes = await api.get("/profile");
+          setUserId(userRes.data?.id || userRes.data?.user?.id || null);
+        } catch {
+          setUserId(null);
+        }
+
+        if (!storeId) {
+          setLoading(false);
+          return;
+        }
+
+        const all = await getShopConversations();
+        const existing = findConversationByShop(all, storeId);
+
+        if (existing) {
+          const full = await getShopConversation(existing.id);
+          setConversation(full.conversation);
+          setMessages(full.messages ?? []);
+          conversationIdRef.current = full.conversation.id;
+        }
+      } catch (err) {
+        console.error("Failed to initialize shop chat:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setMessages((prev) => [...prev, newMsg]);
+    init();
+  }, [storeId]);
 
-    setMessage("");
+  // ===== ECHO PRESENCE CHANNEL — matches ShopMessageSent (PresenceChannel + 'shop.message.sent') =====
+  useEffect(() => {
+    if (!conversation?.id || !echo) return;
 
+    const channelName = `shop-conversation.${conversation.id}`;
+
+    try {
+      channelRef.current = echo.join(channelName);
+
+      channelRef.current.listen(".shop.message.sent", (e: any) => {
+        const messageData = e.message || e;
+        if (!messageData || !messageData.id) return;
+
+        setMessages((prev) => {
+          if (prev.some((m) => String(m.id) === String(messageData.id)))
+            return prev;
+
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+          const hasTemp = prev.some((m) => String(m.id).startsWith("temp-"));
+          if (hasTemp) {
+            return prev.map((m) =>
+              String(m.id).startsWith("temp-") ? messageData : m,
+            );
+          }
+          return [...prev, messageData];
+        });
+      });
+    } catch (err) {
+      console.error("Failed to join shop conversation channel:", err);
+    }
+
+    return () => {
+      if (!echo) return;
+      channelRef.current?.stopListening(".shop.message.sent");
+      echo.leave(channelName);
+    };
+  }, [conversation?.id]);
+
+  const scrollToEnd = useCallback(() => {
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  }, []);
+
+  const deliverPayload = async (
+    payload: { body: string } | { body?: string; attachments: any[] },
+    tempId: string,
+  ) => {
+    setSending(true);
+    try {
+      if (!conversation) {
+        const created = await startShopConversation({
+          shop_id: storeId,
+          body: (payload as any).body || "",
+          product_id: productId,
+          attachments: (payload as any).attachments,
+        });
+        setConversation(created);
+        conversationIdRef.current = created.id;
+
+        const full = await getShopConversation(created.id);
+        setMessages(full.messages ?? []);
+      } else {
+        const message = await sendShopMessage(conversation.id, payload as any);
+        setMessages((prev) =>
+          prev.map((m) => (String(m.id) === tempId ? message : m)),
+        );
+      }
+      scrollToEnd();
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      Alert.alert("Delivery Fail", "We couldn't deliver this message.");
+      setMessages((prev) => prev.filter((m) => String(m.id) !== tempId));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!draft.trim() || sending || !storeId) return;
+    const textToSend = draft.trim();
+    setDraft("");
+
+    const tempId = `temp-${Date.now()}`;
+    const tempMessage: Message = {
+      id: tempId,
+      shop_conversation_id: conversation?.id ?? 0,
+      sender_id: userId as number,
+      sender_type: "user",
+      body: textToSend,
+      context_type: null,
+      context_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      attachments: [],
+    };
+
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setMessages((prev) => [...prev, tempMessage]);
+
+    await deliverPayload({ body: textToSend }, tempId);
+  };
+
+  const buildTempAttachmentMessage = (
+    tempId: string,
+    bodyText: string,
+    attachmentPreview: any,
+  ): Message => ({
+    id: tempId,
+    shop_conversation_id: conversation?.id ?? 0,
+    sender_id: userId as number,
+    sender_type: "user",
+    body: bodyText || null,
+    context_type: null,
+    context_id: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    attachments: [attachmentPreview],
+  });
+
+  const handlePickImage = async () => {
+    if (sending) return;
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert("Permission Denied", "We need access to add images.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const bodyText = draft.trim();
+      setDraft("");
+
+      const filename =
+        asset.fileName || asset.uri.split("/").pop() || "upload.jpg";
+      const match = /\.(\w+)$/.exec(filename);
+      const mime = match ? `image/${match[1]}` : "image/jpeg";
+
+      const attachmentFile = { uri: asset.uri, name: filename, type: mime };
+      const tempId = `temp-${Date.now()}`;
+
+      const tempMessage = buildTempAttachmentMessage(tempId, bodyText, {
+        id: tempId,
+        path: asset.uri,
+        original_name: filename,
+        mime_type: mime,
+        size: asset.fileSize || 0,
+      });
+
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setMessages((prev) => [...prev, tempMessage]);
+
+      await deliverPayload(
+        { body: bodyText || undefined, attachments: [attachmentFile] },
+        tempId,
+      );
+    }
+  };
+
+  const handlePickDocument = async () => {
+    if (sending) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["*/*"],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        const bodyText = draft.trim();
+        setDraft("");
+
+        const filename = file.name || file.uri.split("/").pop() || "document";
+        const mime = file.mimeType || "application/octet-stream";
+
+        const attachmentFile = { uri: file.uri, name: filename, type: mime };
+        const tempId = `temp-${Date.now()}`;
+
+        const tempMessage = buildTempAttachmentMessage(tempId, bodyText, {
+          id: tempId,
+          path: file.uri,
+          original_name: filename,
+          mime_type: mime,
+          size: file.size || 0,
+        });
+
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setMessages((prev) => [...prev, tempMessage]);
+
+        await deliverPayload(
+          { body: bodyText || undefined, attachments: [attachmentFile] },
+          tempId,
+        );
+      }
+    } catch (err) {
+      console.error("Document selector failure", err);
+    }
+  };
+
+  const handleAttachmentMenu = () => {
+    Keyboard.dismiss();
     setTimeout(() => {
-      scrollToBottom();
+      Alert.alert(
+        "Send Attachment",
+        "Choose what kind of file you want to send.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Photo Gallery", onPress: handlePickImage },
+          { text: "Document File", onPress: handlePickDocument },
+        ],
+      );
     }, 100);
   };
 
-  return (
-    <View className="flex-1 bg-white">
-      {/* HEADER */}
+  const renderAttachment = useCallback(
+    (attachment: any, isTemp: boolean, isMe: boolean) => {
+      const finalPathValue = normalizePath(attachment);
+      const mimeType = attachment.mime_type || attachment.type || "";
+      const isImage =
+        mimeType.startsWith("image/") ||
+        /\.(jpg|jpeg|png|webp|gif)$/i.test(finalPathValue);
+      const displayName =
+        attachment.original_name || attachment.name || "Attachment File";
 
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-slate-100 bg-white">
-        <View className="flex-row items-center flex-1">
-          <View className="relative">
+      if (isImage) {
+        return (
+          <TouchableOpacity
+            key={`touch-${attachment.id}`}
+            activeOpacity={0.9}
+            onPress={() => finalPathValue && handleOpenImage(finalPathValue)}
+            style={[styles.mediaBubbleBox, isTemp && { opacity: 0.7 }]}
+          >
             <Image
-              source={SELLER_INFO.avatar}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 100,
-              }}
+              key={`img-${attachment.id}-${finalPathValue}`}
+              source={{ uri: finalPathValue }}
+              style={styles.media}
+              resizeMode="cover"
             />
+          </TouchableOpacity>
+        );
+      }
 
-            <View className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
-          </View>
-
-          <View className="ml-3">
-            <Text className="font-semibold text-lg text-primary">
-              {SELLER_INFO.name}
-            </Text>
-
-            <Text className="text-xs text-slate-400">{SELLER_INFO.status}</Text>
-          </View>
-        </View>
-
-        <View className="flex-row gap-4">
-          {/* <Ionicons name="call-outline" size={22} color="#475569" /> */}
-
-          <Ionicons name="ellipsis-vertical" size={22} color="#475569" />
-        </View>
-      </View>
-
-      {/* CHAT AREA */}
-
-      <KeyboardAvoidingView
-        style={{
-          flex: 1,
-        }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
-      >
-        <ScrollView
-          ref={scrollViewRef}
-          className="flex-1 bg-slate-50 px-4"
-          contentContainerStyle={{
-            paddingTop: 16,
-
-            paddingBottom: 20,
-
-            flexGrow: 1,
-          }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={scrollToBottom}
+      const isDownloadingThis = downloadingFileId === attachment.id;
+      return (
+        <TouchableOpacity
+          key={`doc-${attachment.id}`}
+          activeOpacity={0.7}
+          onPress={() => handleDownloadFile(attachment)}
+          style={[
+            styles.docContainer,
+            isMe ? styles.docMe : styles.docThem,
+            isTemp && { opacity: 0.6 },
+          ]}
         >
-          {messages.map((msg) => {
-            const isUser = msg.sender === "user";
+          {isDownloadingThis ? (
+            <ActivityIndicator
+              size="small"
+              color={isMe ? COLORS.bubbleOutText : COLORS.brand}
+              style={{ marginRight: 8 }}
+            />
+          ) : (
+            <Feather
+              name="download-cloud"
+              size={18}
+              color={isMe ? COLORS.bubbleOutText : COLORS.brand}
+              style={{ marginRight: 8 }}
+            />
+          )}
+          <View style={{ flex: 1 }}>
+            <Text
+              style={[
+                styles.docName,
+                { color: isMe ? COLORS.bubbleOutText : COLORS.ink },
+              ]}
+              numberOfLines={1}
+            >
+              {displayName}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [normalizePath, downloadingFileId, imageRefresh],
+  );
 
-            return (
+  const renderItem = useCallback(
+    ({ item, index }: { item: Message; index: number }) => {
+      const isTemp = String(item.id).startsWith("temp-");
+      const isMe = item.sender_type === "user";
+
+      let showDateHeader = false;
+      let dateString = "";
+
+      if (item.created_at) {
+        const currentDate = new Date(item.created_at);
+        dateString = currentDate.toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+          weekday: "long",
+        });
+
+        if (index === 0) {
+          showDateHeader = true;
+        } else {
+          const prevItem = messages[index - 1];
+          if (prevItem?.created_at) {
+            const prevDate = new Date(prevItem.created_at);
+            if (currentDate.toDateString() !== prevDate.toDateString()) {
+              showDateHeader = true;
+            }
+          }
+        }
+      }
+
+      return (
+        <View>
+          {showDateHeader && (
+            <View style={styles.dateHeaderContainer}>
+              <View style={styles.dateDivider} />
+              <Text style={styles.dateHeaderText}>{dateString}</Text>
+              <View style={styles.dateDivider} />
+            </View>
+          )}
+
+          <View style={[styles.row, isMe ? styles.rowOut : styles.rowIn]}>
+            {!isMe && (
+              <View style={styles.avatarMini}>
+                <Text style={styles.avatarMiniText}>
+                  {typeof storeName === "string"
+                    ? storeName.substring(0, 2).toUpperCase()
+                    : "SH"}
+                </Text>
+              </View>
+            )}
+
+            <View
+              style={[styles.bubbleWrap, isMe && { alignItems: "flex-end" }]}
+            >
+              {!isMe && (
+                <Text style={styles.senderLabel}>{storeName || "Seller"}</Text>
+              )}
+
               <View
-                key={msg.id}
-                className={`flex-row mb-4 ${
-                  isUser ? "justify-end" : "justify-start"
-                }`}
+                style={[
+                  styles.bubble,
+                  isMe ? styles.bubbleOut : styles.bubbleIn,
+                ]}
               >
-                {!isUser && (
-                  <Image
-                    source={SELLER_INFO.avatar}
-                    style={{
-                      width: 32,
+                {item.attachments && item.attachments.length > 0
+                  ? item.attachments.map((file) =>
+                      renderAttachment(file, isTemp, isMe),
+                    )
+                  : null}
 
-                      height: 32,
+                {item.body ? (
+                  <Text
+                    style={isMe ? styles.bubbleOutText : styles.bubbleInText}
+                  >
+                    {item.body}
+                  </Text>
+                ) : null}
+              </View>
 
-                      borderRadius: 100,
-                    }}
-                    className="mr-2"
+              <View
+                style={[
+                  styles.metaLine,
+                  isMe && { flexDirection: "row-reverse" },
+                ]}
+              >
+                {isMe && (
+                  <Feather
+                    name={isTemp ? "clock" : "check"}
+                    size={12}
+                    color={isTemp ? COLORS.inkFaint : COLORS.brand}
+                    style={{ marginRight: 4, marginLeft: 4 }}
                   />
                 )}
-
-                <View className="max-w-[75%]">
-                  <View
-                    className={`p-3 rounded-2xl ${
-                      isUser
-                        ? "bg-primary rounded-tr-none"
-                        : "bg-white border border-slate-100 rounded-tl-none"
-                    }`}
-                  >
-                    <Text
-                      className={`text-[15px] ${
-                        isUser ? "text-white" : "text-slate-800"
-                      }`}
-                    >
-                      {msg.text}
-                    </Text>
-                  </View>
-
-                  <Text className="text-[10px] text-slate-400 mt-1">
-                    {msg.time}
-                  </Text>
-                </View>
+                <Text style={styles.metaText}>
+                  {item.created_at
+                    ? new Date(item.created_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : ""}
+                </Text>
               </View>
-            );
-          })}
-        </ScrollView>
-
-        {/* FOOTER */}
-
-        <View className="border-t border-slate-100 bg-white px-3 py-3">
-          <View className="flex-row items-center gap-2">
-            <View className="flex-1 bg-slate-100 rounded-2xl px-4 py-2">
-              <TextInput
-                value={message}
-                onChangeText={setMessage}
-                placeholder="Type a message..."
-                multiline
-                className="text-[15px]"
-                style={{
-                  maxHeight: 100,
-                }}
-              />
             </View>
-
-            <TouchableOpacity
-              onPress={handleSendMessage}
-              disabled={!message.trim()}
-              className={`p-3 rounded-full ${
-                message.trim() ? "bg-primary" : "bg-slate-300"
-              }`}
-            >
-              <Ionicons name="send" size={18} color="white" />
-            </TouchableOpacity>
           </View>
         </View>
+      );
+    },
+    [messages, renderAttachment, storeName],
+  );
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.loadingContainer,
+          { paddingTop: insets.top, paddingBottom: insets.bottom },
+        ]}
+      >
+        <ActivityIndicator size="large" color={COLORS.brand} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      <StatusBar hidden={true} />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+            style={{ padding: 4 }}
+          >
+            <Feather
+              name="chevron-left"
+              size={22}
+              color={COLORS.inkDim}
+              style={{ marginRight: 4 }}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.avatarMain}>
+            <Text style={styles.avatarMainText}>
+              {typeof storeName === "string"
+                ? storeName.substring(0, 2).toUpperCase()
+                : "SH"}
+            </Text>
+            <View style={styles.avatarDot} />
+          </View>
+
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text numberOfLines={1} style={styles.headName}>
+              {storeName || "Chat with Seller"}
+            </Text>
+            <View style={styles.headStatusRow}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.headStatus}>online — shop channel</Text>
+            </View>
+          </View>
+        </View>
+
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderItem}
+          contentContainerStyle={styles.threadContent}
+          onContentSizeChange={scrollToEnd}
+          ListEmptyComponent={
+            <View style={{ alignItems: "center", paddingVertical: 40 }}>
+              <Text style={{ color: COLORS.inkFaint }}>
+                No messages yet. Say hello to start the conversation.
+              </Text>
+            </View>
+          }
+        />
+
+        <View style={styles.composer}>
+          <TouchableOpacity
+            onPress={handleAttachmentMenu}
+            style={{ paddingHorizontal: 4 }}
+          >
+            <Feather name="plus" size={20} color={COLORS.inkDim} />
+          </TouchableOpacity>
+
+          <View style={styles.compField}>
+            <TextInput
+              placeholder={`Message ${storeName || "Seller"}...`}
+              placeholderTextColor={COLORS.inkFaint}
+              style={styles.compInput}
+              value={draft}
+              onChangeText={setDraft}
+              multiline
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.sendBtn,
+              (!draft.trim() || sending) && { backgroundColor: COLORS.rail },
+            ]}
+            onPress={handleSend}
+            disabled={!draft.trim() || sending}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="send"
+              size={16}
+              color={!draft.trim() || sending ? COLORS.inkFaint : "#ffffff"}
+            />
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={viewerVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseViewer}
+      >
+        <View
+          style={[
+            styles.viewerContainer,
+            { backgroundColor: "#000000", opacity: 1 },
+          ]}
+        >
+          <View style={[styles.viewerHeader, { paddingTop: insets.top + 8 }]}>
+            <TouchableOpacity
+              onPress={handleCloseViewer}
+              style={styles.viewerCloseBtn}
+            >
+              <Feather name="x" size={24} color="#ffffff" />
+            </TouchableOpacity>
+            <View style={{ width: 40 }} />
+            <View style={{ width: 40 }} />
+          </View>
+
+          <View style={styles.viewerMain}>
+            {viewerUri ? (
+              <Image
+                key={viewerUri}
+                source={{ uri: viewerUri }}
+                style={styles.viewerFullImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <ActivityIndicator size="large" color="#ffffff" />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
+  );
+}
+
+export default function ChatSellerPage() {
+  return (
+    <SafeAreaProvider>
+      <ChatSellerPageInner />
+    </SafeAreaProvider>
   );
 }
