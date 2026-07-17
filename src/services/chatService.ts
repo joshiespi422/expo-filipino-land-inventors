@@ -34,20 +34,44 @@ export interface Participant {
 }
 
 export interface ConversationData {
-  id: number;
-  status: string;
+  conversation: {
+    id: number;
+    status: string;
+    participants: Participant[];
+  };
   messages: Message[];
-  participants: Participant[];
+  pagination: {
+    current_page: number;
+    last_page: number;
+    has_more: boolean;
+  };
 }
 
 /**
- * Fetch a conversation by its ID
+ * Fetch a conversation by its ID with pagination support
+ * @param conversationId - The conversation ID
+ * @param page - Page number (1 = newest messages, 2+ = older messages)
+ * @returns Paginated conversation data
  */
 export const getConversation = async (
   conversationId: string | number,
+  page: number = 1,
 ): Promise<ConversationData> => {
-  const res = await api.get(`/conversations/${conversationId}`);
-  return res.data;
+  const res = await api.get(`/conversations/${conversationId}`, {
+    params: { page },
+  });
+
+  const data = res.data as ConversationData;
+
+  // Ensure messages are sorted by timestamp (oldest first for display)
+  if (data.messages && Array.isArray(data.messages)) {
+    data.messages.sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+  }
+
+  return data;
 };
 
 /**
@@ -67,7 +91,7 @@ export const sendMessage = async (
       },
     },
   );
-  return res.data.data;
+  return res.data;
 };
 
 /**
