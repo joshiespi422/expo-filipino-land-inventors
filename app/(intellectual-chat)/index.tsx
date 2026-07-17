@@ -651,12 +651,13 @@ function ChatIntellectualPageInner() {
               </View>
             )}
 
-            <View
+            {/* <View
               style={[
                 styles.railDot,
                 { backgroundColor: isMe ? COLORS.brand : COLORS.inkFaint },
               ]}
-            />
+              className="border"
+            /> */}
 
             <View
               style={[styles.bubbleWrap, isMe && { alignItems: "flex-end" }]}
@@ -781,47 +782,40 @@ function ChatIntellectualPageInner() {
           onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
         />
 
-        <View
-          style={{
-            paddingBottom: Math.min(insets.bottom, 10),
-            backgroundColor: "#FFFFFF",
-          }}
-        >
-          <View style={styles.composer}>
-            <TouchableOpacity
-              onPress={handleAttachmentMenu}
-              style={{ paddingHorizontal: 4 }}
-            >
-              <Feather name="plus" size={20} color={COLORS.inkDim} />
-            </TouchableOpacity>
+        <View style={styles.composer}>
+          <TouchableOpacity
+            onPress={handleAttachmentMenu}
+            style={{ paddingHorizontal: 4 }}
+          >
+            <Feather name="plus" size={20} color={COLORS.inkDim} />
+          </TouchableOpacity>
 
-            <View style={styles.compField}>
-              <TextInput
-                placeholder={`Message ${title || "Agent"}...`}
-                placeholderTextColor={COLORS.inkFaint}
-                style={styles.compInput}
-                value={draft}
-                onChangeText={setDraft}
-                multiline
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.sendBtn,
-                (!draft.trim() || sending) && { backgroundColor: COLORS.rail },
-              ]}
-              onPress={handleSend}
-              disabled={!draft.trim() || sending}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name="send"
-                size={16}
-                color={!draft.trim() || sending ? COLORS.inkFaint : "#ffffff"}
-              />
-            </TouchableOpacity>
+          <View style={styles.compField}>
+            <TextInput
+              placeholder={`Message ${title || "Agent"}...`}
+              placeholderTextColor={COLORS.inkFaint}
+              style={styles.compInput}
+              value={draft}
+              onChangeText={setDraft}
+              multiline
+            />
           </View>
+
+          <TouchableOpacity
+            style={[
+              styles.sendBtn,
+              (!draft.trim() || sending) && { backgroundColor: COLORS.rail },
+            ]}
+            onPress={handleSend}
+            disabled={!draft.trim() || sending}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="send"
+              size={16}
+              color={!draft.trim() || sending ? COLORS.inkFaint : "#ffffff"}
+            />
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 

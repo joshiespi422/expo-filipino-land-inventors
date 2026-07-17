@@ -218,7 +218,7 @@ export default function ChatListScreen() {
   const renderConversationCard = ({ item }: { item: UIConversation }) => {
     const isUnread = item.unread_count > 0;
     const initialLetter = item.ip_title
-      ? item.ip_title.charAt(0).toUpperCase()
+      ? item.ip_title.slice(0, 2).toUpperCase()
       : "I";
 
     return (

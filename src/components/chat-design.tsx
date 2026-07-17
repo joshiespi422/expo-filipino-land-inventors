@@ -82,7 +82,8 @@ export const styles = StyleSheet.create({
     backgroundColor: COLORS.rail,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 4,
+    marginBottom: 17,
+    marginRight: 8,
   },
   avatarMiniText: { color: COLORS.inkDim, fontWeight: "600", fontSize: 10 },
   avatarDot: {
@@ -107,13 +108,13 @@ export const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "flex-end", marginVertical: 5 },
   rowIn: { justifyContent: "flex-start" },
   rowOut: { justifyContent: "flex-end" },
-  railDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginHorizontal: 8,
-    marginBottom: 10,
-  },
+  // railDot: {
+  //   width: 6,
+  //   height: 6,
+  //   borderRadius: 3,
+  //   marginHorizontal: 8,
+  //   marginBottom: 10,
+  // },
   bubbleWrap: { maxWidth: "72%" },
   senderLabel: {
     color: COLORS.inkDim,
@@ -175,18 +176,12 @@ export const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   metaText: { color: COLORS.inkFaint, fontFamily: mono, fontSize: 10 },
-  // No hardcoded bottom padding here — the screen applies insets.bottom
-  // dynamically, so the home indicator / nav bar area is respected
-  // automatically on every device without a fixed gap fighting it.
-  composerGap: {
-    backgroundColor: COLORS.panel,
-  },
   composer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
     paddingTop: 10,
-    paddingBottom: 1,
+    paddingBottom: 10,
+    paddingHorizontal: 14,
     backgroundColor: COLORS.panel,
     borderTopWidth: 1,
     borderTopColor: COLORS.rail,
