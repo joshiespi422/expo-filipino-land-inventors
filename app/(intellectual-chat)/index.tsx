@@ -53,12 +53,18 @@ function ChatIntellectualPageInner() {
   const [draft, setDraft] = useState("");
   const [userId, setUserId] = useState<string | number | null>(null);
 
+  // ===== PAGINATION STATE =====
+  const [currentPage, setCurrentPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMorePages, setHasMorePages] = useState(true);
+
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(
     null,
   );
-  const [imageRefresh, setImageRefresh] = useState(0); // Force image refresh
+  const [imageRefresh, setImageRefresh] = useState(0);
 
   const flatListRef = useRef<FlatList>(null);
   const channelRef = useRef<any>(null);
@@ -69,7 +75,6 @@ function ChatIntellectualPageInner() {
     NavigationBar.setBehaviorAsync("inset-touch").catch(() => {});
   }, []);
 
-  // Force image refresh when messages update to fix blank image issue
   useEffect(() => {
     if (messages.length > 0) {
       const timer = setTimeout(() => {
@@ -83,8 +88,7 @@ function ChatIntellectualPageInner() {
     if (Platform.OS !== "android") return true;
 
     try {
-      // For Android 6.0+, request runtime permissions
-      const permission = await Promise.resolve(true); // Placeholder - permissions should be in app.json
+      const permission = await Promise.resolve(true);
       return permission;
     } catch (error) {
       console.warn("Permission request failed:", error);
@@ -100,7 +104,6 @@ function ChatIntellectualPageInner() {
       attachment.uri ||
       "";
 
-    // If it's already a full URL, trust it
     if (rawPath.startsWith("http")) return rawPath;
     if (rawPath.startsWith("file://")) return rawPath;
 
@@ -108,7 +111,7 @@ function ChatIntellectualPageInner() {
     const domainUrl = apiBaseUrl.replace(/\/api\/?$/, "");
     const final = `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
 
-    console.log("DEBUG PATH:", { rawPath, final }); // <--- CHECK THIS IN YOUR CONSOLE
+    console.log("DEBUG PATH:", { rawPath, final });
     return final;
   }, []);
 
@@ -122,10 +125,6 @@ function ChatIntellectualPageInner() {
     setViewerUri(null);
   };
 
-  // ==========================================
-  // DOWNLOAD FILE - FOR ATTACHMENTS ONLY
-  // (Similar to QR code download pattern)
-  // ==========================================
   const handleDownloadFile = async (attachment: any) => {
     const finalUrl = normalizePath(attachment);
     const fileName =
@@ -140,7 +139,6 @@ function ChatIntellectualPageInner() {
       setDownloadingFileId(attachment.id);
       console.log("🔄 Starting download for:", fileName);
 
-      // Request permissions
       const hasPermission = await requestFilePermissions();
       if (!hasPermission) {
         Alert.alert(
@@ -151,7 +149,6 @@ function ChatIntellectualPageInner() {
         return;
       }
 
-      // Try multiple directory options with fallbacks
       let baseDir: string | null = null;
 
       console.log("FileSystem directories:", {
@@ -181,7 +178,6 @@ function ChatIntellectualPageInner() {
         );
       }
 
-      // Ensure directory path ends with /
       if (!baseDir.endsWith("/")) {
         baseDir = baseDir + "/";
       }
@@ -203,7 +199,6 @@ function ChatIntellectualPageInner() {
 
       console.log("✓ Download completed:", uri);
 
-      // Share file or show success
       if (await Sharing.isAvailableAsync()) {
         console.log("📤 Sharing file...");
         await Sharing.shareAsync(uri, {
@@ -218,7 +213,6 @@ function ChatIntellectualPageInner() {
     } catch (error) {
       console.error("❌ Primary download failed:", error);
 
-      // FALLBACK: Try to download directly to gallery using MediaLibrary
       try {
         console.log("🔄 Attempting fallback: Save to Media Library...");
 
@@ -228,7 +222,6 @@ function ChatIntellectualPageInner() {
           throw new Error("Media Library permission denied");
         }
 
-        // Try downloading to a temporary cache location first
         const tempUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}temp_${Date.now()}_${fileName}`;
 
         console.log("📥 Downloading to temp:", tempUri);
@@ -241,7 +234,6 @@ function ChatIntellectualPageInner() {
         if (downloadResult.status === 200) {
           console.log("✓ Download succeeded, saving to gallery...");
 
-          // Save to media library
           const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
           await MediaLibrary.createAlbumAsync("Downloads", asset, false);
 
@@ -260,6 +252,7 @@ function ChatIntellectualPageInner() {
     }
   };
 
+  // ===== LOAD INITIAL MESSAGES =====
   useEffect(() => {
     const initChatSession = async () => {
       try {
@@ -274,8 +267,16 @@ function ChatIntellectualPageInner() {
         if (conversationId) {
           const conversationData = await getConversation(
             conversationId as string,
+            1, // Load page 1 (newest messages)
           );
+
+          // With an inverted FlatList, index 0 is at the bottom (newest).
+          // If api returns [newest ... oldest], we match this.
+          // Check if your API returns newest first. If it returns oldest first, use .reverse().
           setMessages(conversationData.messages || []);
+          setCurrentPage(conversationData.pagination.current_page);
+          setLastPage(conversationData.pagination.last_page);
+          setHasMorePages(conversationData.pagination.has_more);
         }
       } catch (err) {
         console.error("Initialization of chat telemetry failed", err);
@@ -287,6 +288,47 @@ function ChatIntellectualPageInner() {
     initChatSession();
   }, [conversationId]);
 
+  // ===== LOAD OLDER MESSAGES WHEN SCROLLING UP (REACHING END OF INVERTED LIST) =====
+  const loadMoreMessages = useCallback(async () => {
+    if (isLoadingMore || !hasMorePages || currentPage >= lastPage) {
+      return;
+    }
+
+    const nextPage = currentPage + 1;
+    setIsLoadingMore(true);
+
+    try {
+      const conversationData = await getConversation(
+        conversationId as string,
+        nextPage,
+      );
+
+      const newMessages = conversationData.messages || [];
+
+      if (newMessages.length > 0) {
+        // Under inverted logic, older messages live at the "end" of the list.
+        // Therefore, we append older messages to the end of the state array.
+        setMessages((prev) => {
+          const combined = [...prev, ...newMessages];
+          const seen = new Set();
+          return combined.filter((msg) => {
+            if (seen.has(msg.id)) return false;
+            seen.add(msg.id);
+            return true;
+          });
+        });
+
+        setCurrentPage(nextPage);
+        setHasMorePages(conversationData.pagination.has_more);
+      }
+    } catch (err) {
+      console.error("Failed to load more messages:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [conversationId, currentPage, lastPage, isLoadingMore, hasMorePages]);
+
+  // ===== ECHO LISTENER FOR NEW MESSAGES =====
   useEffect(() => {
     if (!conversationId || !echo) return;
 
@@ -295,12 +337,10 @@ function ChatIntellectualPageInner() {
     try {
       channelRef.current = echo.private(channelName);
 
-      // Inside your useEffect for echo:
       channelRef.current.listen(".message.sent", (e: any) => {
         const messageData = e.message || e;
         if (!messageData || !messageData.id) return;
 
-        // IMPORTANT: Ensure attachments are properly formatted for the renderer
         const processedMessage = {
           ...messageData,
           attachments:
@@ -316,14 +356,14 @@ function ChatIntellectualPageInner() {
 
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
-          // Replace temp if exists, otherwise append
+          // Temp message is replaced, or new message is prepended to the top (visually the bottom of the list)
           const hasTemp = prev.some((m) => String(m.id).startsWith("temp-"));
           if (hasTemp) {
             return prev.map((m) =>
               String(m.id).startsWith("temp-") ? processedMessage : m,
             );
           }
-          return [...prev, processedMessage];
+          return [processedMessage, ...prev];
         });
       });
     } catch (err) {
@@ -345,12 +385,10 @@ function ChatIntellectualPageInner() {
     setSending(true);
 
     try {
-      // Only send the message; do NOT update state here
       await sendMessage(conversationId as string, payload);
     } catch (err) {
       console.error("Upload error details:", err);
       Alert.alert("Delivery Fail", "We couldn't deliver this message.");
-      // Only remove the temp message if the API call actually fails
       setMessages((prev) => prev.filter((m) => String(m.id) !== tempId));
     } finally {
       setSending(false);
@@ -373,7 +411,9 @@ function ChatIntellectualPageInner() {
     };
 
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setMessages((prev) => [...prev, tempMessage]);
+    // Prepend temp message to the active array (visually at bottom)
+    setMessages((prev) => [tempMessage, ...prev]);
+
     await processMessagePayload({ body: textToSend }, tempId);
   };
 
@@ -433,7 +473,8 @@ function ChatIntellectualPageInner() {
       };
 
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setMessages((prev) => [...prev, tempMessage]);
+      setMessages((prev) => [tempMessage, ...prev]);
+
       await processMessagePayload(formData, tempId);
     }
   };
@@ -486,7 +527,8 @@ function ChatIntellectualPageInner() {
         };
 
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setMessages((prev) => [...prev, tempMessage]);
+        setMessages((prev) => [tempMessage, ...prev]);
+
         await processMessagePayload(formData, tempId);
       }
     } catch (err) {
@@ -511,10 +553,8 @@ function ChatIntellectualPageInner() {
 
   const renderAttachment = useCallback(
     (attachment: any, isTemp: boolean, isMe: boolean) => {
-      // Get the normalized path
       const finalPathValue = normalizePath(attachment);
 
-      // Determine type
       const mimeType = attachment.mime_type || attachment.type || "";
       const isImage =
         mimeType.startsWith("image/") ||
@@ -523,7 +563,6 @@ function ChatIntellectualPageInner() {
       const displayName =
         attachment.original_name || attachment.name || "Attachment File";
 
-      // IMAGE RENDERING
       if (isImage) {
         return (
           <TouchableOpacity
@@ -533,7 +572,6 @@ function ChatIntellectualPageInner() {
             style={[styles.mediaBubbleBox, isTemp && { opacity: 0.7 }]}
           >
             <Image
-              // This is the key fix: include the path in the key
               key={`img-${attachment.id}-${finalPathValue}`}
               source={{ uri: finalPathValue }}
               style={styles.media}
@@ -545,7 +583,6 @@ function ChatIntellectualPageInner() {
         );
       }
 
-      // ATTACHMENT RENDERING
       const isDownloadingThis = downloadingFileId === attachment.id;
       return (
         <TouchableOpacity
@@ -617,13 +654,16 @@ function ChatIntellectualPageInner() {
           weekday: "long",
         });
 
-        if (index === 0) {
+        // In inverted layouts, index 0 is the newest message.
+        // The oldest message is at index (messages.length - 1).
+        if (index === messages.length - 1) {
           showDateHeader = true;
         } else {
-          const prevItem = messages[index - 1];
-          if (prevItem && prevItem.created_at) {
-            const prevDate = new Date(prevItem.created_at);
-            if (currentDate.toDateString() !== prevDate.toDateString()) {
+          // Compare with the next item in the array, which is chronological older (below)
+          const nextItem = messages[index + 1];
+          if (nextItem && nextItem.created_at) {
+            const nextDate = new Date(nextItem.created_at);
+            if (currentDate.toDateString() !== nextDate.toDateString()) {
               showDateHeader = true;
             }
           }
@@ -650,14 +690,6 @@ function ChatIntellectualPageInner() {
                 </Text>
               </View>
             )}
-
-            {/* <View
-              style={[
-                styles.railDot,
-                { backgroundColor: isMe ? COLORS.brand : COLORS.inkFaint },
-              ]}
-              className="border"
-            /> */}
 
             <View
               style={[styles.bubbleWrap, isMe && { alignItems: "flex-end" }]}
@@ -773,13 +805,37 @@ function ChatIntellectualPageInner() {
           </View>
         </View>
 
+        {/* LOADING MORE INDICATOR AT THE TOP (WHICH IS PHYSICALLY THE BOTTOM CONTAINER OF THE INVERTED FLATLIST) */}
+        {isLoadingMore && (
+          <View style={{ padding: 12, alignItems: "center" }}>
+            <ActivityIndicator size="small" color={COLORS.brand} />
+          </View>
+        )}
+
         <FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
           contentContainerStyle={styles.threadContent}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+          inverted={true}
+          onEndReached={loadMoreMessages}
+          onEndReachedThreshold={0.15}
+          ListEmptyComponent={
+            !loading ? (
+              <View
+                style={{
+                  alignItems: "center",
+                  paddingVertical: 40,
+                  transform: [{ scaleY: -1 }], // Keeps empty component text readable in inverted list
+                }}
+              >
+                <Text style={{ color: COLORS.inkFaint }}>
+                  No messages yet. Start the conversation!
+                </Text>
+              </View>
+            ) : null
+          }
         />
 
         <View style={styles.composer}>
@@ -819,9 +875,7 @@ function ChatIntellectualPageInner() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* ==========================================
-          IMAGE VIEWER MODAL - VIEW ONLY
-          ========================================== */}
+      {/* IMAGE VIEWER MODAL */}
       <Modal
         visible={viewerVisible}
         transparent={true}
