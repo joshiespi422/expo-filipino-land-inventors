@@ -3,7 +3,8 @@ import axios from "axios";
 
 // 1. Define base constants
 // local api
-export const devIP = "192.168.1.53:8000";
+export const devIP = "192.168.42.128:8000";
+// export const devIP = "eligibly-recant-outweigh.ngrok-free.dev";
 export const BASE_URL = `http://${devIP}`;
 
 // online api

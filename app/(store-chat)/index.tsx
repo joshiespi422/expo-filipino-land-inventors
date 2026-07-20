@@ -1,4 +1,4 @@
-// app/(intellectual)/chat-intellectual.tsx
+// app/(store)/chat-seller.tsx
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -32,7 +32,15 @@ import {
 
 import { COLORS, styles } from "@/components/chat-design";
 import api from "@/services/api";
-import { getConversation, Message, sendMessage } from "@/services/chatService";
+import {
+  findConversationByShop,
+  getShopConversation,
+  getShopConversations,
+  Message,
+  sendShopMessage,
+  ShopConversation,
+  startShopConversation,
+} from "@/services/chatShopService";
 import echo from "@/services/echo";
 
 if (
@@ -42,18 +50,25 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-function ChatIntellectualPageInner() {
-  const { conversationId, title } = useLocalSearchParams();
+function ChatSellerPageInner() {
+  const { storeId, storeName, productId } = useLocalSearchParams<{
+    storeId: string;
+    storeName: string;
+    productId?: string;
+  }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const [conversation, setConversation] = useState<ShopConversation | null>(
+    null,
+  );
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const [userId, setUserId] = useState<string | number | null>(null);
 
-  // ===== PAGINATION STATE =====
+  // ===== PAGINATION STATE (mirrors chat-intellectual.tsx) =====
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -68,6 +83,7 @@ function ChatIntellectualPageInner() {
 
   const flatListRef = useRef<FlatList>(null);
   const channelRef = useRef<any>(null);
+  const conversationIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -77,24 +93,10 @@ function ChatIntellectualPageInner() {
 
   useEffect(() => {
     if (messages.length > 0) {
-      const timer = setTimeout(() => {
-        setImageRefresh((prev) => prev + 1);
-      }, 500);
+      const timer = setTimeout(() => setImageRefresh((p) => p + 1), 500);
       return () => clearTimeout(timer);
     }
   }, [messages]);
-
-  const requestFilePermissions = useCallback(async () => {
-    if (Platform.OS !== "android") return true;
-
-    try {
-      const permission = await Promise.resolve(true);
-      return permission;
-    } catch (error) {
-      console.warn("Permission request failed:", error);
-      return false;
-    }
-  }, []);
 
   const normalizePath = useCallback((attachment: any): string => {
     const rawPath =
@@ -109,14 +111,11 @@ function ChatIntellectualPageInner() {
 
     const apiBaseUrl = api.defaults.baseURL || "";
     const domainUrl = apiBaseUrl.replace(/\/api\/?$/, "");
-    const final = `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
-
-    console.log("DEBUG PATH:", { rawPath, final });
-    return final;
+    return `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
   }, []);
 
-  const handleOpenImage = (selectedUri: string) => {
-    setViewerUri(selectedUri);
+  const handleOpenImage = (uri: string) => {
+    setViewerUri(uri);
     setViewerVisible(true);
   };
 
@@ -137,70 +136,26 @@ function ChatIntellectualPageInner() {
 
     try {
       setDownloadingFileId(attachment.id);
-      console.log("🔄 Starting download for:", fileName);
 
-      const hasPermission = await requestFilePermissions();
-      if (!hasPermission) {
-        Alert.alert(
-          "Permission Required",
-          "File storage permission is required to download files.",
-        );
-        setDownloadingFileId(null);
-        return;
+      let baseDir: string | null =
+        FileSystem.cacheDirectory ||
+        FileSystem.documentDirectory ||
+        FileSystem.temporaryDirectory ||
+        null;
+
+      if (!baseDir) {
+        throw new Error("No writable directory available.");
       }
+      if (!baseDir.endsWith("/")) baseDir += "/";
 
-      let baseDir: string | null = null;
-
-      console.log("FileSystem directories:", {
-        cacheDirectory: FileSystem.cacheDirectory,
-        documentDirectory: FileSystem.documentDirectory,
-        temporaryDirectory: FileSystem.temporaryDirectory,
-      });
-
-      if (FileSystem.cacheDirectory && FileSystem.cacheDirectory.length > 0) {
-        baseDir = FileSystem.cacheDirectory;
-      } else if (
-        FileSystem.documentDirectory &&
-        FileSystem.documentDirectory.length > 0
-      ) {
-        baseDir = FileSystem.documentDirectory;
-      } else if (
-        FileSystem.temporaryDirectory &&
-        FileSystem.temporaryDirectory.length > 0
-      ) {
-        baseDir = FileSystem.temporaryDirectory;
-      }
-
-      if (!baseDir || baseDir.length === 0) {
-        console.error("All FileSystem directories are unavailable");
-        throw new Error(
-          "No writable directory available. Try saving to gallery instead.",
-        );
-      }
-
-      if (!baseDir.endsWith("/")) {
-        baseDir = baseDir + "/";
-      }
-
-      const timestamp = Date.now();
-      const randomSuffix = Math.random().toString(36).substring(7);
       const safeFileName = fileName
         .replace(/[^a-zA-Z0-9.-]/g, "_")
         .substring(0, 50);
-      const localUri = `${baseDir}download_${timestamp}_${randomSuffix}_${safeFileName}`;
-
-      console.log("Download starting:", {
-        url: finalUrl,
-        savePath: localUri,
-        usedDir: baseDir,
-      });
+      const localUri = `${baseDir}download_${Date.now()}_${safeFileName}`;
 
       const { uri } = await FileSystem.downloadAsync(finalUrl, localUri);
 
-      console.log("✓ Download completed:", uri);
-
       if (await Sharing.isAvailableAsync()) {
-        console.log("📤 Sharing file...");
         await Sharing.shareAsync(uri, {
           mimeType: attachment.mime_type || "application/octet-stream",
           dialogTitle: `Share ${fileName}`,
@@ -208,89 +163,86 @@ function ChatIntellectualPageInner() {
       } else {
         Alert.alert("Success", `${fileName} downloaded successfully`);
       }
-
       setDownloadingFileId(null);
     } catch (error) {
-      console.error("❌ Primary download failed:", error);
-
+      console.error("Primary download failed:", error);
       try {
-        console.log("🔄 Attempting fallback: Save to Media Library...");
-
         const mediaPermission = await MediaLibrary.requestPermissionsAsync();
-
         if (mediaPermission.status !== "granted") {
           throw new Error("Media Library permission denied");
         }
-
         const tempUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}temp_${Date.now()}_${fileName}`;
-
-        console.log("📥 Downloading to temp:", tempUri);
-
         const downloadResult = await FileSystem.downloadAsync(
           finalUrl,
           tempUri,
         );
-
         if (downloadResult.status === 200) {
-          console.log("✓ Download succeeded, saving to gallery...");
-
           const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
           await MediaLibrary.createAlbumAsync("Downloads", asset, false);
-
           Alert.alert("Success", `${fileName} saved to your gallery`);
           setDownloadingFileId(null);
           return;
         }
       } catch (fallbackError) {
-        console.error("❌ Fallback also failed:", fallbackError);
+        console.error("Fallback also failed:", fallbackError);
       }
-
       setDownloadingFileId(null);
-      const errorMsg =
+      const msg =
         error instanceof Error ? error.message : "Unknown error occurred";
-      Alert.alert("Download Error", "Could not download file. " + errorMsg);
+      Alert.alert("Download Error", "Could not download file. " + msg);
     }
   };
 
-  // ===== LOAD INITIAL MESSAGES =====
+  // ===== INITIAL LOAD =====
   useEffect(() => {
-    const initChatSession = async () => {
+    const init = async () => {
       try {
         try {
           const userRes = await api.get("/profile");
-          const resolvedId = userRes.data?.id || userRes.data?.user?.id || null;
-          setUserId(resolvedId);
-        } catch (userErr) {
+          setUserId(userRes.data?.id || userRes.data?.user?.id || null);
+        } catch {
           setUserId(null);
         }
 
-        if (conversationId) {
-          const conversationData = await getConversation(
-            conversationId as string,
-            1, // Load page 1
-          );
+        if (!storeId) {
+          setLoading(false);
+          return;
+        }
 
-          // ✅ FIXED: chatService.ts now reverses messages
-          // Messages come as [newest, newest-1, ..., oldest]
-          // Perfect for inverted FlatList where index 0 is at bottom (newest)
-          setMessages(conversationData.messages || []);
-          setCurrentPage(conversationData.pagination.current_page);
-          setLastPage(conversationData.pagination.last_page);
-          setHasMorePages(conversationData.pagination.has_more);
+        const all = await getShopConversations();
+        const existing = findConversationByShop(all, storeId);
+
+        if (existing) {
+          const full = await getShopConversation(existing.id, 1);
+          setConversation(full.conversation);
+          setMessages(full.messages ?? []);
+          setCurrentPage(full.pagination.current_page);
+          setLastPage(full.pagination.last_page);
+          setHasMorePages(full.pagination.has_more);
+          conversationIdRef.current = full.conversation.id;
+        } else {
+          setHasMorePages(false);
         }
       } catch (err) {
-        console.error("Initialization of chat telemetry failed", err);
+        console.error("Failed to initialize shop chat:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    initChatSession();
-  }, [conversationId]);
+    init();
+  }, [storeId]);
 
   // ===== LOAD OLDER MESSAGES WHEN SCROLLING UP (REACHING END OF INVERTED LIST) =====
   const loadMoreMessages = useCallback(async () => {
-    if (isLoadingMore || !hasMorePages || currentPage >= lastPage) {
+    const activeId = conversation?.id ?? conversationIdRef.current;
+
+    if (
+      !activeId ||
+      isLoadingMore ||
+      !hasMorePages ||
+      currentPage >= lastPage
+    ) {
       return;
     }
 
@@ -298,21 +250,13 @@ function ChatIntellectualPageInner() {
     setIsLoadingMore(true);
 
     try {
-      const conversationData = await getConversation(
-        conversationId as string,
-        nextPage,
-      );
-
-      const newMessages = conversationData.messages || [];
+      const full = await getShopConversation(activeId, nextPage);
+      const newMessages = full.messages || [];
 
       if (newMessages.length > 0) {
         setMessages((prev) => {
-          // ✅ FIXED: newMessages already reversed by chatService
-          // They're older than prev, so append to end
-          // Array stays [newest ... oldest] order
           const combined = [...prev, ...newMessages];
 
-          // Deduplicate by ID
           const seen = new Set<string | number>();
           return combined.filter((msg) => {
             const msgId = String(msg.id);
@@ -323,36 +267,27 @@ function ChatIntellectualPageInner() {
         });
 
         setCurrentPage(nextPage);
-        setHasMorePages(conversationData.pagination.has_more);
+        setHasMorePages(full.pagination.has_more);
       }
     } catch (err) {
-      console.error("Failed to load more messages:", err);
+      console.error("Failed to load more shop messages:", err);
     } finally {
       setIsLoadingMore(false);
     }
-  }, [conversationId, currentPage, lastPage, isLoadingMore, hasMorePages]);
+  }, [conversation?.id, currentPage, lastPage, isLoadingMore, hasMorePages]);
 
-  // ===== ECHO LISTENER FOR NEW MESSAGES =====
+  // ===== ECHO PRESENCE CHANNEL — matches ShopMessageSent (PresenceChannel + 'shop.message.sent') =====
   useEffect(() => {
-    if (!conversationId || !echo) return;
+    if (!conversation?.id || !echo) return;
 
-    const channelName = `conversation.${conversationId}`;
+    const channelName = `shop-conversation.${conversation.id}`;
 
     try {
-      channelRef.current = echo.private(channelName);
+      channelRef.current = echo.join(channelName);
 
-      channelRef.current.listen(".message.sent", (e: any) => {
+      channelRef.current.listen(".shop.message.sent", (e: any) => {
         const messageData = e.message || e;
         if (!messageData || !messageData.id) return;
-
-        const processedMessage = {
-          ...messageData,
-          attachments:
-            messageData.attachments?.map((att: any) => ({
-              ...att,
-              id: att.id || `att-${Date.now()}`,
-            })) || [],
-        };
 
         setMessages((prev) => {
           if (prev.some((m) => String(m.id) === String(messageData.id)))
@@ -360,39 +295,55 @@ function ChatIntellectualPageInner() {
 
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
-          // ✅ New message is always newest, so prepend to front
-          // This keeps newest-first ordering: [newMsg, ...prev]
           const hasTemp = prev.some((m) => String(m.id).startsWith("temp-"));
           if (hasTemp) {
             return prev.map((m) =>
-              String(m.id).startsWith("temp-") ? processedMessage : m,
+              String(m.id).startsWith("temp-") ? messageData : m,
             );
           }
-          return [processedMessage, ...prev];
+          return [messageData, ...prev];
         });
       });
     } catch (err) {
-      console.error("Failed to subscribe to channel:", err);
+      console.error("Failed to join shop conversation channel:", err);
     }
 
     return () => {
       if (!echo) return;
-      channelRef.current?.stopListening(".message.sent");
+      channelRef.current?.stopListening(".shop.message.sent");
       echo.leave(channelName);
     };
-  }, [conversationId, echo]);
+  }, [conversation?.id]);
 
-  const processMessagePayload = async (
-    payload: FormData | { body: string },
+  const deliverPayload = async (
+    payload: { body: string } | { body?: string; attachments: any[] },
     tempId: string,
   ) => {
-    if (!conversationId) return;
     setSending(true);
-
     try {
-      await sendMessage(conversationId as string, payload);
+      if (!conversation) {
+        const created = await startShopConversation({
+          shop_id: storeId,
+          body: (payload as any).body || "",
+          product_id: productId,
+          attachments: (payload as any).attachments,
+        });
+        setConversation(created);
+        conversationIdRef.current = created.id;
+
+        const full = await getShopConversation(created.id, 1);
+        setMessages(full.messages ?? []);
+        setCurrentPage(full.pagination.current_page);
+        setLastPage(full.pagination.last_page);
+        setHasMorePages(full.pagination.has_more);
+      } else {
+        const message = await sendShopMessage(conversation.id, payload as any);
+        setMessages((prev) =>
+          prev.map((m) => (String(m.id) === tempId ? message : m)),
+        );
+      }
     } catch (err) {
-      console.error("Upload error details:", err);
+      console.error("Failed to send message:", err);
       Alert.alert("Delivery Fail", "We couldn't deliver this message.");
       setMessages((prev) => prev.filter((m) => String(m.id) !== tempId));
     } finally {
@@ -401,26 +352,46 @@ function ChatIntellectualPageInner() {
   };
 
   const handleSend = async () => {
-    if (!draft.trim() || sending) return;
+    if (!draft.trim() || sending || !storeId) return;
     const textToSend = draft.trim();
     setDraft("");
 
     const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
-      id: tempId as any,
-      conversation_id: Number(conversationId),
+      id: tempId,
+      shop_conversation_id: conversation?.id ?? 0,
       sender_id: userId as number,
+      sender_type: "user",
       body: textToSend,
+      context_type: null,
+      context_id: null,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       attachments: [],
     };
 
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    // ✅ Prepend temp message (newest goes to front)
     setMessages((prev) => [tempMessage, ...prev]);
 
-    await processMessagePayload({ body: textToSend }, tempId);
+    await deliverPayload({ body: textToSend }, tempId);
   };
+
+  const buildTempAttachmentMessage = (
+    tempId: string,
+    bodyText: string,
+    attachmentPreview: any,
+  ): Message => ({
+    id: tempId,
+    shop_conversation_id: conversation?.id ?? 0,
+    sender_id: userId as number,
+    sender_type: "user",
+    body: bodyText || null,
+    context_type: null,
+    context_id: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    attachments: [attachmentPreview],
+  });
 
   const handlePickImage = async () => {
     if (sending) return;
@@ -438,49 +409,33 @@ function ChatIntellectualPageInner() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const targetAsset = result.assets[0];
-      const formData = new FormData();
-
+      const asset = result.assets[0];
       const bodyText = draft.trim();
-      if (bodyText) {
-        formData.append("body", bodyText);
-      }
       setDraft("");
 
-      const rawUri = targetAsset.uri;
       const filename =
-        targetAsset.fileName || rawUri.split("/").pop() || "upload.jpg";
+        asset.fileName || asset.uri.split("/").pop() || "upload.jpg";
       const match = /\.(\w+)$/.exec(filename);
-      const mime = match ? `image/${match[1]}` : `image/jpeg`;
+      const mime = match ? `image/${match[1]}` : "image/jpeg";
 
-      formData.append("attachments[]", {
-        uri: rawUri,
-        name: filename,
-        type: mime,
-      } as any);
-
+      const attachmentFile = { uri: asset.uri, name: filename, type: mime };
       const tempId = `temp-${Date.now()}`;
-      const tempMessage: Message = {
-        id: tempId as any,
-        conversation_id: Number(conversationId),
-        sender_id: userId as number,
-        body: bodyText || null,
-        created_at: new Date().toISOString(),
-        attachments: [
-          {
-            id: tempId as any,
-            path: rawUri,
-            original_name: filename,
-            mime_type: mime,
-            size: targetAsset.fileSize || 0,
-          },
-        ],
-      };
+
+      const tempMessage = buildTempAttachmentMessage(tempId, bodyText, {
+        id: tempId,
+        path: asset.uri,
+        original_name: filename,
+        mime_type: mime,
+        size: asset.fileSize || 0,
+      });
 
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setMessages((prev) => [tempMessage, ...prev]);
 
-      await processMessagePayload(formData, tempId);
+      await deliverPayload(
+        { body: bodyText || undefined, attachments: [attachmentFile] },
+        tempId,
+      );
     }
   };
 
@@ -493,48 +448,31 @@ function ChatIntellectualPageInner() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const targetFile = result.assets[0];
-        const formData = new FormData();
-
+        const file = result.assets[0];
         const bodyText = draft.trim();
-        if (bodyText) {
-          formData.append("body", bodyText);
-        }
         setDraft("");
 
-        const rawUri = targetFile.uri;
-        const filename =
-          targetFile.name || rawUri.split("/").pop() || "document";
-        const mime = targetFile.mimeType || "application/octet-stream";
+        const filename = file.name || file.uri.split("/").pop() || "document";
+        const mime = file.mimeType || "application/octet-stream";
 
-        formData.append("attachments[]", {
-          uri: rawUri,
-          name: filename,
-          type: mime,
-        } as any);
-
+        const attachmentFile = { uri: file.uri, name: filename, type: mime };
         const tempId = `temp-${Date.now()}`;
-        const tempMessage: Message = {
-          id: tempId as any,
-          conversation_id: Number(conversationId),
-          sender_id: userId as number,
-          body: bodyText || null,
-          created_at: new Date().toISOString(),
-          attachments: [
-            {
-              id: tempId as any,
-              path: rawUri,
-              original_name: filename,
-              mime_type: mime,
-              size: targetFile.size || 0,
-            },
-          ],
-        };
+
+        const tempMessage = buildTempAttachmentMessage(tempId, bodyText, {
+          id: tempId,
+          path: file.uri,
+          original_name: filename,
+          mime_type: mime,
+          size: file.size || 0,
+        });
 
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setMessages((prev) => [tempMessage, ...prev]);
 
-        await processMessagePayload(formData, tempId);
+        await deliverPayload(
+          { body: bodyText || undefined, attachments: [attachmentFile] },
+          tempId,
+        );
       }
     } catch (err) {
       console.error("Document selector failure", err);
@@ -559,12 +497,10 @@ function ChatIntellectualPageInner() {
   const renderAttachment = useCallback(
     (attachment: any, isTemp: boolean, isMe: boolean) => {
       const finalPathValue = normalizePath(attachment);
-
       const mimeType = attachment.mime_type || attachment.type || "";
       const isImage =
         mimeType.startsWith("image/") ||
         /\.(jpg|jpeg|png|webp|gif)$/i.test(finalPathValue);
-
       const displayName =
         attachment.original_name || attachment.name || "Attachment File";
 
@@ -581,8 +517,6 @@ function ChatIntellectualPageInner() {
               source={{ uri: finalPathValue }}
               style={styles.media}
               resizeMode="cover"
-              onLoad={() => console.log("Loaded:", finalPathValue)}
-              onError={(e) => console.log("Error:", e.nativeEvent.error)}
             />
           </TouchableOpacity>
         );
@@ -628,24 +562,13 @@ function ChatIntellectualPageInner() {
         </TouchableOpacity>
       );
     },
-    [
-      normalizePath,
-      downloadingFileId,
-      imageRefresh,
-      handleOpenImage,
-      handleDownloadFile,
-    ],
+    [normalizePath, downloadingFileId, imageRefresh],
   );
 
   const renderItem = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
       const isTemp = String(item.id).startsWith("temp-");
-
-      const isMe = isTemp
-        ? true
-        : userId !== null
-          ? String(item.sender_id) === String(userId)
-          : String(item.sender_id) === "14";
+      const isMe = item.sender_type === "user";
 
       let showDateHeader = false;
       let dateString = "";
@@ -659,15 +582,11 @@ function ChatIntellectualPageInner() {
           weekday: "long",
         });
 
-        // ✅ In inverted layouts:
-        // - index 0 is the newest message (bottom of UI)
-        // - index (messages.length - 1) is the oldest message (top of UI)
         if (index === messages.length - 1) {
           showDateHeader = true;
         } else {
-          // Compare with the next item in the array (chronologically older, visually below)
           const nextItem = messages[index + 1];
-          if (nextItem && nextItem.created_at) {
+          if (nextItem?.created_at) {
             const nextDate = new Date(nextItem.created_at);
             if (currentDate.toDateString() !== nextDate.toDateString()) {
               showDateHeader = true;
@@ -690,9 +609,9 @@ function ChatIntellectualPageInner() {
             {!isMe && (
               <View style={styles.avatarMini}>
                 <Text style={styles.avatarMiniText}>
-                  {item.sender?.name
-                    ? item.sender.name.substring(0, 2).toUpperCase()
-                    : "AG"}
+                  {typeof storeName === "string"
+                    ? storeName.substring(0, 2).toUpperCase()
+                    : "SH"}
                 </Text>
               </View>
             )}
@@ -700,8 +619,8 @@ function ChatIntellectualPageInner() {
             <View
               style={[styles.bubbleWrap, isMe && { alignItems: "flex-end" }]}
             >
-              {!isMe && item.sender?.name && (
-                <Text style={styles.senderLabel}>{item.sender.name}</Text>
+              {!isMe && (
+                <Text style={styles.senderLabel}>{storeName || "Seller"}</Text>
               )}
 
               <View
@@ -736,7 +655,7 @@ function ChatIntellectualPageInner() {
                     name={isTemp ? "clock" : "check"}
                     size={12}
                     color={isTemp ? COLORS.inkFaint : COLORS.brand}
-                    style={{ marginRight: 4, marginLeft: isTemp ? 4 : 4 }}
+                    style={{ marginRight: 4, marginLeft: 4 }}
                   />
                 )}
                 <Text style={styles.metaText}>
@@ -753,7 +672,7 @@ function ChatIntellectualPageInner() {
         </View>
       );
     },
-    [userId, messages, renderAttachment],
+    [messages, renderAttachment, storeName],
   );
 
   if (loading) {
@@ -793,25 +712,24 @@ function ChatIntellectualPageInner() {
 
           <View style={styles.avatarMain}>
             <Text style={styles.avatarMainText}>
-              {typeof title === "string"
-                ? title.substring(0, 2).toUpperCase()
-                : "CH"}
+              {typeof storeName === "string"
+                ? storeName.substring(0, 2).toUpperCase()
+                : "SH"}
             </Text>
             <View style={styles.avatarDot} />
           </View>
 
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text numberOfLines={1} style={styles.headName}>
-              {title || "Support Thread"}
+              {storeName || "Chat with Seller"}
             </Text>
             <View style={styles.headStatusRow}>
               <View style={styles.pulseDot} />
-              <Text style={styles.headStatus}>online — active channel</Text>
+              <Text style={styles.headStatus}>online — shop channel</Text>
             </View>
           </View>
         </View>
 
-        {/* LOADING MORE INDICATOR AT THE TOP (WHICH IS PHYSICALLY THE BOTTOM CONTAINER OF THE INVERTED FLATLIST) */}
         {isLoadingMore && (
           <View style={{ padding: 12, alignItems: "center" }}>
             <ActivityIndicator size="small" color={COLORS.brand} />
@@ -833,11 +751,11 @@ function ChatIntellectualPageInner() {
                 style={{
                   alignItems: "center",
                   paddingVertical: 40,
-                  transform: [{ scaleY: -1 }], // Keeps empty component text readable in inverted list
+                  transform: [{ scaleY: -1 }],
                 }}
               >
                 <Text style={{ color: COLORS.inkFaint }}>
-                  No messages yet. Start the conversation!
+                  No messages yet. Say hello to start the conversation.
                 </Text>
               </View>
             ) : null
@@ -854,7 +772,7 @@ function ChatIntellectualPageInner() {
 
           <View style={styles.compField}>
             <TextInput
-              placeholder={`Message ${title || "Agent"}...`}
+              placeholder={`Message ${storeName || "Seller"}...`}
               placeholderTextColor={COLORS.inkFaint}
               style={styles.compInput}
               value={draft}
@@ -881,7 +799,6 @@ function ChatIntellectualPageInner() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* IMAGE VIEWER MODAL */}
       <Modal
         visible={viewerVisible}
         transparent={true}
@@ -923,10 +840,10 @@ function ChatIntellectualPageInner() {
   );
 }
 
-export default function ChatIntellectualPage() {
+export default function ChatSellerPage() {
   return (
     <SafeAreaProvider>
-      <ChatIntellectualPageInner />
+      <ChatSellerPageInner />
     </SafeAreaProvider>
   );
 }

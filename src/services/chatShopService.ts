@@ -1,4 +1,3 @@
-// @/services/chatShopService.ts
 import api from "./api";
 
 export interface ShopMessageAttachment {
@@ -22,6 +21,16 @@ export interface Message {
   updated_at: string;
 }
 
+export interface Participant {
+  id: number | string;
+  user_id: number;
+  role: string;
+  user?: {
+    id: number;
+    name: string;
+  };
+}
+
 export interface ShopConversation {
   id: number;
   shop_id: number;
@@ -31,6 +40,7 @@ export interface ShopConversation {
   last_message_at: string | null;
   shop_read_at: string | null;
   user_read_at: string | null;
+  unread_count?: number;
   created_at: string;
   updated_at: string;
   shop?: {
@@ -48,18 +58,23 @@ export interface ShopConversation {
   latest_message?: Message;
 }
 
-export interface ShopConversationResponse {
+export interface ShopConversationData {
   conversation: ShopConversation;
   messages: Message[];
+  pagination: {
+    current_page: number;
+    last_page: number;
+    has_more: boolean;
+  };
 }
 
 /**
  * Fetch all conversations for the authenticated buyer/seller.
- * Laravel returns a paginated result — res.data.data is the actual array.
+ * Backend returns paginated structure: res.data.data contains the list.
  */
 export const getShopConversations = async (): Promise<ShopConversation[]> => {
   const res = await api.get("/shop-conversations");
-  return res.data.data ?? [];
+  return res.data.data ?? res.data ?? [];
 };
 
 /**
@@ -74,7 +89,6 @@ export const findConversationByShop = (
 
 /**
  * Start a conversation between a buyer and a shop/seller.
- * Works even when no conversation exists yet — backend does firstOrCreate.
  */
 export const startShopConversation = async (payload: {
   shop_id: number | string;
@@ -116,30 +130,27 @@ export const startShopConversation = async (payload: {
 };
 
 /**
- * Fetch a single shop conversation and its messages.
+ * Fetch a single shop conversation with paginated messages.
  */
 export const getShopConversation = async (
   conversationId: string | number,
-): Promise<ShopConversationResponse> => {
-  const res = await api.get(`/shop-conversations/${conversationId}`);
-  const raw = res.data;
+  page: number = 1,
+): Promise<ShopConversationData> => {
+  const res = await api.get(`/shop-conversations/${conversationId}`, {
+    params: { page },
+  });
 
-  // Controller returns { conversation, messages } — fall back gracefully
-  // in case the backend hasn't been updated to that shape yet.
-  const conversation = raw.conversation ?? raw;
-  const messages: Message[] = raw.messages ?? raw.conversation?.messages ?? [];
+  const data = res.data as ShopConversationData;
 
-  messages.sort(
-    (a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-  );
+  if (data.messages && Array.isArray(data.messages)) {
+    data.messages.reverse();
+  }
 
-  return { conversation, messages };
+  return data;
 };
 
 /**
  * Send a message within an EXISTING shop conversation.
- * Supports plain body or FormData with attachments.
  */
 export const sendShopMessage = async (
   conversationId: string | number,
@@ -175,5 +186,15 @@ export const sendShopMessage = async (
   const res = await api.post(`/shop-conversations/${conversationId}/messages`, {
     body: (payload as any).body,
   });
+  return res.data;
+};
+
+/**
+ * Mark all messages in the shop conversation as read.
+ */
+export const markShopConversationAsRead = async (
+  conversationId: string | number,
+): Promise<{ status: string }> => {
+  const res = await api.post(`/shop-conversations/${conversationId}/read`);
   return res.data;
 };

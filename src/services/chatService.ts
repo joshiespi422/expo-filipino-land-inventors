@@ -52,6 +52,9 @@ export interface ConversationData {
  * @param conversationId - The conversation ID
  * @param page - Page number (1 = newest messages, 2+ = older messages)
  * @returns Paginated conversation data
+ *
+ * IMPORTANT: Backend returns oldest-first, but we reverse for inverted FlatList
+ * where index 0 is at bottom (newest) and last index is at top (oldest)
  */
 export const getConversation = async (
   conversationId: string | number,
@@ -63,12 +66,10 @@ export const getConversation = async (
 
   const data = res.data as ConversationData;
 
-  // Ensure messages are sorted by timestamp (oldest first for display)
+  // CRITICAL: Reverse messages because backend returns oldest-first
+  // For inverted FlatList, we need newest-first: [newest, ..., oldest]
   if (data.messages && Array.isArray(data.messages)) {
-    data.messages.sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    );
+    data.messages.reverse();
   }
 
   return data;

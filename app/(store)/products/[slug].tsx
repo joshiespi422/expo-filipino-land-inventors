@@ -372,7 +372,7 @@ export default function Products() {
 
   const formatImageUrl = (url: string | null) => {
     if (!url) return "";
-    return url.startsWith("http") ? url : `http://192.168.1.53:8000${url}`;
+    return url.startsWith("http") ? url : `http://192.168.1.46:8000${url}`;
   };
 
   if (loading) {
@@ -497,7 +497,16 @@ export default function Products() {
       <View className="absolute bottom-0 left-0 right-0 bg-white p-3 border-t border-slate-100 z-10">
         <View className="flex-row gap-2">
           <TouchableOpacity
-            onPress={() => router.push("/chat-seller")}
+            onPress={() => {
+              if (!product.store?.id) return;
+              router.push({
+                pathname: "/(store-chat)/",
+                params: {
+                  storeId: String(product.store.id),
+                  storeName: product.store.name,
+                },
+              });
+            }}
             className="flex-1 p-1.5 bg-green-500 rounded-xl items-center justify-center"
           >
             <Ionicons name="chatbubble-outline" size={24} color="#fff" />

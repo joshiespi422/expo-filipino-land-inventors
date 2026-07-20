@@ -3,8 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
 import { Stack, useFocusEffect, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   AppState,
   Image,
   KeyboardAvoidingView,
@@ -26,6 +27,8 @@ import NotifGrey from "../../assets/images/icon/notifgrey.png";
 import ProfileBlue from "../../assets/images/icon/profileblue.png";
 import ProfileGrey from "../../assets/images/icon/profilegrey.png";
 
+import api from "@/services/api";
+import echo from "@/services/echo";
 import "../../global.css";
 
 const queryClient = new QueryClient();
@@ -50,9 +53,23 @@ export default function RootLayout() {
   const isCheckout = pathname === "/checkout";
   const isOrrderList = pathname === "/order-list";
   const isChatList = pathname === "/chat-list";
-  const isChatSeller = pathname === "/chat-seller";
+  const isChatSeller =
+    pathname === "/chat-seller" || pathname === "/(store-chat)";
   const isProducts = pathname.startsWith("/products/");
   const isShop = pathname === "/store";
+
+  // Ref so the echo listener always knows the latest screen without
+  // re-subscribing every time pathname changes (mirrors intellectual layout).
+  const isChatSellerRef = useRef(isChatSeller);
+  useEffect(() => {
+    isChatSellerRef.current = isChatSeller;
+  }, [isChatSeller]);
+
+  // ===== Notification & Global Unread Badging State =====
+  const [userId, setUserId] = useState<number | null>(null);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [notification, setNotification] = useState<any>(null);
+  const slideAnim = useRef(new Animated.Value(-100)).current;
 
   const hideNavigationBar = async () => {
     if (Platform.OS !== "android") return;
@@ -83,6 +100,123 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, []);
 
+  // ===== Fetch Current User ID & Initial Unread Count =====
+  useEffect(() => {
+    api
+      .get("/profile")
+      .then((res) => {
+        const rawData = res.data?.data;
+        const id = rawData?.id || res.data?.id || res.data?.user?.id;
+
+        if (id) {
+          console.log("✅ Store layout User ID fetched for notifications:", id);
+          setUserId(id);
+          fetchUnreadCount();
+        } else {
+          console.log("⚠️ Could not find User ID in response:", res.data);
+        }
+      })
+      .catch((err) =>
+        console.error(
+          "❌ Failed to fetch user profile for store notifications",
+          err,
+        ),
+      );
+  }, []);
+
+  // Re-sync unread count whenever we land back on a non-chat screen
+  useEffect(() => {
+    if (userId && !isChatSeller && !isChatList) {
+      fetchUnreadCount();
+    }
+  }, [pathname, userId]);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await api.get("/shop-conversations");
+      const data = res.data?.data || res.data || [];
+      const total = data.reduce(
+        (sum: number, item: any) => sum + (item.unread_count || 0),
+        0,
+      );
+      setUnreadCount(total);
+    } catch (err) {
+      console.error(
+        "Failed to fetch initial unread count in store layout:",
+        err,
+      );
+    }
+  };
+
+  // ===== Subscribe to Real-time Notifications =====
+  useEffect(() => {
+    if (!userId || !echo) return;
+
+    const channelName = `App.Models.User.${userId}`;
+    const channel = echo.private(channelName);
+
+    channel.subscribed(() => {
+      console.log(
+        `✅ Subscribed to global store notification channel: ${channelName}`,
+      );
+    });
+
+    channel.notification((notificationData: any) => {
+      console.log("🔔 New Shop Notification Received:", notificationData);
+
+      setUnreadCount((prev) => prev + 1);
+
+      // Don't show the toast if the user is already inside a chat screen
+      if (isChatSellerRef.current) {
+        console.log(
+          "🔕 User is currently in the seller chat screen, ignoring toast.",
+        );
+        return;
+      }
+
+      setNotification(notificationData);
+
+      Animated.spring(slideAnim, {
+        toValue: 50,
+        useNativeDriver: true,
+      }).start();
+
+      setTimeout(() => {
+        closeNotification();
+      }, 5000);
+    });
+
+    return () => {
+      if (echo) {
+        echo.leave(channelName);
+        console.log(`👋 Left store notification channel: ${channelName}`);
+      }
+    };
+  }, [userId]);
+
+  const closeNotification = () => {
+    Animated.timing(slideAnim, {
+      toValue: -100,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => setNotification(null));
+  };
+
+  const handleNotificationPress = () => {
+    if (!notification?.shop_id) return;
+
+    const { shop_id, shop_name } = notification;
+    closeNotification();
+
+    router.push({
+      pathname: "/(store-chat)/",
+      params: {
+        storeId: String(shop_id),
+        storeName: shop_name || "Seller",
+      },
+    });
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar hidden={true} />
@@ -92,6 +226,55 @@ export default function RootLayout() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           className="flex-1"
         >
+          {/* --- NOTIFICATION TOAST --- */}
+          {notification && (
+            <Animated.View
+              style={{
+                transform: [{ translateY: slideAnim }],
+                position: "absolute",
+                top: 0,
+                left: 16,
+                right: 16,
+                zIndex: 999,
+              }}
+            >
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={handleNotificationPress}
+                className="bg-white rounded-2xl p-4 shadow-lg flex-row items-center border border-slate-100"
+                style={{
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 12,
+                  elevation: 5,
+                }}
+              >
+                <View className="bg-[#0084FF]/10 w-10 h-10 rounded-full items-center justify-center mr-3">
+                  <Ionicons
+                    name="chatbubble-ellipses"
+                    size={20}
+                    color="#034194"
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-slate-900 font-bold text-sm">
+                    {notification.shop_name || "New Message"}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    className="text-slate-500 text-xs mt-0.5"
+                  >
+                    {notification.body || "You received a new message."}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={closeNotification} className="p-2">
+                  <Ionicons name="close" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
           {/* HEADER */}
           {!isProfile && !isProducts && (
             <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
@@ -118,7 +301,31 @@ export default function RootLayout() {
                               : "FISMPC Online Store"}
                 </Text>
 
-                <View className="w-[31px]" />
+                {/* Right Side: Message Icon with Unread Badge (hidden on chat screens) */}
+                {!isChatList && !isChatSeller ? (
+                  <View className="w-[31px] items-end">
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => router.push("/chat-list")}
+                      className="relative p-1"
+                    >
+                      <Ionicons
+                        name="chatbubbles-outline"
+                        size={24}
+                        color="white"
+                      />
+                      {unreadCount > 0 && (
+                        <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-primary">
+                          <Text className="text-white text-[10px] font-extrabold text-center">
+                            {unreadCount > 9 ? "9+" : unreadCount}
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View className="w-[31px]" />
+                )}
               </View>
             </View>
           )}
