@@ -1,13 +1,16 @@
 import {
   fetchOrdersAPI,
+  OrderBadges,
   OrderListItem,
   PaginationMeta,
+  updateOrderStatusAPI,
 } from "@/services/order";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   RefreshControl,
@@ -21,10 +24,10 @@ const filterTabs = [
   { label: "All", slug: "all" },
   { label: "To Pay", slug: "to-pay" },
   { label: "To Ship", slug: "to-ship" },
-  { label: "To Receive", slug: "to-receive" },
+  { label: "To Received", slug: "to-receive" },
   { label: "Completed", slug: "completed" },
+  { label: "Return/Refund", slug: "return_requested" },
   { label: "Cancelled", slug: "cancelled" },
-  { label: "Returned", slug: "returned" },
 ];
 
 export default function OrderList() {
@@ -34,19 +37,29 @@ export default function OrderList() {
   const [selectedSlug, setSelectedSlug] = useState<string>("all");
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [badges, setBadges] = useState<OrderBadges>({
+    to_pay: 0,
+    to_ship: 0,
+    to_receive: 0,
+    to_rate: 0,
+  });
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
-  // FIXED: Standardized dependencies to stop execution race patterns
   const getOrders = useCallback(
-    async (page: number = 1, clearExisting: boolean = false) => {
+    async (
+      targetSlug: string,
+      page: number = 1,
+      clearExisting: boolean = false,
+    ) => {
       try {
         if (page === 1 && !clearExisting) setIsLoading(true);
         if (page > 1) setIsLoadingMore(true);
 
-        const response = await fetchOrdersAPI(selectedSlug, page);
+        const response = await fetchOrdersAPI(targetSlug, page);
 
         if (response.success) {
           setOrders((prev) =>
@@ -55,6 +68,7 @@ export default function OrderList() {
               : [...prev, ...response.data.orders],
           );
           setPagination(response.data.pagination);
+          setBadges(response.data.badges);
         }
       } catch (error) {
         console.error("[FETCH_ORDERS_ERROR]:", error);
@@ -64,16 +78,17 @@ export default function OrderList() {
         setIsRefreshing(false);
       }
     },
-    [selectedSlug],
+    [],
   );
 
-  // Sync route param with tab selection state safely
+  // Sync initial tab state from route params
   useEffect(() => {
     if (routeStatus) {
       const activeTab = filterTabs.find(
         (t) =>
           t.slug === routeStatus ||
-          t.label.toLowerCase() === routeStatus.toLowerCase(),
+          t.label.toLowerCase() === routeStatus.toLowerCase() ||
+          (routeStatus.includes("return") && t.slug === "return_requested"),
       );
       if (activeTab) {
         setSelectedSlug(activeTab.slug);
@@ -83,26 +98,166 @@ export default function OrderList() {
     setSelectedSlug("all");
   }, [routeStatus]);
 
-  // Handle fetching triggers cleanly when component shifts tabs
+  // Fetch items whenever the selected tab changes
   useEffect(() => {
-    getOrders(1, false);
-  }, [getOrders]);
+    getOrders(selectedSlug, 1, false);
+  }, [selectedSlug, getOrders]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    getOrders(1, true);
+    getOrders(selectedSlug, 1, true);
   };
 
   const handleLoadMore = () => {
     if (!isLoadingMore && pagination?.has_more) {
-      getOrders(pagination.current_page + 1, false);
+      getOrders(selectedSlug, pagination.current_page + 1, false);
+    }
+  };
+
+  const handleTabChange = (slug: string) => {
+    setSelectedSlug(slug);
+  };
+
+  const handleCancelOrder = (orderId: number) => {
+    Alert.alert(
+      "Cancel Order",
+      "Are you sure you want to cancel this order? This action cannot be undone.",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setActionLoadingId(orderId);
+              const response = await updateOrderStatusAPI(orderId, "cancelled");
+              if (response.success) {
+                Alert.alert(
+                  "Success",
+                  response.message || "Order successfully cancelled.",
+                );
+                handleTabChange("cancelled");
+              } else {
+                Alert.alert(
+                  "Error",
+                  response.message || "Failed to cancel order.",
+                );
+              }
+            } catch (error: any) {
+              Alert.alert(
+                "Error",
+                error?.response?.data?.message ||
+                  "Something went wrong while cancelling the order.",
+              );
+            } finally {
+              setActionLoadingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleOrderReceived = (orderId: number) => {
+    Alert.alert(
+      "Order Received",
+      "Have you received your items? This will update the order status to completed.",
+      [
+        { text: "Not Yet", style: "cancel" },
+        {
+          text: "Yes, Received",
+          onPress: async () => {
+            try {
+              setActionLoadingId(orderId);
+              const response = await updateOrderStatusAPI(orderId, "completed");
+              if (response.success) {
+                Alert.alert(
+                  "Success",
+                  response.message || "Order marked as received!",
+                );
+                handleTabChange("completed");
+              } else {
+                Alert.alert(
+                  "Error",
+                  response.message || "Failed to update order status.",
+                );
+              }
+            } catch (error: any) {
+              Alert.alert(
+                "Error",
+                error?.response?.data?.message || "Something went wrong.",
+              );
+            } finally {
+              setActionLoadingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleRefundOrder = (orderId: number) => {
+    Alert.alert(
+      "Request Refund / Return",
+      "Are you sure you want to request a return or refund for this order?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Submit Request",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setActionLoadingId(orderId);
+              const response = await updateOrderStatusAPI(
+                orderId,
+                "return_requested",
+              );
+              if (response.success) {
+                Alert.alert(
+                  "Request Submitted",
+                  response.message ||
+                    "Your return request is now pending approval.",
+                );
+                handleTabChange("return_requested");
+              } else {
+                Alert.alert(
+                  "Error",
+                  response.message || "Failed to submit return request.",
+                );
+              }
+            } catch (error: any) {
+              Alert.alert(
+                "Error",
+                error?.response?.data?.message || "Something went wrong.",
+              );
+            } finally {
+              setActionLoadingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const getBadgeCount = (slug: string) => {
+    switch (slug) {
+      case "to-pay":
+        return badges.to_pay;
+      case "to-ship":
+        return badges.to_ship;
+      case "to-receive":
+        return badges.to_receive;
+      case "completed":
+        return badges.to_rate || 0;
+      default:
+        return 0;
     }
   };
 
   return (
     <View className="flex-1 bg-slate-100">
       {/* FILTER TABS SCROLL BAR */}
-      <View className="bg-white pt-3 border-b-2 border-slate-200">
+      <View className="bg-white pt-3 border-b border-slate-200">
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -110,19 +265,29 @@ export default function OrderList() {
         >
           {filterTabs.map((tab) => {
             const isTabActive = selectedSlug === tab.slug;
+            const count = getBadgeCount(tab.slug);
             return (
               <TouchableOpacity
-                key={tab.slug}
-                onPress={() => setSelectedSlug(tab.slug)}
-                className={`mx-4 py-2 ${
+                key={`${tab.slug}-${tab.label}`}
+                onPress={() => handleTabChange(tab.slug)}
+                className={`mx-3 py-2 flex-row items-center ${
                   isTabActive ? "border-b-2 border-[#034194]" : ""
                 }`}
               >
                 <Text
-                  className={`text-md px-1 ${isTabActive ? "text-primary font-bold" : "text-slate-600"}`}
+                  className={`text-sm px-1 ${
+                    isTabActive ? "text-[#034194] font-bold" : "text-slate-600"
+                  }`}
                 >
                   {tab.label}
                 </Text>
+                {count > 0 && (
+                  <View className="bg-red-500 rounded-full px-1.5 py-0.5 ml-1">
+                    <Text className="text-white text-[10px] font-bold">
+                      {count}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -151,18 +316,18 @@ export default function OrderList() {
           renderItem={({ item }) => (
             <View className="bg-white rounded-2xl mb-4 p-3 border border-slate-200 shadow-sm">
               {/* SHOP HEADER */}
-              <View className="flex-row bg-blue px-2 py-3 rounded-xl justify-between items-center mb-3">
+              <View className="flex-row bg-slate-50 px-3 py-2 rounded-xl justify-between items-center mb-3">
                 <View className="flex-row items-center">
                   <Ionicons
                     name="storefront-outline"
-                    size={18}
+                    size={16}
                     color="#034194"
                   />
-                  <Text className="ml-2 font-bold text-primary">
+                  <Text className="ml-2 font-bold text-[#034194] text-xs">
                     {item.store_name || "Unknown Shop"}
                   </Text>
                 </View>
-                <Text className="text-slate-200 text-sm">
+                <Text className="text-orange-600 font-semibold text-xs">
                   {item.status_label}
                 </Text>
               </View>
@@ -175,12 +340,11 @@ export default function OrderList() {
                 >
                   <Image
                     source={{
-                      // 💡 APPLY IMAGE VARIANT PARSING LOGIC HERE:
                       uri:
                         product.product_image &&
                         product.product_image.startsWith("http")
                           ? product.product_image
-                          : `http://192.168.1.46:8000${product.product_image || ""}`,
+                          : `http://192.168.42.128:8000${product.product_image || ""}`,
                     }}
                     style={{
                       width: 75,
@@ -215,42 +379,174 @@ export default function OrderList() {
                 </View>
               ))}
 
-              {/* BILLING AND ACTIONS SUB-SECTION */}
-              <View className="border-t border-slate-100 pt-3 mt-2">
+              {/* BILLING SECTION */}
+              <View className="border-t border-slate-100 pt-3 mt-1">
                 <View className="flex-row justify-between items-center">
                   <Text className="text-slate-400 text-xs">Order Total</Text>
-                  <Text className="font-bold text-base text-slate-800">
+                  <Text className="font-bold text-base text-[#034194]">
                     ₱{item.total}
                   </Text>
                 </View>
               </View>
 
-              {/* ACTION TRIGGERS CONTAINER */}
-              <View className="flex-row justify-end mt-4 gap-2">
+              {/* DYNAMIC ACTION TRIGGERS */}
+              <View className="flex-row justify-end mt-4 gap-2 flex-wrap">
+                {/* 1. Cancel Option */}
                 {item.status === "to-pay" && (
-                  <TouchableOpacity className="border border-red-500 px-4 py-2 rounded-xl">
+                  <TouchableOpacity
+                    disabled={actionLoadingId === item.id}
+                    onPress={() => handleCancelOrder(item.id)}
+                    className="border border-red-500 px-4 py-2 rounded-xl flex-row items-center"
+                  >
+                    {actionLoadingId === item.id ? (
+                      <ActivityIndicator
+                        size="small"
+                        color="#ef4444"
+                        style={{ marginRight: 4 }}
+                      />
+                    ) : null}
                     <Text className="text-red-500 text-xs font-semibold">
                       Cancel Order
                     </Text>
                   </TouchableOpacity>
                 )}
 
-                {item.status === "completed" && (
-                  <TouchableOpacity className="border border-orange-500 px-4 py-2 rounded-xl">
-                    <Text className="text-orange-500 text-xs font-semibold">
-                      Refund
+                {/* 2. Order Received Option */}
+                {(item.status === "to-receive" ||
+                  item.status === "delivered") && (
+                  <TouchableOpacity
+                    disabled={actionLoadingId === item.id}
+                    onPress={() => handleOrderReceived(item.id)}
+                    className="bg-emerald-600 px-4 py-2 rounded-xl flex-row items-center"
+                  >
+                    {actionLoadingId === item.id ? (
+                      <ActivityIndicator
+                        size="small"
+                        color="#fff"
+                        style={{ marginRight: 4 }}
+                      />
+                    ) : null}
+                    <Text className="text-white text-xs font-semibold">
+                      Order Received
                     </Text>
                   </TouchableOpacity>
                 )}
 
-                <TouchableOpacity
-                  // onPress={() => router.push(`/orders/${item.id}`)}
-                  className="bg-[#034194] px-4 py-2 rounded-xl"
-                >
-                  <Text className="text-white text-xs font-semibold">
-                    View Details
-                  </Text>
-                </TouchableOpacity>
+                {/* 3. Refund / Return Option */}
+                {(item.status === "to-receive" ||
+                  item.status === "delivered" ||
+                  item.status === "completed") && (
+                  <TouchableOpacity
+                    disabled={actionLoadingId === item.id}
+                    onPress={() => handleRefundOrder(item.id)}
+                    className="border border-orange-500 px-4 py-2 rounded-xl flex-row items-center"
+                  >
+                    {actionLoadingId === item.id ? (
+                      <ActivityIndicator
+                        size="small"
+                        color="#f97316"
+                        style={{ marginRight: 4 }}
+                      />
+                    ) : null}
+                    <Text className="text-orange-500 text-xs font-semibold">
+                      Refund / Return
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* 4. Return Requested Status Badge */}
+                {item.status === "return_requested" && (
+                  <View className="bg-amber-100 border border-amber-400 px-3 py-1.5 rounded-xl flex-row items-center">
+                    <Ionicons
+                      name="time-outline"
+                      size={14}
+                      color="#d97706"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text className="text-amber-700 text-xs font-semibold">
+                      Return Requested (Pending)
+                    </Text>
+                  </View>
+                )}
+
+                {/* 5. Return Approved Status Badge */}
+                {item.status === "return_approved" && (
+                  <View className="bg-emerald-100 border border-emerald-400 px-3 py-1.5 rounded-xl flex-row items-center">
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={14}
+                      color="#059669"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text className="text-emerald-700 text-xs font-semibold">
+                      Return Approved
+                    </Text>
+                  </View>
+                )}
+
+                {/* 6. Returned / Completed Refund Status Badge */}
+                {item.status === "returned" && (
+                  <View className="bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-xl flex-row items-center">
+                    <Ionicons
+                      name="refresh-circle-outline"
+                      size={14}
+                      color="#475569"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text className="text-slate-600 text-xs font-semibold">
+                      Returned / Refunded
+                    </Text>
+                  </View>
+                )}
+
+                {/* 7. Rate Order Button */}
+                {item.status === "completed" && (
+                  <TouchableOpacity
+                    onPress={() =>
+                      router.push({
+                        pathname: "/order-list",
+                        params: { orderId: item.id },
+                      })
+                    }
+                    className="bg-amber-500 px-4 py-2 rounded-xl flex-row items-center"
+                  >
+                    <Ionicons
+                      name="star-outline"
+                      size={14}
+                      color="#fff"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text className="text-white text-xs font-semibold">
+                      Rate Order
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* TRACK ORDER BUTTON */}
+                {(item.status === "to-pay" ||
+                  item.status === "to-ship" ||
+                  item.status === "to-receive" ||
+                  item.status === "delivered") && (
+                  <TouchableOpacity
+                    onPress={() =>
+                      router.push({
+                        pathname: "/track-order",
+                        params: { orderId: item.id },
+                      })
+                    }
+                    className="bg-[#034194] px-4 py-2 rounded-xl flex-row items-center"
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={14}
+                      color="#fff"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text className="text-white text-xs font-semibold">
+                      Track Order
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           )}

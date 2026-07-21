@@ -8,21 +8,60 @@ export interface OrderItem {
   quantity: number;
 }
 
+export interface OrderTracking {
+  created_at: string | null;
+  confirmed_at: string | null;
+  processing_at: string | null;
+  packed_at: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  cancelled_at: string | null;
+  returned_at: string | null;
+}
+
 export interface OrderListItem {
   id: number;
+  order_number: string;
   store_name: string;
   status:
     | "to-pay"
     | "to-ship"
     | "to-receive"
     | "completed"
+    | "delivered"
     | "cancelled"
+    | "return_requested"
+    | "return_approved"
     | "returned";
+  raw_status: string;
   status_label: string;
   shipping_fee: number;
   total: number;
   items: OrderItem[];
+  tracking: OrderTracking;
   created_at: string;
+}
+
+export interface SingleOrderResponse {
+  success: boolean;
+  data: {
+    order: {
+      id: number;
+      order_number: string;
+      status: string;
+      shipping_fee: number;
+      total: number;
+      created_at: string;
+      store: { id: number; name: string };
+      items: OrderItem[];
+      shipping_name: string;
+      shipping_phone: string;
+      shipping_address: string;
+      paid_at: string | null;
+      shipped_at: string | null;
+      completed_at: string | null;
+    };
+  };
 }
 
 export interface PaginationMeta {
@@ -57,9 +96,6 @@ export interface OrderIndexResponse {
   };
 }
 
-/**
- * Fetches order list records from Laravel with dynamic filter categories and page cursors
- */
 export const fetchOrdersAPI = async (
   status: string,
   page: number = 1,
@@ -74,10 +110,15 @@ export const fetchOrdersAPI = async (
   return response.data;
 };
 
-/**
- * Fetches order badge counts for the buyer profile.
- * Uses the same endpoint to avoid creating another API.
- */
+export const fetchSingleOrderAPI = async (
+  orderId: number | string,
+): Promise<SingleOrderResponse> => {
+  const response = await api.get<SingleOrderResponse>(
+    `/store/orders/${orderId}`,
+  );
+  return response.data;
+};
+
 export const fetchOrderBadgesAPI = async (): Promise<OrderBadges> => {
   const response = await api.get<OrderIndexResponse>("/store/orders", {
     params: {
@@ -87,4 +128,20 @@ export const fetchOrderBadgesAPI = async (): Promise<OrderBadges> => {
   });
 
   return response.data.data.badges;
+};
+
+export const updateOrderStatusAPI = async (
+  orderId: number,
+  status:
+    | "cancelled"
+    | "delivered"
+    | "completed"
+    | "return_requested"
+    | "return_approved"
+    | "returned",
+) => {
+  const response = await api.post(`/store/orders/${orderId}/status`, {
+    status,
+  });
+  return response.data;
 };
