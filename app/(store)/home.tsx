@@ -283,17 +283,6 @@ export default function HomePage() {
                   </View>
                 )}
               </TouchableOpacity>
-
-              {/* CHAT */}
-              <TouchableOpacity
-                onPress={() => router.push("/chat-list")}
-                className="ml-2 bg-white h-12 w-12 rounded-2xl items-center justify-center border border-slate-200 relative"
-              >
-                <Ionicons name="chatbubble-outline" size={24} color="#034194" />
-                <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1">
-                  <Text className="text-white text-[10px] font-bold">3</Text>
-                </View>
-              </TouchableOpacity>
             </View>
 
             {/* BANNER & DYNAMIC CATEGORIES NAVBAR */}
