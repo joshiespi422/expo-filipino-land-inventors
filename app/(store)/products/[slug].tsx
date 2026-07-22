@@ -372,7 +372,7 @@ export default function Products() {
 
   const formatImageUrl = (url: string | null) => {
     if (!url) return "";
-    return url.startsWith("http") ? url : `http://192.168.1.46:8000${url}`;
+    return url.startsWith("http") ? url : `http://192.168.42.10:8000${url}`;
   };
 
   if (loading) {
@@ -829,29 +829,35 @@ const ProductInfoSection = ({
 const MerchantPartnerSection = ({ product, router }: any) => (
   <View className="px-3 pb-4">
     <View className="border-2 border-blue rounded-xl p-4">
-      <View className="flex-row justify-between">
-        <View className="flex-row items-center gap-2">
+      <View className="flex-row justify-between items-center">
+        <View className="flex-row items-center flex-1">
           <Image
             source={
               product.store.logo ? { uri: product.store.logo } : UserProfile
             }
             style={{ width: 45, height: 45, borderRadius: 100 }}
           />
-          <View>
+
+          <View className="flex-1 ml-2 mr-3" style={{ minWidth: 0 }}>
             <Text
               className="text-primary text-xl font-semibold"
               style={{ lineHeight: 24 }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
-              {product.store.name} {product.store.is_official && "🛡️"}
+              {product.store.name} {product.store.is_official}
             </Text>
+
             <Text
               className="text-slate-500"
               style={{ lineHeight: 16, marginTop: -2 }}
+              numberOfLines={1}
             >
               Merchant Partner
             </Text>
           </View>
         </View>
+
         <TouchableOpacity
           onPress={() => {
             if (!product.store?.slug) return;
