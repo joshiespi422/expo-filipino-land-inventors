@@ -26,6 +26,7 @@ export interface OrderListItem {
   status:
     | "to-pay"
     | "to-ship"
+    | "shipped"
     | "to-receive"
     | "completed"
     | "delivered"

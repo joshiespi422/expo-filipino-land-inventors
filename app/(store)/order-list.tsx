@@ -239,6 +239,18 @@ export default function OrderList() {
     );
   };
 
+  const slugify = (text: string): string => {
+    return text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/[\s_]+/g, "-")
+      .replace(/[^\w\-]+/g, "")
+      .replace(/\-\-+/g, "-")
+      .replace(/^-+/, "")
+      .replace(/-+$/, "");
+  };
+
   const getBadgeCount = (slug: string) => {
     switch (slug) {
       case "to-pay":
@@ -316,18 +328,18 @@ export default function OrderList() {
           renderItem={({ item }) => (
             <View className="bg-white rounded-2xl mb-4 p-3 border border-slate-200 shadow-sm">
               {/* SHOP HEADER */}
-              <View className="flex-row bg-slate-50 px-3 py-2 rounded-xl justify-between items-center mb-3">
+              <View className="flex-row bg-slate-50 py-2 rounded-xl justify-between items-center mb-3">
                 <View className="flex-row items-center">
                   <Ionicons
                     name="storefront-outline"
                     size={16}
-                    color="#034194"
+                    color="#4d4d4d"
                   />
-                  <Text className="ml-2 font-bold text-[#034194] text-xs">
+                  <Text className="ml-2 font-semibold text-md">
                     {item.store_name || "Unknown Shop"}
                   </Text>
                 </View>
-                <Text className="text-orange-600 font-semibold text-xs">
+                <Text className="text-primary text-sm">
                   {item.status_label}
                 </Text>
               </View>
@@ -344,7 +356,7 @@ export default function OrderList() {
                         product.product_image &&
                         product.product_image.startsWith("http")
                           ? product.product_image
-                          : `http://192.168.42.128:8000${product.product_image || ""}`,
+                          : `http://192.168.42.10:8000${product.product_image || ""}`,
                     }}
                     style={{
                       width: 75,
@@ -357,35 +369,33 @@ export default function OrderList() {
                     <View>
                       <Text
                         numberOfLines={2}
-                        className="font-medium text-slate-800 text-sm"
+                        className="font-medium text-slate-800 text-md"
                       >
                         {product.product_name}
                       </Text>
                       {product.variant_name ? (
-                        <Text className="text-[11px] text-slate-400 mt-0.5">
-                          {product.variant_name}
-                        </Text>
+                        <View className="flex-row justify-between items-center mt-1">
+                          <Text className="text-[11px] text-slate-400 mt-0.5">
+                            {product.variant_name}
+                          </Text>
+                          <Text className="text-slate-400 text-xs">
+                            x{product.quantity}
+                          </Text>
+                        </View>
                       ) : null}
                     </View>
-                    <View className="flex-row justify-between items-center mt-1">
-                      <Text className="text-[#034194] font-bold">
-                        ₱{product.price}
-                      </Text>
-                      <Text className="text-slate-400 text-xs">
-                        x{product.quantity}
-                      </Text>
+                    <View className="flex-row justify-end mt-1">
+                      <Text>₱{product.price}</Text>
                     </View>
                   </View>
                 </View>
               ))}
 
               {/* BILLING SECTION */}
-              <View className="border-t border-slate-100 pt-3 mt-1">
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-slate-400 text-xs">Order Total</Text>
-                  <Text className="font-bold text-base text-[#034194]">
-                    ₱{item.total}
-                  </Text>
+              <View className="pt-3 mt-1">
+                <View className="flex-row justify-end items-center gap-3">
+                  <Text className="text-slate-950 text-md">Order Total:</Text>
+                  <Text className="font-bold text-base">₱{item.total}</Text>
                 </View>
               </View>
 
@@ -396,7 +406,7 @@ export default function OrderList() {
                   <TouchableOpacity
                     disabled={actionLoadingId === item.id}
                     onPress={() => handleCancelOrder(item.id)}
-                    className="border border-red-500 px-4 py-2 rounded-xl flex-row items-center"
+                    className="border border-[#D70127] px-4 py-2 rounded-lg flex-row items-center"
                   >
                     {actionLoadingId === item.id ? (
                       <ActivityIndicator
@@ -405,19 +415,18 @@ export default function OrderList() {
                         style={{ marginRight: 4 }}
                       />
                     ) : null}
-                    <Text className="text-red-500 text-xs font-semibold">
+                    <Text className="text-[#D70127] text-xs font-semibold">
                       Cancel Order
                     </Text>
                   </TouchableOpacity>
                 )}
 
                 {/* 2. Order Received Option */}
-                {(item.status === "to-receive" ||
-                  item.status === "delivered") && (
+                {item.status_label === "Delivered" && (
                   <TouchableOpacity
                     disabled={actionLoadingId === item.id}
                     onPress={() => handleOrderReceived(item.id)}
-                    className="bg-emerald-600 px-4 py-2 rounded-xl flex-row items-center"
+                    className="bg-primary px-4 py-2 rounded-lg flex-row items-center"
                   >
                     {actionLoadingId === item.id ? (
                       <ActivityIndicator
@@ -433,13 +442,12 @@ export default function OrderList() {
                 )}
 
                 {/* 3. Refund / Return Option */}
-                {(item.status === "to-receive" ||
-                  item.status === "delivered" ||
+                {(item.status_label === "Delivered" ||
                   item.status === "completed") && (
                   <TouchableOpacity
                     disabled={actionLoadingId === item.id}
                     onPress={() => handleRefundOrder(item.id)}
-                    className="border border-orange-500 px-4 py-2 rounded-xl flex-row items-center"
+                    className="border border-slate-300 px-4 py-2 rounded-lg"
                   >
                     {actionLoadingId === item.id ? (
                       <ActivityIndicator
@@ -448,7 +456,7 @@ export default function OrderList() {
                         style={{ marginRight: 4 }}
                       />
                     ) : null}
-                    <Text className="text-orange-500 text-xs font-semibold">
+                    <Text className="text-xs text-slate-900 font-semibold">
                       Refund / Return
                     </Text>
                   </TouchableOpacity>
@@ -456,14 +464,8 @@ export default function OrderList() {
 
                 {/* 4. Return Requested Status Badge */}
                 {item.status === "return_requested" && (
-                  <View className="bg-amber-100 border border-amber-400 px-3 py-1.5 rounded-xl flex-row items-center">
-                    <Ionicons
-                      name="time-outline"
-                      size={14}
-                      color="#d97706"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text className="text-amber-700 text-xs font-semibold">
+                  <View className="border border-slate-300 px-4 py-2 rounded-lg">
+                    <Text className="text-xs text-slate-900 font-semibold">
                       Return Requested (Pending)
                     </Text>
                   </View>
@@ -471,14 +473,8 @@ export default function OrderList() {
 
                 {/* 5. Return Approved Status Badge */}
                 {item.status === "return_approved" && (
-                  <View className="bg-emerald-100 border border-emerald-400 px-3 py-1.5 rounded-xl flex-row items-center">
-                    <Ionicons
-                      name="checkmark-circle-outline"
-                      size={14}
-                      color="#059669"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text className="text-emerald-700 text-xs font-semibold">
+                  <View className="border border-slate-300 px-4 py-2 rounded-lg">
+                    <Text className="text-xs text-slate-900 font-semibold">
                       Return Approved
                     </Text>
                   </View>
@@ -486,15 +482,9 @@ export default function OrderList() {
 
                 {/* 6. Returned / Completed Refund Status Badge */}
                 {item.status === "returned" && (
-                  <View className="bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-xl flex-row items-center">
-                    <Ionicons
-                      name="refresh-circle-outline"
-                      size={14}
-                      color="#475569"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text className="text-slate-600 text-xs font-semibold">
-                      Returned / Refunded
+                  <View className="border border-slate-300 px-4 py-2 rounded-lg">
+                    <Text className="text-xs text-slate-900 font-semibold">
+                      Returned/Refunded
                     </Text>
                   </View>
                 )}
@@ -508,16 +498,10 @@ export default function OrderList() {
                         params: { orderId: item.id },
                       })
                     }
-                    className="bg-amber-500 px-4 py-2 rounded-xl flex-row items-center"
+                    className="bg-primary px-4 py-2 rounded-lg"
                   >
-                    <Ionicons
-                      name="star-outline"
-                      size={14}
-                      color="#fff"
-                      style={{ marginRight: 4 }}
-                    />
                     <Text className="text-white text-xs font-semibold">
-                      Rate Order
+                      Rate
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -525,8 +509,7 @@ export default function OrderList() {
                 {/* TRACK ORDER BUTTON */}
                 {(item.status === "to-pay" ||
                   item.status === "to-ship" ||
-                  item.status === "to-receive" ||
-                  item.status === "delivered") && (
+                  item.status === "shipped") && (
                   <TouchableOpacity
                     onPress={() =>
                       router.push({
@@ -534,16 +517,31 @@ export default function OrderList() {
                         params: { orderId: item.id },
                       })
                     }
-                    className="bg-[#034194] px-4 py-2 rounded-xl flex-row items-center"
+                    className="bg-[#034194] px-4 py-2 rounded-lg"
                   >
-                    <Ionicons
-                      name="location-outline"
-                      size={14}
-                      color="#fff"
-                      style={{ marginRight: 4 }}
-                    />
                     <Text className="text-white text-xs font-semibold">
                       Track Order
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* TRACK ORDER BUTTON */}
+                {(item.status === "cancelled" ||
+                  item.status === "return_requested" ||
+                  item.status === "return_approved" ||
+                  item.status === "returned") && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      const productSlug = slugify(item.items[0].product_name);
+                      router.push({
+                        pathname: "/products/[slug]",
+                        params: { slug: productSlug },
+                      });
+                    }}
+                    className="bg-[#034194] px-4 py-2 rounded-lg"
+                  >
+                    <Text className="text-white text-xs font-semibold">
+                      Buy Again
                     </Text>
                   </TouchableOpacity>
                 )}
