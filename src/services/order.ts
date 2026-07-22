@@ -1,6 +1,8 @@
 import api from "./api";
 
+// --- EXISTING INTERFACES ---
 export interface OrderItem {
+  id: number; // Ensured ID exists for rating payload
   product_name: string;
   product_image: string | null;
   variant_name: string | null;
@@ -97,17 +99,48 @@ export interface OrderIndexResponse {
   };
 }
 
+// --- NEW RATING INTERFACES ---
+export interface MediaFile {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+export interface ProductRatingPayload {
+  order_item_id: number;
+  rating: number;
+  comment: string;
+  is_anonymous: boolean;
+  video?: MediaFile | null;
+  images: MediaFile[];
+}
+
+export interface FetchRateDataResponse {
+  success: boolean;
+  data: {
+    user: { name: string; phone: string; avatar: string | null };
+    order: {
+      id: number;
+      store: { id: number; name: string };
+      items: {
+        id: number;
+        order_id: number;
+        product_name: string;
+        product_image: string | null;
+        variant_name: string | null;
+      }[];
+    };
+  };
+}
+
+// --- API METHODS ---
 export const fetchOrdersAPI = async (
   status: string,
   page: number = 1,
 ): Promise<OrderIndexResponse> => {
   const response = await api.get<OrderIndexResponse>("/store/orders", {
-    params: {
-      status,
-      page,
-    },
+    params: { status, page },
   });
-
   return response.data;
 };
 
@@ -122,12 +155,8 @@ export const fetchSingleOrderAPI = async (
 
 export const fetchOrderBadgesAPI = async (): Promise<OrderBadges> => {
   const response = await api.get<OrderIndexResponse>("/store/orders", {
-    params: {
-      status: "all",
-      page: 1,
-    },
+    params: { status: "all", page: 1 },
   });
-
   return response.data.data.badges;
 };
 
@@ -144,5 +173,67 @@ export const updateOrderStatusAPI = async (
   const response = await api.post(`/store/orders/${orderId}/status`, {
     status,
   });
+  return response.data;
+};
+
+// Fetch order structure for rating UI
+export const fetchOrderForRatingAPI = async (
+  orderId: number | string,
+): Promise<FetchRateDataResponse> => {
+  const response = await api.get<FetchRateDataResponse>(
+    `/store/orders/${orderId}/rate`,
+  );
+  return response.data;
+};
+
+// Submit rating multipart Form Data
+export const submitOrderRatingAPI = async (
+  orderId: number | string,
+  ratings: ProductRatingPayload[],
+) => {
+  const formData = new FormData();
+
+  ratings.forEach((item, index) => {
+    formData.append(
+      `items[${index}][order_item_id]`,
+      String(item.order_item_id),
+    );
+    formData.append(`items[${index}][rating]`, String(item.rating));
+
+    if (item.comment) {
+      formData.append(`items[${index}][comment]`, item.comment);
+    }
+
+    // Convert boolean to string "1" or "0" for Laravel validation
+    formData.append(
+      `items[${index}][is_anonymous]`,
+      item.is_anonymous ? "1" : "0",
+    );
+
+    if (item.video) {
+      formData.append(`items[${index}][video]`, {
+        uri: item.video.uri,
+        name: item.video.name || `video_${Date.now()}.mp4`,
+        type: item.video.type || "video/mp4",
+      } as any);
+    }
+
+    if (item.images && item.images.length > 0) {
+      item.images.forEach((img, imgIdx) => {
+        formData.append(`items[${index}][images][${imgIdx}]`, {
+          uri: img.uri,
+          name: img.name || `image_${Date.now()}_${imgIdx}.jpg`,
+          type: img.type || "image/jpeg",
+        } as any);
+      });
+    }
+  });
+
+  const response = await api.post(`/store/orders/${orderId}/rate`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+
   return response.data;
 };
