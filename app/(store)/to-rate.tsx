@@ -8,6 +8,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video"; // Import Video components from expo-video
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -23,8 +24,32 @@ import {
   View,
 } from "react-native";
 
+// --- SEPARATE VIDEO PLAYER COMPONENT ---
+// Keeping this isolated ensures Video hooks run cleanly per item
+function ReviewVideoPlayer({ videoUrl }: { videoUrl: string }) {
+  const player = useVideoPlayer(videoUrl, (player) => {
+    player.loop = false;
+  });
+
+  return (
+    <View className="mb-3">
+      <Text className="text-[11px] font-semibold text-slate-400 mb-1.5">
+        Video:
+      </Text>
+      <View className="w-full h-48 rounded-xl overflow-hidden bg-black">
+        <VideoView
+          style={{ width: "100%", height: "100%" }}
+          player={player}
+          allowsFullscreen
+          allowsPictureInPicture
+        />
+      </View>
+    </View>
+  );
+}
+
 export default function ToRateScreen() {
-  const router = useRouter(); // Fixed here
+  const router = useRouter();
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -78,7 +103,6 @@ export default function ToRateScreen() {
     }
   };
 
-  // Fetch feedback specifically for an order
   const handleViewFeedback = async (orderId: number) => {
     try {
       setFetchingOrderId(orderId);
@@ -275,6 +299,7 @@ export default function ToRateScreen() {
                     const review = item.review;
                     const rating = review?.rating ?? 5;
                     const comment = review?.comment;
+                    const videoUrl = review?.video_url;
                     const images = review?.images || [];
 
                     return (
@@ -310,7 +335,12 @@ export default function ToRateScreen() {
                           </Text>
                         )}
 
-                        {/* Review Images */}
+                        {/* Review Video Section */}
+                        {videoUrl ? (
+                          <ReviewVideoPlayer videoUrl={videoUrl} />
+                        ) : null}
+
+                        {/* Review Images Section */}
                         {images.length > 0 && (
                           <View className="mb-3">
                             <Text className="text-[11px] font-semibold text-slate-400 mb-1.5">
