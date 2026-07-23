@@ -24,7 +24,7 @@ const filterTabs = [
   { label: "All", slug: "all" },
   { label: "To Pay", slug: "to-pay" },
   { label: "To Ship", slug: "to-ship" },
-  { label: "To Received", slug: "to-receive" },
+  { label: "To Receive", slug: "to-receive" },
   { label: "Completed", slug: "completed" },
   { label: "Return/Refund", slug: "return_requested" },
   { label: "Cancelled", slug: "cancelled" },
@@ -325,229 +325,239 @@ export default function OrderList() {
           }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.1}
-          renderItem={({ item }) => (
-            <View className="bg-white rounded-2xl mb-4 p-3 border border-slate-200 shadow-sm">
-              {/* SHOP HEADER */}
-              <View className="flex-row bg-slate-50 py-2 rounded-xl justify-between items-center mb-3">
-                <View className="flex-row items-center">
-                  <Ionicons
-                    name="storefront-outline"
-                    size={16}
-                    color="#4d4d4d"
-                  />
-                  <Text className="ml-2 font-semibold text-md">
-                    {item.store_name || "Unknown Shop"}
+          renderItem={({ item }) => {
+            const isCompletedAndRated =
+              item.status === "completed" && item.is_rated;
+
+            return (
+              <View className="bg-white rounded-2xl mb-4 p-3 border border-slate-200 shadow-sm">
+                {/* SHOP HEADER */}
+                <View className="flex-row bg-slate-50 py-2 rounded-xl justify-between items-center mb-3">
+                  <View className="flex-row items-center">
+                    <Ionicons
+                      name="storefront-outline"
+                      size={16}
+                      color="#4d4d4d"
+                    />
+                    <Text className="ml-2 font-semibold text-md">
+                      {item.store_name || "Unknown Shop"}
+                    </Text>
+                  </View>
+                  <Text className="text-primary text-sm">
+                    {item.status_label}
                   </Text>
                 </View>
-                <Text className="text-primary text-sm">
-                  {item.status_label}
-                </Text>
-              </View>
 
-              {/* PRODUCTS */}
-              {item.items?.map((product, index) => (
-                <View
-                  key={`${product.product_name}-${index}`}
-                  className="flex-row mb-3"
-                >
-                  <Image
-                    source={{
-                      uri:
-                        product.product_image &&
-                        product.product_image.startsWith("http")
-                          ? product.product_image
-                          : `http://192.168.42.10:8000${product.product_image || ""}`,
-                    }}
-                    style={{
-                      width: 75,
-                      height: 75,
-                      borderRadius: 12,
-                      backgroundColor: "#f1f5f9",
-                    }}
-                  />
-                  <View className="flex-1 ml-3 justify-between">
-                    <View>
-                      <Text
-                        numberOfLines={2}
-                        className="font-medium text-slate-800 text-md"
-                      >
-                        {product.product_name}
-                      </Text>
-                      {product.variant_name ? (
-                        <View className="flex-row justify-between items-center mt-1">
-                          <Text className="text-[11px] text-slate-400 mt-0.5">
-                            {product.variant_name}
-                          </Text>
-                          <Text className="text-slate-400 text-xs">
-                            x{product.quantity}
-                          </Text>
-                        </View>
+                {/* PRODUCTS */}
+                {item.items?.map((product, index) => (
+                  <View
+                    key={`${product.product_name}-${index}`}
+                    className="flex-row mb-3"
+                  >
+                    <Image
+                      source={{
+                        uri: `${product.product_image}`,
+                      }}
+                      style={{
+                        width: 75,
+                        height: 75,
+                        borderRadius: 12,
+                        backgroundColor: "#f1f5f9",
+                      }}
+                    />
+                    <View className="flex-1 ml-3 justify-between">
+                      <View>
+                        <Text
+                          numberOfLines={2}
+                          className="font-medium text-slate-800 text-md"
+                        >
+                          {product.product_name}
+                        </Text>
+                        {product.variant_name ? (
+                          <View className="flex-row justify-between items-center mt-1">
+                            <Text className="text-[11px] text-slate-400 mt-0.5">
+                              {product.variant_name}
+                            </Text>
+                            <Text className="text-slate-400 text-xs">
+                              x{product.quantity}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <View className="mt-1">
+                        {/* BUY AGAIN BUTTON */}
+                        {[
+                          "cancelled",
+                          "return_requested",
+                          "return_approved",
+                          "returned",
+                        ].includes(item.status) || isCompletedAndRated ? (
+                          <View className="flex-row justify-between items-center">
+                            <TouchableOpacity
+                              onPress={() => {
+                                const productSlug = slugify(
+                                  product.product_name,
+                                );
+                                router.push({
+                                  pathname: "/products/[slug]",
+                                  params: { slug: productSlug },
+                                });
+                              }}
+                              className="bg-[#034194] px-4 py-2 rounded-lg"
+                            >
+                              <Text className="text-white text-xs font-semibold">
+                                Buy Again
+                              </Text>
+                            </TouchableOpacity>
+                            <Text>₱{product.price}</Text>
+                          </View>
+                        ) : (
+                          <View className="flex-row justify-end">
+                            <Text>₱{product.price}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                ))}
+
+                {/* BILLING SECTION */}
+                <View className="pt-3 mt-1">
+                  <View className="flex-row justify-end items-center gap-3">
+                    <Text className="text-slate-950 text-md">Order Total:</Text>
+                    <Text className="font-bold text-base">₱{item.total}</Text>
+                  </View>
+                </View>
+
+                {/* DYNAMIC ACTION TRIGGERS */}
+                <View className="flex-row justify-end mt-4 gap-2 flex-wrap">
+                  {/* 1. Cancel Option */}
+                  {item.status === "to-pay" && (
+                    <TouchableOpacity
+                      disabled={actionLoadingId === item.id}
+                      onPress={() => handleCancelOrder(item.id)}
+                      className="border border-[#D70127] px-4 py-2 rounded-lg flex-row items-center"
+                    >
+                      {actionLoadingId === item.id ? (
+                        <ActivityIndicator
+                          size="small"
+                          color="#ef4444"
+                          style={{ marginRight: 4 }}
+                        />
                       ) : null}
-                    </View>
-                    <View className="flex-row justify-end mt-1">
-                      <Text>₱{product.price}</Text>
-                    </View>
-                  </View>
-                </View>
-              ))}
+                      <Text className="text-[#D70127] text-xs font-semibold">
+                        Cancel Order
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
-              {/* BILLING SECTION */}
-              <View className="pt-3 mt-1">
-                <View className="flex-row justify-end items-center gap-3">
-                  <Text className="text-slate-950 text-md">Order Total:</Text>
-                  <Text className="font-bold text-base">₱{item.total}</Text>
+                  {/* 2. Order Received Option */}
+                  {item.status_label === "Delivered" && (
+                    <TouchableOpacity
+                      disabled={actionLoadingId === item.id}
+                      onPress={() => handleOrderReceived(item.id)}
+                      className="bg-primary px-4 py-2 rounded-lg flex-row items-center"
+                    >
+                      {actionLoadingId === item.id ? (
+                        <ActivityIndicator
+                          size="small"
+                          color="#fff"
+                          style={{ marginRight: 4 }}
+                        />
+                      ) : null}
+                      <Text className="text-white text-xs font-semibold">
+                        Order Received
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* 3. Refund / Return Option — hidden once completed order is already rated */}
+                  {(item.status_label === "Delivered" ||
+                    (item.status === "completed" && !isCompletedAndRated)) && (
+                    <TouchableOpacity
+                      disabled={actionLoadingId === item.id}
+                      onPress={() => handleRefundOrder(item.id)}
+                      className="border border-slate-300 px-4 py-2 rounded-lg"
+                    >
+                      {actionLoadingId === item.id ? (
+                        <ActivityIndicator
+                          size="small"
+                          color="#f97316"
+                          style={{ marginRight: 4 }}
+                        />
+                      ) : null}
+                      <Text className="text-xs text-slate-900 font-semibold">
+                        Refund / Return
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* 4. Return Requested Status Badge */}
+                  {item.status === "return_requested" && (
+                    <View className="border border-slate-300 px-4 py-2 rounded-lg">
+                      <Text className="text-xs text-slate-900 font-semibold">
+                        Return Requested (Pending)
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* 5. Return Approved Status Badge */}
+                  {item.status === "return_approved" && (
+                    <View className="border border-slate-300 px-4 py-2 rounded-lg">
+                      <Text className="text-xs text-slate-900 font-semibold">
+                        Return Approved
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* 6. Returned / Completed Refund Status Badge */}
+                  {item.status === "returned" && (
+                    <View className="border border-slate-300 px-4 py-2 rounded-lg">
+                      <Text className="text-xs text-slate-900 font-semibold">
+                        Returned/Refunded
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* 7. Rate Order Button — hidden once already rated */}
+                  {item.status === "completed" && !isCompletedAndRated && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: "/rating-products",
+                          params: { orderId: item.id },
+                        })
+                      }
+                      className="bg-primary px-4 py-2 rounded-lg"
+                    >
+                      <Text className="text-white text-xs font-semibold">
+                        Rate
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* TRACK ORDER BUTTON */}
+                  {(item.status === "to-pay" ||
+                    item.status === "to-ship" ||
+                    item.status === "shipped") && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: "/track-order",
+                          params: { orderId: item.id },
+                        })
+                      }
+                      className="bg-[#034194] px-4 py-2 rounded-lg"
+                    >
+                      <Text className="text-white text-xs font-semibold">
+                        Track Order
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
-
-              {/* DYNAMIC ACTION TRIGGERS */}
-              <View className="flex-row justify-end mt-4 gap-2 flex-wrap">
-                {/* 1. Cancel Option */}
-                {item.status === "to-pay" && (
-                  <TouchableOpacity
-                    disabled={actionLoadingId === item.id}
-                    onPress={() => handleCancelOrder(item.id)}
-                    className="border border-[#D70127] px-4 py-2 rounded-lg flex-row items-center"
-                  >
-                    {actionLoadingId === item.id ? (
-                      <ActivityIndicator
-                        size="small"
-                        color="#ef4444"
-                        style={{ marginRight: 4 }}
-                      />
-                    ) : null}
-                    <Text className="text-[#D70127] text-xs font-semibold">
-                      Cancel Order
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* 2. Order Received Option */}
-                {item.status_label === "Delivered" && (
-                  <TouchableOpacity
-                    disabled={actionLoadingId === item.id}
-                    onPress={() => handleOrderReceived(item.id)}
-                    className="bg-primary px-4 py-2 rounded-lg flex-row items-center"
-                  >
-                    {actionLoadingId === item.id ? (
-                      <ActivityIndicator
-                        size="small"
-                        color="#fff"
-                        style={{ marginRight: 4 }}
-                      />
-                    ) : null}
-                    <Text className="text-white text-xs font-semibold">
-                      Order Received
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* 3. Refund / Return Option */}
-                {(item.status_label === "Delivered" ||
-                  item.status === "completed") && (
-                  <TouchableOpacity
-                    disabled={actionLoadingId === item.id}
-                    onPress={() => handleRefundOrder(item.id)}
-                    className="border border-slate-300 px-4 py-2 rounded-lg"
-                  >
-                    {actionLoadingId === item.id ? (
-                      <ActivityIndicator
-                        size="small"
-                        color="#f97316"
-                        style={{ marginRight: 4 }}
-                      />
-                    ) : null}
-                    <Text className="text-xs text-slate-900 font-semibold">
-                      Refund / Return
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* 4. Return Requested Status Badge */}
-                {item.status === "return_requested" && (
-                  <View className="border border-slate-300 px-4 py-2 rounded-lg">
-                    <Text className="text-xs text-slate-900 font-semibold">
-                      Return Requested (Pending)
-                    </Text>
-                  </View>
-                )}
-
-                {/* 5. Return Approved Status Badge */}
-                {item.status === "return_approved" && (
-                  <View className="border border-slate-300 px-4 py-2 rounded-lg">
-                    <Text className="text-xs text-slate-900 font-semibold">
-                      Return Approved
-                    </Text>
-                  </View>
-                )}
-
-                {/* 6. Returned / Completed Refund Status Badge */}
-                {item.status === "returned" && (
-                  <View className="border border-slate-300 px-4 py-2 rounded-lg">
-                    <Text className="text-xs text-slate-900 font-semibold">
-                      Returned/Refunded
-                    </Text>
-                  </View>
-                )}
-
-                {/* 7. Rate Order Button */}
-                {item.status === "completed" && (
-                  <TouchableOpacity
-                    onPress={() =>
-                      router.push({
-                        pathname: "/order-list",
-                        params: { orderId: item.id },
-                      })
-                    }
-                    className="bg-primary px-4 py-2 rounded-lg"
-                  >
-                    <Text className="text-white text-xs font-semibold">
-                      Rate
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* TRACK ORDER BUTTON */}
-                {(item.status === "to-pay" ||
-                  item.status === "to-ship" ||
-                  item.status === "shipped") && (
-                  <TouchableOpacity
-                    onPress={() =>
-                      router.push({
-                        pathname: "/track-order",
-                        params: { orderId: item.id },
-                      })
-                    }
-                    className="bg-[#034194] px-4 py-2 rounded-lg"
-                  >
-                    <Text className="text-white text-xs font-semibold">
-                      Track Order
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* TRACK ORDER BUTTON */}
-                {(item.status === "cancelled" ||
-                  item.status === "return_requested" ||
-                  item.status === "return_approved" ||
-                  item.status === "returned") && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      const productSlug = slugify(item.items[0].product_name);
-                      router.push({
-                        pathname: "/products/[slug]",
-                        params: { slug: productSlug },
-                      });
-                    }}
-                    className="bg-[#034194] px-4 py-2 rounded-lg"
-                  >
-                    <Text className="text-white text-xs font-semibold">
-                      Buy Again
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          )}
+            );
+          }}
           ListEmptyComponent={
             <View className="items-center justify-center py-20">
               <Ionicons name="receipt-outline" size={48} color="#94a3b8" />
