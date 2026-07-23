@@ -101,11 +101,29 @@ export interface OrderIndexResponse {
   };
 }
 
-// --- NEW RATING INTERFACES ---
+// --- RATING INTERFACES ---
 export interface MediaFile {
   uri: string;
   name: string;
   type: string;
+}
+
+export interface ReviewData {
+  id: number;
+  rating: number;
+  comment: string | null;
+  video_url: string | null;
+  is_anonymous: boolean;
+  images: string[];
+}
+
+export interface RateItem {
+  id: number;
+  order_id: number;
+  product_name: string;
+  product_image: string | null;
+  variant_name: string | null;
+  review?: ReviewData | null;
 }
 
 export interface ProductRatingPayload {
@@ -120,18 +138,12 @@ export interface ProductRatingPayload {
 export interface FetchRateDataResponse {
   success: boolean;
   message?: string;
-  data: {
-    user: { name: string; phone: string; avatar: string | null };
+  data?: {
+    user: { name: string; phone: string | null; avatar: string | null };
     order: {
       id: number;
       store: { id: number; name: string };
-      items: {
-        id: number;
-        order_id: number;
-        product_name: string;
-        product_image: string | null;
-        variant_name: string | null;
-      }[];
+      items: RateItem[];
     };
   };
 }
@@ -183,10 +195,17 @@ export const updateOrderStatusAPI = async (
 export const fetchOrderForRatingAPI = async (
   orderId: number | string,
 ): Promise<FetchRateDataResponse> => {
-  const response = await api.get<FetchRateDataResponse>(
-    `/store/orders/${orderId}/rate`,
-  );
-  return response.data;
+  try {
+    const response = await api.get<FetchRateDataResponse>(
+      `/store/orders/${orderId}/rate`,
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error?.response?.data) {
+      return error.response.data;
+    }
+    throw error;
+  }
 };
 
 // Submit rating multipart Form Data
@@ -207,7 +226,6 @@ export const submitOrderRatingAPI = async (
       formData.append(`items[${index}][comment]`, item.comment);
     }
 
-    // Convert boolean to string "1" or "0" for Laravel validation
     formData.append(
       `items[${index}][is_anonymous]`,
       item.is_anonymous ? "1" : "0",
