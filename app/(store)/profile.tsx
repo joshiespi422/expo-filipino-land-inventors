@@ -2,8 +2,8 @@ import { fetchOrdersAPI } from "@/services/order";
 import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -61,36 +61,47 @@ export default function BuyerProfile() {
     toRate: 0,
   });
 
-  useEffect(() => {
-    async function loadProfileData() {
-      try {
-        setLoading(true);
+  // Fetch profile and badge counts automatically whenever screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
 
-        // Load latest profile
-        const profile = await profileService.getProfile();
-        setUser(profile);
-        setUserData(profile);
+      async function loadProfileData() {
+        try {
+          // Load latest profile
+          const profile = await profileService.getProfile();
+          if (isMounted) {
+            setUser(profile);
+            setUserData(profile);
+          }
 
-        // Load order badges
-        const response = await fetchOrdersAPI("all", 1);
+          // Load order badges
+          const response = await fetchOrdersAPI("all", 1);
 
-        if (response.success && response.data) {
-          setOrderBadges({
-            toPay: response.data.badges?.to_pay || 0,
-            toShip: response.data.badges?.to_ship || 0,
-            toReceive: response.data.badges?.to_receive || 0,
-            toRate: response.data.badges?.to_rate || 0,
-          });
+          if (isMounted && response.success && response.data) {
+            setOrderBadges({
+              toPay: response.data.badges?.to_pay || 0,
+              toShip: response.data.badges?.to_ship || 0,
+              toReceive: response.data.badges?.to_receive || 0,
+              toRate: response.data.badges?.to_rate || 0,
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching buyer profile data:", error);
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
         }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
       }
-    }
 
-    loadProfileData();
-  }, []);
+      loadProfileData();
+
+      return () => {
+        isMounted = false;
+      };
+    }, []),
+  );
 
   // Structural evaluation flags matching profile rule sets
   const userTypeName = userData?.user_type?.name?.toUpperCase() || "";
@@ -185,7 +196,6 @@ export default function BuyerProfile() {
         </View>
 
         {/* TRACKING ORDER STATES LAYER */}
-        {/* Negative placement applied via native style object properties to bypass NativeWind limitations */}
         <View
           className="mx-4 bg-white rounded-3xl p-4 border border-slate-100 shadow-sm"
           style={{ marginTop: -20, zIndex: 10 }}
@@ -233,7 +243,7 @@ export default function BuyerProfile() {
               className="items-center justify-center w-16 relative"
             >
               <Ionicons name="cube-outline" size={24} color="#034194" />
-              <Text className="text-[11px] text-primary  font-medium mt-2 text-center">
+              <Text className="text-[11px] text-primary font-medium mt-2 text-center">
                 To Ship
               </Text>
               {orderBadges.toShip > 0 && (
@@ -267,11 +277,11 @@ export default function BuyerProfile() {
             {/* TO RATE SELECTION */}
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => handleTrackOrderPress("Completed")}
+              onPress={() => router.push("/to-rate")} // <-- Direct routing here
               className="items-center justify-center w-16 relative"
             >
               <Ionicons name="star-outline" size={24} color="#034194" />
-              <Text className="text-[11px] text-primary  font-medium mt-2 text-center">
+              <Text className="text-[11px] text-primary font-medium mt-2 text-center">
                 To Rate
               </Text>
               {orderBadges.toRate > 0 && (
@@ -317,17 +327,16 @@ export default function BuyerProfile() {
         </View>
       </ScrollView>
 
-      {/* ABSOLUTE START SELLING BUTTON AT SCREEN BOTTOM (100VH VIEWPORT BASE) */}
+      {/* ABSOLUTE START SELLING BUTTON AT SCREEN BOTTOM */}
       <View className="absolute bottom-0 left-0 mx-4 mb-10 right-0">
         {userData?.is_seller ? (
-          /* IF USER IS A SELLER: Redirects them to the external web dashboard */
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={async () => {
-              const url = "http://192.168.1.46:8000/login";
+              const url = "http://192.168.42.10:8000/login";
               const supported = await Linking.canOpenURL(url);
               if (supported) {
-                await Linking.openURL(url); // This automatically acts like target="_blank"
+                await Linking.openURL(url);
               } else {
                 console.error("Don't know how to open this URL: " + url);
               }
@@ -342,7 +351,6 @@ export default function BuyerProfile() {
             </View>
           </TouchableOpacity>
         ) : (
-          /* IF USER IS NOT A SELLER: Keeps them in-app to register */
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => router.push("/register-seller")}
