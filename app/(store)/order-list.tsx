@@ -6,7 +6,7 @@ import {
   updateOrderStatusAPI,
 } from "@/services/order";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -98,10 +98,12 @@ export default function OrderList() {
     setSelectedSlug("all");
   }, [routeStatus]);
 
-  // Fetch items whenever the selected tab changes
-  useEffect(() => {
-    getOrders(selectedSlug, 1, false);
-  }, [selectedSlug, getOrders]);
+  // Re-fetch orders whenever screen is focused or selected tab changes
+  useFocusEffect(
+    useCallback(() => {
+      getOrders(selectedSlug, 1, false);
+    }, [selectedSlug, getOrders]),
+  );
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -326,13 +328,19 @@ export default function OrderList() {
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.1}
           renderItem={({ item }) => {
-            const isCompletedAndRated =
-              item.status === "completed" && item.is_rated;
+            // Strictly check boolean value, handling true, 1, or "1" strings from API JSON
+            const isRated =
+              item.is_rated === true ||
+              // item.is_rated === 1 ||
+              String(item.is_rated) === "true" ||
+              String(item.is_rated) === "1";
+
+            const isCompletedAndRated = item.status === "completed" && isRated;
 
             return (
               <View className="bg-white rounded-2xl mb-4 p-3 border border-slate-200 shadow-sm">
                 {/* SHOP HEADER */}
-                <View className="flex-row bg-slate-50 py-2 rounded-xl justify-between items-center mb-3">
+                <View className="flex-row bg-slate-50 py-2 rounded-xl justify-between items-center mb-3 px-2">
                   <View className="flex-row items-center">
                     <Ionicons
                       name="storefront-outline"
@@ -343,7 +351,7 @@ export default function OrderList() {
                       {item.store_name || "Unknown Shop"}
                     </Text>
                   </View>
-                  <Text className="text-primary text-sm">
+                  <Text className="text-primary text-sm font-medium">
                     {item.status_label}
                   </Text>
                 </View>
@@ -409,11 +417,15 @@ export default function OrderList() {
                                 Buy Again
                               </Text>
                             </TouchableOpacity>
-                            <Text>₱{product.price}</Text>
+                            <Text className="font-semibold text-slate-800">
+                              ₱{product.price}
+                            </Text>
                           </View>
                         ) : (
                           <View className="flex-row justify-end">
-                            <Text>₱{product.price}</Text>
+                            <Text className="font-semibold text-slate-800">
+                              ₱{product.price}
+                            </Text>
                           </View>
                         )}
                       </View>
@@ -422,10 +434,12 @@ export default function OrderList() {
                 ))}
 
                 {/* BILLING SECTION */}
-                <View className="pt-3 mt-1">
-                  <View className="flex-row justify-end items-center gap-3">
-                    <Text className="text-slate-950 text-md">Order Total:</Text>
-                    <Text className="font-bold text-base">₱{item.total}</Text>
+                <View className="pt-3 mt-1 border-t border-slate-100">
+                  <View className="flex-row justify-end items-center gap-2">
+                    <Text className="text-slate-500 text-sm">Order Total:</Text>
+                    <Text className="font-bold text-base text-[#034194]">
+                      ₱{item.total}
+                    </Text>
                   </View>
                 </View>
 
@@ -452,7 +466,7 @@ export default function OrderList() {
                   )}
 
                   {/* 2. Order Received Option */}
-                  {item.status_label === "Delivered" && (
+                  {item.status === "delivered" && (
                     <TouchableOpacity
                       disabled={actionLoadingId === item.id}
                       onPress={() => handleOrderReceived(item.id)}
@@ -477,7 +491,7 @@ export default function OrderList() {
                     <TouchableOpacity
                       disabled={actionLoadingId === item.id}
                       onPress={() => handleRefundOrder(item.id)}
-                      className="border border-slate-300 px-4 py-2 rounded-lg"
+                      className="border border-slate-300 px-4 py-2 rounded-lg flex-row items-center"
                     >
                       {actionLoadingId === item.id ? (
                         <ActivityIndicator
@@ -494,8 +508,8 @@ export default function OrderList() {
 
                   {/* 4. Return Requested Status Badge */}
                   {item.status === "return_requested" && (
-                    <View className="border border-slate-300 px-4 py-2 rounded-lg">
-                      <Text className="text-xs text-slate-900 font-semibold">
+                    <View className="border border-slate-300 px-4 py-2 rounded-lg bg-slate-50">
+                      <Text className="text-xs text-slate-700 font-semibold">
                         Return Requested (Pending)
                       </Text>
                     </View>
@@ -503,8 +517,8 @@ export default function OrderList() {
 
                   {/* 5. Return Approved Status Badge */}
                   {item.status === "return_approved" && (
-                    <View className="border border-slate-300 px-4 py-2 rounded-lg">
-                      <Text className="text-xs text-slate-900 font-semibold">
+                    <View className="border border-slate-300 px-4 py-2 rounded-lg bg-slate-50">
+                      <Text className="text-xs text-slate-700 font-semibold">
                         Return Approved
                       </Text>
                     </View>
@@ -512,14 +526,14 @@ export default function OrderList() {
 
                   {/* 6. Returned / Completed Refund Status Badge */}
                   {item.status === "returned" && (
-                    <View className="border border-slate-300 px-4 py-2 rounded-lg">
-                      <Text className="text-xs text-slate-900 font-semibold">
+                    <View className="border border-slate-300 px-4 py-2 rounded-lg bg-slate-50">
+                      <Text className="text-xs text-slate-700 font-semibold">
                         Returned/Refunded
                       </Text>
                     </View>
                   )}
 
-                  {/* 7. Rate Order Button — hidden once already rated */}
+                  {/* 7. Rate Order Button — Strictly hidden when isCompletedAndRated is true */}
                   {item.status === "completed" && !isCompletedAndRated && (
                     <TouchableOpacity
                       onPress={() =>
