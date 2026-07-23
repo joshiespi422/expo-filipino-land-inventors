@@ -2,7 +2,8 @@ import api from "./api";
 
 // --- EXISTING INTERFACES ---
 export interface OrderItem {
-  id: number; // Ensured ID exists for rating payload
+  id: number;
+  product_id: number | null;
   product_name: string;
   product_image: string | null;
   variant_name: string | null;
@@ -43,6 +44,7 @@ export interface OrderListItem {
   items: OrderItem[];
   tracking: OrderTracking;
   created_at: string;
+  is_rated: boolean;
 }
 
 export interface SingleOrderResponse {
@@ -117,6 +119,7 @@ export interface ProductRatingPayload {
 
 export interface FetchRateDataResponse {
   success: boolean;
+  message?: string;
   data: {
     user: { name: string; phone: string; avatar: string | null };
     order: {
