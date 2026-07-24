@@ -254,3 +254,49 @@ export const getStore = async (
   const response = await api.get(`/store/${slug}`, { params: { page } });
   return response.data;
 };
+
+// Review Products Interfaces
+export interface ReviewItem {
+  id: number;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  user_name: string;
+  user_avatar: string | null;
+  video_url: string | null;
+  images: string[];
+}
+
+export interface ReviewStats {
+  average_rating: number;
+  total_reviews: number;
+  breakdown: Record<1 | 2 | 3 | 4 | 5, number>;
+}
+
+export interface FetchProductReviewsResponse {
+  success: boolean;
+  data: {
+    stats: ReviewStats;
+    reviews: ReviewItem[];
+    pagination: {
+      current_page: number;
+      last_page: number;
+      has_more: boolean;
+      total: number;
+    };
+  };
+}
+
+export const fetchProductReviewsAPI = async (
+  productId: number | string,
+  page: number = 1,
+  ratingFilter: string = "all",
+): Promise<FetchProductReviewsResponse> => {
+  const response = await api.get<FetchProductReviewsResponse>(
+    `/store/products/${productId}/reviews`,
+    {
+      params: { page, rating: ratingFilter },
+    },
+  );
+  return response.data;
+};
