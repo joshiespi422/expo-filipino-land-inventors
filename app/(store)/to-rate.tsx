@@ -8,7 +8,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useVideoPlayer, VideoView } from "expo-video"; // Import Video components from expo-video
+import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,7 +25,6 @@ import {
 } from "react-native";
 
 // --- SEPARATE VIDEO PLAYER COMPONENT ---
-// Keeping this isolated ensures Video hooks run cleanly per item
 function ReviewVideoPlayer({ videoUrl }: { videoUrl: string }) {
   const player = useVideoPlayer(videoUrl, (player) => {
     player.loop = false;
@@ -50,6 +49,7 @@ function ReviewVideoPlayer({ videoUrl }: { videoUrl: string }) {
 
 export default function ToRateScreen() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"to-rate" | "rated">("to-rate");
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -124,6 +124,14 @@ export default function ToRateScreen() {
     }
   };
 
+  // Filter orders based on active tab
+  const filteredOrders = orders.filter((order) => {
+    if (activeTab === "to-rate") {
+      return !order.is_rated;
+    }
+    return order.is_rated;
+  });
+
   const renderOrderItem = ({ item }: { item: OrderListItem }) => {
     const isFetchingThis = fetchingOrderId === item.id;
 
@@ -187,18 +195,12 @@ export default function ToRateScreen() {
             <TouchableOpacity
               onPress={() => handleViewFeedback(item.id)}
               disabled={isFetchingThis}
-              className="border border-[#034194] bg-blue-50 px-4 py-2 rounded-xl flex-row items-center"
+              className="border border-[#034194] bg-blue-50 px-4 py-2 rounded-lg flex-row items-center"
             >
               {isFetchingThis ? (
                 <ActivityIndicator size="small" color="#034194" />
               ) : (
                 <>
-                  <Ionicons
-                    name="chatbox-ellipses-outline"
-                    size={14}
-                    color="#034194"
-                    style={{ marginRight: 4 }}
-                  />
                   <Text className="text-xs text-[#034194] font-semibold">
                     View Feedback
                   </Text>
@@ -209,18 +211,12 @@ export default function ToRateScreen() {
             <TouchableOpacity
               onPress={() =>
                 router.push({
-                  pathname: "/(store)/rate-order",
+                  pathname: "/rating-products",
                   params: { orderId: item.id },
                 })
               }
-              className="bg-[#034194] px-5 py-2.5 rounded-xl flex-row items-center"
+              className="bg-[#034194] px-5 py-2.5 rounded-lg"
             >
-              <Ionicons
-                name="star-outline"
-                size={14}
-                color="#ffffff"
-                style={{ marginRight: 4 }}
-              />
               <Text className="text-xs text-white font-semibold">
                 Rate Order
               </Text>
@@ -242,8 +238,42 @@ export default function ToRateScreen() {
 
   return (
     <View className="flex-1 bg-slate-50 p-4">
+      {/* FILTER TABS: TO-RATE vs RATED */}
+      <View className="flex-row mb-4 bg-slate-200/60 p-1 rounded-2xl">
+        <TouchableOpacity
+          onPress={() => setActiveTab("to-rate")}
+          className={`flex-1 py-2.5 rounded-xl items-center justify-center ${
+            activeTab === "to-rate" ? "bg-white shadow-xs" : ""
+          }`}
+        >
+          <Text
+            className={`text-xs font-bold ${
+              activeTab === "to-rate" ? "text-[#034194]" : "text-slate-500"
+            }`}
+          >
+            To Rate
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setActiveTab("rated")}
+          className={`flex-1 py-2.5 rounded-xl items-center justify-center ${
+            activeTab === "rated" ? "bg-white shadow-xs" : ""
+          }`}
+        >
+          <Text
+            className={`text-xs font-bold ${
+              activeTab === "rated" ? "text-[#034194]" : "text-slate-500"
+            }`}
+          >
+            Rated
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ORDERS LIST */}
       <FlatList
-        data={orders}
+        data={filteredOrders}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderOrderItem}
         refreshControl={
@@ -260,7 +290,9 @@ export default function ToRateScreen() {
           <View className="items-center justify-center py-20">
             <Ionicons name="receipt-outline" size={48} color="#cbd5e1" />
             <Text className="text-slate-400 font-medium mt-3">
-              No orders to rate yet.
+              {activeTab === "to-rate"
+                ? "No orders to rate yet."
+                : "No rated orders found."}
             </Text>
           </View>
         }
@@ -383,6 +415,7 @@ export default function ToRateScreen() {
         visible={!!selectedImageUri}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setSelectedImageUri(null)}
       >
         <View className="flex-1 bg-black justify-center items-center">
