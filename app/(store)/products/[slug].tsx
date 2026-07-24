@@ -3,9 +3,11 @@ import { ProductCard } from "@/components/ProductItems";
 import { addToCart, getCart } from "@/services/cart";
 import {
   DetailedProduct,
+  fetchProductReviewsAPI,
   getProductShow,
   getStoreHome,
   Product,
+  ReviewItem,
   selectDirectCheckout,
   toggleCollection,
 } from "@/services/productService";
@@ -372,7 +374,7 @@ export default function Products() {
 
   const formatImageUrl = (url: string | null) => {
     if (!url) return "";
-    return url.startsWith("http") ? url : `http://192.168.42.10:8000${url}`;
+    return url.startsWith("http") ? url : `http://192.168.42.254:8000${url}`;
   };
 
   if (loading) {
@@ -728,103 +730,155 @@ const ProductInfoSection = ({
   displayPrice,
   displayComparePrice,
   currentStock,
-}: any) => (
-  <View className="py-4 px-3">
-    <View className="flex-row pb-4 items-end justify-between">
-      <View className="flex-row items-center gap-2">
-        <Text className="text-[#D70127] text-2xl font-semibold mt-2">
-          ₱
-          {Number(displayPrice).toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
-        </Text>
-        {displayComparePrice && (
-          <Text className="text-slate-400 line-through text-sm mt-3">
+}: any) => {
+  const router = useRouter();
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [totalReviews, setTotalReviews] = useState<number>(0);
+  const [loadingReviews, setLoadingReviews] = useState<boolean>(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLatestReviews = async () => {
+      if (!product?.id) return;
+      try {
+        setLoadingReviews(true);
+        // Fetch page 1 of reviews
+        const response = await fetchProductReviewsAPI(product.id, 1, "all");
+
+        if (isMounted && response?.success && response.data) {
+          setReviews(response.data.reviews.slice(0, 2));
+          setTotalReviews(response.data.pagination.total);
+        }
+      } catch (error) {
+        console.error("Failed to load product reviews:", error);
+      } finally {
+        if (isMounted) setLoadingReviews(false);
+      }
+    };
+
+    loadLatestReviews();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [product?.id]);
+
+  return (
+    <View className="py-4 px-3">
+      <View className="flex-row pb-4 items-end justify-between">
+        <View className="flex-row items-center gap-2">
+          <Text className="text-[#D70127] text-2xl font-semibold mt-2">
             ₱
-            {Number(displayComparePrice).toLocaleString(undefined, {
+            {Number(displayPrice).toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
           </Text>
-        )}
+          {displayComparePrice && (
+            <Text className="text-slate-400 line-through text-sm mt-3">
+              ₱
+              {Number(displayComparePrice).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </Text>
+          )}
+        </View>
+        <View className="flex-row gap-3 items-center">
+          <Text className="text-slate-500">{product.sold_count ?? 0} sold</Text>
+          <Text className="text-slate-300">|</Text>
+          <Text className="text-slate-500">Stock: {currentStock}</Text>
+        </View>
       </View>
-      <View className="flex-row gap-3 items-center">
-        <Text className="text-slate-500">{product.sold_count ?? 0} sold</Text>
-        <Text className="text-slate-300">|</Text>
-        <Text className="text-slate-500">Stock: {currentStock}</Text>
-      </View>
-    </View>
 
-    <Text className="text-2xl font-semibold text-primary">{product.name}</Text>
-    <Text className="text-slate-700 text-lg mt-2">
-      {product.description || "No product description provided."}
-    </Text>
+      <Text className="text-2xl font-semibold text-primary">
+        {product.name}
+      </Text>
+      <Text className="text-slate-700 text-lg mt-2">
+        {product.description || "No product description provided."}
+      </Text>
 
-    {/* SHIPPING METRICS */}
-    <View className="mt-5 bg-blue rounded-xl p-3">
-      <View className="flex-row gap-3 items-center">
-        <Image
-          source={delivery}
-          className="rounded-xl"
-          style={{ width: 80, height: 40, resizeMode: "contain" }}
-        />
-        <View className="flex-1">
-          <View className="bg-primary self-start px-5 py-1 rounded-full">
-            <Text className="text-white text-[13px]">Fast Delivery</Text>
+      {/* SHIPPING METRICS */}
+      <View className="mt-5 bg-blue rounded-xl p-3">
+        <View className="flex-row gap-3 items-center">
+          <Image
+            source={delivery}
+            className="rounded-xl"
+            style={{ width: 80, height: 40, resizeMode: "contain" }}
+          />
+          <View className="flex-1">
+            <View className="bg-primary self-start px-5 py-1 rounded-full">
+              <Text className="text-white text-[13px]">Fast Delivery</Text>
+            </View>
+            <Text className="text-slate-600 mt-1 text-[12px]">
+              Fast, reliable, and always on time because you deserve delivery
+              that moves at your speed.
+            </Text>
           </View>
-          <Text className="text-slate-600 mt-1 text-[12px]">
-            Fast, reliable, and always on time because you deserve delivery that
-            moves at your speed.
+        </View>
+      </View>
+
+      {/* DYNAMIC CUSTOMER REVIEWS */}
+      <View className="mt-5 bg-blue rounded-xl p-4">
+        <View className="flex-row justify-between items-center">
+          <Text className="font-semibold text-base">
+            <Text className="text-slate-500 pr-3">
+              {" "}
+              {product.rating ?? 0} ⭐
+            </Text>{" "}
+            Customer Feedback ({totalReviews})
           </Text>
+
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: "/feedback",
+                params: { productId: product.id },
+              })
+            }
+          >
+            <Text className="text-primary font-medium">See All</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View className="mt-3 gap-3">
+          {loadingReviews ? (
+            <ActivityIndicator size="small" color="#0052cc" className="py-4" />
+          ) : reviews.length > 0 ? (
+            reviews.map((review) => (
+              <View key={review.id} className="bg-white rounded-xl p-3">
+                <View className="flex-row justify-between items-start">
+                  <View className="flex-row items-center flex-1">
+                    <Image
+                      source={
+                        review.user_avatar
+                          ? { uri: review.user_avatar }
+                          : UserProfile
+                      }
+                      style={{ width: 45, height: 45, borderRadius: 100 }}
+                    />
+                    <View className="ml-3 flex-1">
+                      <Text className="font-semibold">{review.user_name}</Text>
+                      <Text className="text-slate-500">⭐ {review.rating}</Text>
+                    </View>
+                  </View>
+                </View>
+                {review.comment ? (
+                  <Text className="text-slate-600 mt-3">{review.comment}</Text>
+                ) : null}
+              </View>
+            ))
+          ) : (
+            <Text className="text-center text-slate-400 py-3">
+              No reviews available for this product yet.
+            </Text>
+          )}
         </View>
       </View>
     </View>
-
-    {/* CUSTOMER REVIEWS */}
-    <View className="mt-5 bg-blue rounded-xl p-4">
-      <View className="flex-row justify-between items-center">
-        <Text className="font-semibold text-base">
-          <Text className="text-slate-500 pr-3"> {product.rating ?? 0} ⭐</Text>{" "}
-          Customer Feedback
-        </Text>
-        <TouchableOpacity>
-          <Text className="text-primary font-medium">See All</Text>
-        </TouchableOpacity>
-      </View>
-      <View className="mt-3 gap-3">
-        {[
-          {
-            name: "Juan Dela Cruz",
-            rating: 5,
-            comment: "Very good product, fast delivery!",
-          },
-          {
-            name: "Maria Santos",
-            rating: 5,
-            comment: "Item is exactly what I expected.",
-          },
-        ].map((review, index) => (
-          <View key={index} className="bg-white rounded-xl p-3">
-            <View className="flex-row justify-between items-start">
-              <View className="flex-row items-center flex-1">
-                <Image
-                  source={UserProfile}
-                  style={{ width: 45, height: 45, borderRadius: 100 }}
-                />
-                <View className="ml-3 flex-1">
-                  <Text className="font-semibold">{review.name}</Text>
-                  <Text className="text-slate-500">⭐ {review.rating}</Text>
-                </View>
-              </View>
-            </View>
-            <Text className="text-slate-600 mt-3">{review.comment}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  </View>
-);
+  );
+};
 
 const MerchantPartnerSection = ({ product, router }: any) => (
   <View className="px-3 pb-4">
