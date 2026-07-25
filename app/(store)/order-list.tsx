@@ -341,16 +341,22 @@ export default function OrderList() {
               <View className="bg-white rounded-2xl mb-4 p-3 border border-slate-200 shadow-sm">
                 {/* SHOP HEADER */}
                 <View className="flex-row bg-slate-50 py-2 rounded-xl justify-between items-center mb-3 px-2">
-                  <View className="flex-row items-center">
+                  <View className="flex-row items-center flex-1 mr-2">
                     <Ionicons
                       name="storefront-outline"
                       size={16}
                       color="#4d4d4d"
                     />
-                    <Text className="ml-2 font-semibold text-md">
+
+                    <Text
+                      className="ml-2 font-semibold text-md flex-1"
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
                       {item.store_name || "Unknown Shop"}
                     </Text>
                   </View>
+
                   <Text className="text-primary text-sm font-medium">
                     {item.status_label}
                   </Text>
