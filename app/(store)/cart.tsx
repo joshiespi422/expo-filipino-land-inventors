@@ -5,8 +5,8 @@ import {
   updateCartItem,
 } from "@/services/cart";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -27,7 +27,7 @@ export default function CartPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  const fetchCartData = async () => {
+  const fetchCartData = useCallback(async () => {
     try {
       const data = await getCart();
       if (data.success && data.cart && data.cart.items) {
@@ -36,6 +36,8 @@ export default function CartPage() {
           selected: true,
         }));
         setCartItems(itemsWithSelection);
+      } else {
+        setCartItems([]);
       }
     } catch (error) {
       console.error("Error fetching cart data:", error);
@@ -43,11 +45,14 @@ export default function CartPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchCartData();
   }, []);
+
+  // Re-fetch data every time the Cart screen becomes active/focused
+  useFocusEffect(
+    useCallback(() => {
+      fetchCartData();
+    }, [fetchCartData]),
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
