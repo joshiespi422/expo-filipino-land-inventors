@@ -374,7 +374,7 @@ export default function Products() {
 
   const formatImageUrl = (url: string | null) => {
     if (!url) return "";
-    return url.startsWith("http") ? url : `http://192.168.42.254:8000${url}`;
+    return url.startsWith("http") ? url : `http://192.168.1.46:8000${url}`;
   };
 
   if (loading) {
@@ -885,12 +885,47 @@ const MerchantPartnerSection = ({ product, router }: any) => (
     <View className="border-2 border-blue rounded-xl p-4">
       <View className="flex-row justify-between items-center">
         <View className="flex-row items-center flex-1">
-          <Image
-            source={
-              product.store.logo ? { uri: product.store.logo } : UserProfile
-            }
-            style={{ width: 45, height: 45, borderRadius: 100 }}
-          />
+          <View
+            style={{
+              position: "relative",
+              width: 45,
+              height: 45,
+              alignItems: "center",
+            }}
+          >
+            <Image
+              source={
+                product.store.logo ? { uri: product.store.logo } : UserProfile
+              }
+              style={{ width: 45, height: 45, borderRadius: 100 }}
+            />
+
+            {product.store.is_official && (
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: -4,
+                  alignSelf: "center",
+                  backgroundColor: "#D70127",
+                  borderRadius: 3,
+                  paddingHorizontal: 6,
+                  paddingVertical: 1,
+                }}
+                className="w-full"
+              >
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "bold",
+                    color: "#FFFFFF",
+                    textAlign: "center",
+                  }}
+                >
+                  Mall
+                </Text>
+              </View>
+            )}
+          </View>
 
           <View className="flex-1 ml-2 mr-3" style={{ minWidth: 0 }}>
             <Text
@@ -899,15 +934,11 @@ const MerchantPartnerSection = ({ product, router }: any) => (
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {product.store.name} {product.store.is_official}
+              {product.store.name}
             </Text>
 
-            <Text
-              className="text-slate-500"
-              style={{ lineHeight: 16, marginTop: -2 }}
-              numberOfLines={1}
-            >
-              Merchant Partner
+            <Text className="text-xs mt-1 text-slate-500" numberOfLines={1}>
+              {product.store?.description}
             </Text>
           </View>
         </View>
@@ -926,7 +957,7 @@ const MerchantPartnerSection = ({ product, router }: any) => (
           </View>
         </TouchableOpacity>
       </View>
-      <View className="flex-row justify-between mt-4">
+      {/* <View className="flex-row justify-between mt-4">
         <View>
           <Text className="text-center font-semibold">
             {product.store?.rating ?? 0}
@@ -945,7 +976,7 @@ const MerchantPartnerSection = ({ product, router }: any) => (
             Chat Response
           </Text>
         </View>
-      </View>
+      </View> */}
     </View>
   </View>
 );
