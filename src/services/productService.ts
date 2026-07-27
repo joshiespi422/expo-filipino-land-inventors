@@ -65,6 +65,7 @@ export interface Store {
   slug: string;
   logo: string | null;
   banner: string | null;
+  description: string | null;
   rating: number | null;
   is_official: boolean;
 }
@@ -142,6 +143,8 @@ export interface ShopDetails {
   description: string | null;
   rating: number | null;
   is_official: boolean;
+  followers_count: number;
+  is_followed: boolean;
   created_at: string;
 }
 
@@ -173,6 +176,13 @@ export interface StoreProductResponse {
     products: ShopProduct[];
     pagination: ShopPagination;
   };
+}
+
+export interface ToggleFollowResponse {
+  success: boolean;
+  message: string;
+  is_followed: boolean;
+  followers_count: number;
 }
 
 /**
@@ -217,10 +227,6 @@ export const toggleCollection = async (
   slug: string,
 ): Promise<ToggleCollectionResponse> => {
   const response = await api.post(`/store/collections/${slug}/toggle`);
-  console.log(
-    `TOGGLE COLLECTION (${slug}):`,
-    JSON.stringify(response.data, null, 2),
-  );
   return response.data;
 };
 
@@ -245,13 +251,23 @@ export const selectDirectCheckout = async (
 };
 
 /**
- * GET STORE DETAILS BY SLUG (Fully Dynamic backend endpoint)
+ * GET STORE DETAILS BY SLUG
  */
 export const getStore = async (
   slug: string,
   page: number = 1,
 ): Promise<StoreProductResponse> => {
   const response = await api.get(`/store/${slug}`, { params: { page } });
+  return response.data;
+};
+
+/**
+ * TOGGLE FOLLOW/UNFOLLOW SHOP
+ */
+export const toggleFollowShop = async (
+  slug: string,
+): Promise<ToggleFollowResponse> => {
+  const response = await api.post(`/store/${slug}/toggle-follow`);
   return response.data;
 };
 

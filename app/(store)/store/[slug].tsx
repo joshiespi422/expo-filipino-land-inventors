@@ -1,11 +1,13 @@
+import { getCart } from "@/services/cart";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Image,
   ImageBackground,
+  RefreshControl,
   Text,
   TextInput,
   TouchableOpacity,
@@ -18,66 +20,200 @@ import {
   ShopDetails,
   ShopPagination,
   ShopProduct,
-} from "@/services/productService"; // Updated reference to pull from service file directly
+  toggleCollection,
+  toggleFollowShop,
+} from "@/services/productService";
 
 import UserProfile from "../../../assets/images/UserProfile.jpg";
 
 export default function Store() {
   const router = useRouter();
 
-  // Extract slug from the dynamic route configuration /store/[slug]
+  // Extract slug from dynamic route configuration /store/[slug]
   const { slug } = useLocalSearchParams<{ slug: string }>();
 
   // State management for API integrations
   const [storeDetails, setStoreDetails] = useState<ShopDetails | null>(null);
   const [storeProducts, setStoreProducts] = useState<ShopProduct[]>([]);
   const [pagination, setPagination] = useState<ShopPagination | null>(null);
+
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Dynamic Cart Badge State
+  const [cartCount, setCartCount] = useState<number>(0);
+
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
   const [search, setSearch] = useState("");
   const [follow, setFollow] = useState(false);
+  const [followersCount, setFollowersCount] = useState<number>(0);
+  const [followLoading, setFollowLoading] = useState(false);
 
   // Safely grab string value if parameter parses back as an array
   const storeSlug = Array.isArray(slug) ? slug[0] : slug || "";
 
+  // Sync Cart badge values dynamically matching the Collection calculations logic block
+  const fetchCartBadgeCount = async () => {
+    try {
+      const response = await getCart();
+      if (
+        response &&
+        response.success &&
+        response.cart &&
+        response.cart.items
+      ) {
+        const calculatedQuantities = response.cart.items.reduce(
+          (accumulator, item) => accumulator + (item.quantity ?? 0),
+          0,
+        );
+        const finalCount =
+          calculatedQuantities > 0
+            ? calculatedQuantities
+            : response.cart.items.length;
+        setCartCount(finalCount);
+      }
+    } catch (e) {
+      console.error("Failed syncing store view context badges:", e);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCartBadgeCount();
+    }, []),
+  );
+
   // Fetch store data dynamically from API backend
-  useEffect(() => {
+  const fetchStoreData = async (
+    targetPage: number = 1,
+    isInitialLoad = true,
+  ) => {
     if (!storeSlug || storeSlug === "undefined" || storeSlug === "[slug]") {
       setLoading(false);
       return;
     }
 
-    const fetchStoreData = async () => {
-      try {
-        setLoading(true);
-        console.log(`📡 Fetching store data for slug: "${storeSlug}"`);
+    if (isInitialLoad && targetPage === 1) {
+      setLoading(true);
+    } else if (targetPage > 1) {
+      setLoadingMore(true);
+    }
 
-        const response = await getStore(storeSlug, 1);
+    try {
+      const response = await getStore(storeSlug, targetPage);
 
-        if (response && response.success && response.data) {
+      if (response && response.success && response.data) {
+        if (targetPage === 1) {
           setStoreDetails(response.data.store);
           setStoreProducts(response.data.products || []);
-          setPagination(response.data.pagination);
+          setFollow(response.data.store.is_followed ?? false);
+          setFollowersCount(response.data.store.followers_count ?? 0);
         } else {
-          setStoreDetails(null);
+          setStoreProducts((prev) => [
+            ...prev,
+            ...(response.data.products || []),
+          ]);
         }
-      } catch (error: any) {
-        console.error("❌ Failed to fetch store data from backend:");
-        if (error.response) {
-          console.error(`Status: ${error.response.status}`);
-          console.error(`Config URL: ${error.response.config.url}`);
-          console.error("Data:", error.response.data);
-        } else {
-          console.error(error);
-        }
-        setStoreDetails(null);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    fetchStoreData();
+        const paginationData = response.data.pagination;
+        setPagination(paginationData);
+
+        if (paginationData) {
+          setPage(paginationData.current_page);
+          setHasMore(paginationData.has_more);
+        } else {
+          setHasMore(false);
+        }
+      } else {
+        if (targetPage === 1) {
+          setStoreDetails(null);
+          setStoreProducts([]);
+        }
+      }
+    } catch (error: any) {
+      console.error("❌ Failed to fetch store data from backend:", error);
+      if (targetPage === 1) {
+        setStoreDetails(null);
+        setStoreProducts([]);
+      }
+      setHasMore(false);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStoreData(1, true);
   }, [storeSlug]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setPage(1);
+    fetchStoreData(1, false);
+    fetchCartBadgeCount();
+  }, [storeSlug]);
+
+  const loadMoreProducts = () => {
+    if (!loadingMore && hasMore && !search) {
+      const nextPage = page + 1;
+      fetchStoreData(nextPage, false);
+    }
+  };
+
+  const handleToggleFollow = async () => {
+    if (!storeSlug || followLoading) return;
+
+    // Optimistic UI update
+    const previousFollow = follow;
+    const previousCount = followersCount;
+
+    setFollow(!previousFollow);
+    setFollowersCount(previousFollow ? previousCount - 1 : previousCount + 1);
+    setFollowLoading(true);
+
+    try {
+      const res = await toggleFollowShop(storeSlug);
+      if (res && res.success) {
+        setFollow(res.is_followed);
+        setFollowersCount(res.followers_count);
+      }
+    } catch (error) {
+      console.error("Failed to toggle follow status:", error);
+      // Revert back on error
+      setFollow(previousFollow);
+      setFollowersCount(previousCount);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleToggleFavorite = async (productId: number, slug: string) => {
+    if (!slug) return;
+
+    setStoreProducts((prev) =>
+      prev.map((p) =>
+        p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
+      ),
+    );
+
+    try {
+      await toggleCollection(slug);
+    } catch (error) {
+      console.error("Failed to sync collection endpoint changes:", error);
+      // Rollback UI
+      setStoreProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId ? { ...p, is_liked: !p.is_liked } : p,
+        ),
+      );
+    }
+  };
 
   if (loading) {
     return (
@@ -111,7 +247,6 @@ export default function Store() {
     );
   }
 
-  // Filter products locally if searching
   const filteredProducts = storeProducts.filter((product) =>
     product.name.toLowerCase().includes(search.toLowerCase()),
   );
@@ -121,15 +256,32 @@ export default function Store() {
       <FlatList
         data={filteredProducts}
         numColumns={2}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item, index) => `${item.id.toString()}-${index}`}
         columnWrapperStyle={{
           justifyContent: "space-between",
           paddingHorizontal: 0,
         }}
         contentContainerStyle={{
           padding: 8,
-          paddingBottom: 120,
+          paddingBottom: 50,
         }}
+        onEndReached={loadMoreProducts}
+        onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#034194"]}
+            tintColor="#034194"
+          />
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View className="py-4 items-center justify-center">
+              <ActivityIndicator size="small" color="#034194" />
+            </View>
+          ) : null
+        }
         ListHeaderComponent={
           <>
             {/* SEARCH BAR */}
@@ -144,15 +296,21 @@ export default function Store() {
                 />
               </View>
 
+              {/* CART BUTTON WITH BADGE */}
               <TouchableOpacity
                 onPress={() => router.push("/cart")}
-                className="ml-3 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200"
+                className="ml-3 bg-white h-14 w-14 rounded-2xl items-center justify-center border border-slate-200 relative"
               >
                 <Ionicons name="cart-outline" size={25} color="#034194" />
+                {cartCount > 0 && (
+                  <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-white">
+                    <Text className="text-white text-[10px] font-bold">
+                      {cartCount > 99 ? "99+" : cartCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
-
-            {/* SHOP HEADER */}
 
             {/* SHOP HEADER */}
             <ImageBackground
@@ -164,29 +322,63 @@ export default function Store() {
                 storeDetails.banner ? "bg-transparent" : "bg-white"
               }`}
             >
-              {/* BLACK OPACITY LAYER - Only shows if there is a banner image */}
               {storeDetails.banner && (
                 <View className="absolute inset-0 bg-black/50" />
               )}
 
-              {/* MAIN CONTENT CONTAINER */}
               <View className="p-5">
                 <View className="flex-row items-center">
-                  <Image
-                    source={
-                      storeDetails.logo
-                        ? { uri: storeDetails.logo }
-                        : UserProfile
-                    }
+                  {/* Store Logo Container with Mall Badge */}
+                  <View
                     style={{
+                      position: "relative",
                       width: 75,
                       height: 75,
-                      borderRadius: 37.5,
-                      backgroundColor: "#f1f5f9",
+                      alignItems: "center",
                     }}
-                    className="border border-slate-200"
-                  />
+                  >
+                    <Image
+                      source={
+                        storeDetails.logo
+                          ? { uri: storeDetails.logo }
+                          : UserProfile
+                      }
+                      style={{
+                        width: 75,
+                        height: 75,
+                        borderRadius: 37.5,
+                        backgroundColor: "#f1f5f9",
+                      }}
+                      className="border border-slate-200"
+                    />
 
+                    {storeDetails.is_official && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          bottom: -4,
+                          alignSelf: "center",
+                          backgroundColor: "#D70127",
+                          borderRadius: 4,
+                          paddingHorizontal: 16,
+                          paddingVertical: 2,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "bold",
+                            color: "#FFFFFF",
+                            textAlign: "center",
+                          }}
+                        >
+                          Mall
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Store Details */}
                   <View className="ml-4 flex-1">
                     <View className="flex-row items-center flex-wrap">
                       <Text
@@ -197,14 +389,6 @@ export default function Store() {
                       >
                         {storeDetails.name || "Fashion Store"}
                       </Text>
-
-                      {storeDetails.is_official && (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={18}
-                          color={storeDetails.banner ? "#38bdf8" : "#034194"}
-                        />
-                      )}
                     </View>
 
                     <Text
@@ -217,23 +401,14 @@ export default function Store() {
                     >
                       {storeDetails.description || "Welcome to our store!"}
                     </Text>
-
-                    {/* <Text
-                      className={`text-xs mt-1 font-medium ${
-                        storeDetails.banner
-                          ? "text-green-400"
-                          : "text-slate-400"
-                      }`}
-                    >
-                      Online now
-                    </Text> */}
                   </View>
                 </View>
 
                 {/* FOLLOW + CHAT BUTTON */}
                 <View className="flex-row mt-5 gap-3">
                   <TouchableOpacity
-                    onPress={() => setFollow(!follow)}
+                    disabled={followLoading}
+                    onPress={handleToggleFollow}
                     className={`flex-1 py-3 rounded-xl items-center border ${
                       storeDetails.banner
                         ? follow
@@ -260,7 +435,16 @@ export default function Store() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    onPress={() => router.push("/chat-seller")}
+                    onPress={() => {
+                      if (!storeDetails?.id) return;
+                      router.push({
+                        pathname: "/(store-chat)/",
+                        params: {
+                          storeId: String(storeDetails.id),
+                          storeName: storeDetails.name,
+                        },
+                      });
+                    }}
                     className="flex-1 py-3 bg-green-500 rounded-xl flex-row justify-center items-center"
                   >
                     <Ionicons name="chatbubble" size={18} color="white" />
@@ -326,7 +510,7 @@ export default function Store() {
                         storeDetails.banner ? "text-white" : "text-slate-900"
                       }`}
                     >
-                      Active
+                      {followersCount}
                     </Text>
                     <Text
                       className={`text-xs mt-1 ${
@@ -335,7 +519,7 @@ export default function Store() {
                           : "text-slate-500"
                       }`}
                     >
-                      Status
+                      Followers
                     </Text>
                   </View>
                 </View>
@@ -363,6 +547,7 @@ export default function Store() {
               rating: item.rating,
               stock: item.stock,
               category: "",
+              isLiked: item.is_liked,
             }}
             onPress={() =>
               router.push({
@@ -370,6 +555,7 @@ export default function Store() {
                 params: { slug: item.slug },
               })
             }
+            onFavoritePress={() => handleToggleFavorite(item.id, item.slug)}
           />
         )}
         ListEmptyComponent={
