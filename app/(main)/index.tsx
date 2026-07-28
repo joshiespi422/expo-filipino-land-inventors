@@ -14,6 +14,7 @@ import {
 import "../../global.css";
 
 // Hooks & Services
+import echo from "@/services/echo";
 import { profileService } from "@/services/profileService";
 import {
   getWalletBalance,
@@ -94,6 +95,30 @@ export default function DashboardPage() {
     await loadData(false);
     setRefreshing(false);
   }, []);
+
+  // 4. Realtime Wallet Balance Subscription
+  useEffect(() => {
+    if (!user?.id || !isMember || !echo) return;
+
+    const channelName = `wallet.${user.id}`;
+    const channel = echo.private(channelName);
+
+    channel.subscribed(() => {
+      console.log(`✅ Subscribed to wallet channel: ${channelName}`);
+    });
+
+    channel.listen(".wallet.balance.updated", (e: any) => {
+      console.log("💰 Wallet balance updated in realtime:", e);
+      setBalance(e.balance);
+    });
+
+    return () => {
+      if (echo) {
+        echo.leave(channelName);
+        console.log(`👋 Left wallet channel: ${channelName}`);
+      }
+    };
+  }, [user?.id, isMember]);
 
   const handleToggleBalance = async () => {
     const currentState = showBalance;
