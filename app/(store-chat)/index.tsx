@@ -772,7 +772,7 @@ function ChatSellerPageInner() {
 
           <View style={styles.compField}>
             <TextInput
-              placeholder={`Message ${storeName || "Seller"}...`}
+              placeholder={`Message...`}
               placeholderTextColor={COLORS.inkFaint}
               style={styles.compInput}
               value={draft}

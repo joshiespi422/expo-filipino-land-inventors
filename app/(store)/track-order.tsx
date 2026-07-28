@@ -164,7 +164,7 @@ export default function TrackOrder() {
             #{order.order_number || `ORD-${order.id}`}
           </Text>
         </View>
-        <View className="bg-blue-50 px-3 py-1.5 rounded-full  border border-primary">
+        <View className="bg-blue px-3 py-1.5 rounded-full  border border-primary">
           <Text className="text-xs font-semibold text-[#034194] capitalize">
             {order.status_label || order.status || "In Progress"}
           </Text>
@@ -294,7 +294,7 @@ export default function TrackOrder() {
                 uri:
                   item.product_image && item.product_image.startsWith("http")
                     ? item.product_image
-                    : `http://192.168.42.128:8000${item.product_image || ""}`,
+                    : `http://192.168.1.46:8000${item.product_image || ""}`,
               }}
               style={{
                 width: 50,

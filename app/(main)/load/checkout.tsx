@@ -280,7 +280,7 @@ export default function CheckoutPage() {
               onPress={() => setSelectedMethod(m)}
               className={`p-4 mb-3 rounded-xl border ${
                 active
-                  ? "border-primary bg-blue-50/60"
+                  ? "border-primary bg-blue/60"
                   : "border-gray-200 bg-white"
               }`}
             >

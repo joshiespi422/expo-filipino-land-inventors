@@ -1075,7 +1075,7 @@ const VariantPickerModal = ({
                           }
                           className={`flex-row items-center px-3 py-2 rounded-xl border mr-2 mb-2 ${
                             isCurrentlySelected
-                              ? "bg-blue-50 border-primary"
+                              ? "bg-blue border-primary"
                               : !isAvailable
                                 ? "border-slate-100 bg-slate-100 opacity-40"
                                 : "border-slate-200 bg-slate-50"

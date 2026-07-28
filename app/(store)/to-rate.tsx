@@ -195,7 +195,7 @@ export default function ToRateScreen() {
             <TouchableOpacity
               onPress={() => handleViewFeedback(item.id)}
               disabled={isFetchingThis}
-              className="border border-[#034194] bg-blue-50 px-4 py-2 rounded-lg flex-row items-center"
+              className="border border-[#034194] bg-blue px-4 py-2 rounded-lg flex-row items-center"
             >
               {isFetchingThis ? (
                 <ActivityIndicator size="small" color="#034194" />

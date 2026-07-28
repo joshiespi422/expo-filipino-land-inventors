@@ -389,8 +389,8 @@ export default function IndexPage() {
                                   };
                                 case "finished":
                                   return {
-                                    bg: "bg-blue-100",
-                                    text: "text-blue-700",
+                                    bg: "bg-blue",
+                                    text: "text-primary",
                                   };
                                 case "rejected":
                                   return {
@@ -484,7 +484,7 @@ export default function IndexPage() {
                                       : normalizedStatus === "pending"
                                         ? "bg-amber-500"
                                         : normalizedStatus === "finished"
-                                          ? "bg-blue-500"
+                                          ? "bg-primary"
                                           : normalizedStatus === "rejected"
                                             ? "bg-[#D70127]"
                                             : "bg-slate-500"

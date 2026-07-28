@@ -166,7 +166,7 @@ export default function ProfileScreen() {
           activeOpacity={0.8}
           className="relative"
         >
-          <View className="w-24 h-24 rounded-full bg-blue-50 items-center justify-center border-4 border-[#03419420] overflow-hidden">
+          <View className="w-24 h-24 rounded-full bg-blue items-center justify-center border-4 border-[#03419420] overflow-hidden">
             {uploading ? (
               <ActivityIndicator color="#034194" />
             ) : user?.avatar ? (
@@ -354,7 +354,7 @@ export default function ProfileScreen() {
       >
         <View className="flex-1 bg-black/40 justify-center items-center px-5">
           <View className="bg-white p-8 rounded-[40px] items-center w-full max-w-[380px] shadow-2xl">
-            <View className="w-16 h-16 bg-blue-50 rounded-full items-center justify-center mb-4">
+            <View className="w-16 h-16 bg-blue rounded-full items-center justify-center mb-4">
               <Ionicons name="image" size={32} color="#034194" />
             </View>
             <Text className="text-xl font-bold text-[#333] mb-2 text-center">
@@ -373,7 +373,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={pickAndUploadImage}
-                className="w-full flex-row items-center p-4 bg-blue-50 rounded-2xl border border-blue-100"
+                className="w-full flex-row items-center p-4 bg-blue rounded-2xl border border-[#DBEAFE]"
               >
                 <Ionicons
                   name="cloud-upload-outline"
@@ -423,7 +423,7 @@ function ProfileMenuItem({ icon, title, onPress }: any) {
       className="flex-row items-center justify-between p-4 border-b border-gray-50"
     >
       <View className="flex-row items-center">
-        <View className="bg-blue-50 p-2 rounded-lg">
+        <View className="bg-blue p-2 rounded-lg">
           <Ionicons name={icon} size={22} color="#034194" />
         </View>
         <Text className="text-[#333] font-semibold text-base ml-3">

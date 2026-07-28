@@ -168,7 +168,7 @@ export default function ChangePasswordScreen() {
             <TouchableOpacity
               onPress={handleChangePassword}
               disabled={loading}
-              className="bg-[#034194] py-5 rounded-3xl mt-6 shadow-lg shadow-blue-900/20 flex-row justify-center"
+              className="bg-[#034194] py-5 rounded-3xl mt-6 shadow-lg shadow-primary/20 flex-row justify-center"
               style={{ opacity: loading ? 0.7 : 1 }}
             >
               {loading ? (

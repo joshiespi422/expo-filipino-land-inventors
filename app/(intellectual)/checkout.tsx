@@ -150,7 +150,7 @@ export default function IntellectualCheckoutPage() {
             key={m.id}
             onPress={() => !navigating && setSelectedMethod(m)}
             disabled={navigating}
-            className={`p-4 mb-3 rounded-xl border ${selectedMethod?.id === m.id ? "border-primary bg-blue-50" : "border-gray-200 bg-white"}`}
+            className={`p-4 mb-3 rounded-xl border ${selectedMethod?.id === m.id ? "border-primary bg-blue" : "border-gray-200 bg-white"}`}
           >
             <Text className="font-semibold text-gray-900">{m.name}</Text>
             <Text className="text-xs text-gray-500 mt-1 uppercase">

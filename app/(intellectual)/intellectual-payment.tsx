@@ -257,7 +257,7 @@ export default function IntellectualPaymentPage() {
             disabled={hasSchedules || submitting || isProcessing.current}
             className={`p-4 mb-3 border rounded-2xl flex-row justify-between items-center ${
               selectedOption?.term_months === opt.term_months
-                ? "border-primary bg-blue-50"
+                ? "border-primary bg-blue"
                 : "border-gray-200"
             }`}
           >

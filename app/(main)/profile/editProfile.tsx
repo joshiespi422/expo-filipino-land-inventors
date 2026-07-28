@@ -242,7 +242,7 @@ export default function EditProfileScreen() {
           </Text>
           <TouchableOpacity
             onPress={() => setIsEditing(!isEditing)}
-            className={`px-4 py-2 rounded-full ${isEditing ? "bg-[#FEF2F2]" : "bg-blue-50"}`}
+            className={`px-4 py-2 rounded-full ${isEditing ? "bg-[#FEF2F2]" : "bg-blue"}`}
           >
             <Text
               className={`font-bold ${isEditing ? "text-[#D70127]" : "text-[#034194]"}`}

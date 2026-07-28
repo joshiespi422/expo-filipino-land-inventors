@@ -52,6 +52,7 @@ export default function MainLayout() {
   const isNewsDetails = pathname === "/news/details";
   const isNewsSearch = pathname === "/news/search";
   const isLoadWallet = pathname === "/load";
+  const isInfo = pathname === "/info";
 
   const isHistory = pathname === "/history";
   const isCameraQr = pathname === "/camera";
@@ -162,9 +163,13 @@ export default function MainLayout() {
                 className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full shadow-brand"
                 style={{ elevation: 8 }}
               >
-                <TouchableOpacity onPress={handleComingSoon}>
+                <TouchableOpacity onPress={() => router.push("/info")}>
                   <View className="bg-white rounded-full border border-primary/20 p-2 shadow-brand">
-                    <Ionicons name="call" size={35} color="#034194" />
+                    <Ionicons
+                      name="information-circle"
+                      size={35}
+                      color="#034194"
+                    />
                   </View>
                 </TouchableOpacity>
               </View>
@@ -184,14 +189,16 @@ export default function MainLayout() {
                 className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full shadow-brand"
                 style={{ elevation: 8 }}
               >
-                <TouchableOpacity onPress={handleComingSoon}>
+                <TouchableOpacity
+                  onPress={() => router.push("/(chat-support)/")}
+                >
                   <View className="bg-white rounded-full border border-primary/20 p-2 shadow-brand">
                     <Entypo name="message" size={35} color="#034194" />
                   </View>
                 </TouchableOpacity>
               </View>
             </View>
-          ) : isCameraQr ? null : (
+          ) : isCameraQr || isInfo ? null : (
             <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
               <View className="flex-row justify-between items-center w-full px-6">
                 <TouchableOpacity

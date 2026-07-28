@@ -124,13 +124,13 @@ export default function NotificationsPage() {
         renderItem={({ item }) => (
           <TouchableOpacity
             className={`flex-row items-start p-4 border-b border-slate-100 ${
-              item.isRead ? "bg-white" : "bg-blue-50/60"
+              item.isRead ? "bg-white" : "bg-blue/60"
             }`}
           >
             {/* Visual Icon Indicators */}
             <View
               className={`p-2.5 rounded-full mr-3 ${
-                item.type === "promo" ? "bg-amber-100" : "bg-blue-100"
+                item.type === "promo" ? "bg-amber-100" : "bg-[#DBEAFE]"
               }`}
             >
               <Ionicons

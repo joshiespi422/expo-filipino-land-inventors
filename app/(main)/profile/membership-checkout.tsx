@@ -312,9 +312,7 @@ export default function MembershipCheckoutPage() {
               disabled={loading || navigating}
               onPress={() => setSelectedMethod(m)}
               className={`p-4 mb-3 rounded-xl border ${
-                active
-                  ? "border-primary bg-blue-50"
-                  : "border-gray-200 bg-white"
+                active ? "border-primary bg-blue" : "border-gray-200 bg-white"
               }`}
             >
               <Text className="font-semibold">{m.name}</Text>
