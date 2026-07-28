@@ -104,3 +104,43 @@ export const markConversationAsRead = async (
   const res = await api.post(`/conversations/${conversationId}/read`);
   return res.data;
 };
+
+// Chat Support
+export interface SupportChatResponse {
+  exists: boolean;
+  conversation?: {
+    id: number;
+    status: string;
+    participants: Participant[];
+  };
+  messages?: Message[];
+  pagination?: {
+    current_page: number;
+    last_page: number;
+    has_more: boolean;
+  };
+}
+
+/**
+ * Check whether the user already has an open support conversation.
+ */
+export const getSupportConversation =
+  async (): Promise<SupportChatResponse> => {
+    const res = await api.get(`/support-chat`);
+    const data = res.data as SupportChatResponse;
+
+    if (data.messages && Array.isArray(data.messages)) {
+      data.messages.reverse();
+    }
+
+    return data;
+  };
+
+/**
+ * Start a brand new support conversation.
+ */
+export const startSupportConversation =
+  async (): Promise<SupportChatResponse> => {
+    const res = await api.post(`/support-chat`);
+    return res.data;
+  };
