@@ -3,9 +3,10 @@ import { Entypo, Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Redirect, Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -16,6 +17,12 @@ import {
 } from "react-native";
 
 import * as NavigationBar from "expo-navigation-bar";
+
+import {
+  getSupportConversation,
+  markConversationAsRead,
+} from "@/services/chatService";
+import echo from "@/services/echo";
 
 import History from "../../assets/images/icon/History.png";
 import Home from "../../assets/images/icon/Home.png";
@@ -32,9 +39,19 @@ export default function MainLayout() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // ✅ NEW: modal state
+  // Modal State
   const [comingSoonVisible, setComingSoonVisible] = useState(false);
 
+  // ===== SUPPORT CHAT: unread badge + realtime toast =====
+  const [supportConversationId, setSupportConversationId] = useState<
+    number | null
+  >(null);
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
+  const [supportNotification, setSupportNotification] = useState<any>(null);
+  const supportSlideAnim = useRef(new Animated.Value(-100)).current;
+  const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Route matches
   const isMainIndex =
     pathname === "/" || pathname === "/(main)" || pathname === "/(main)/";
 
@@ -60,8 +77,12 @@ export default function MainLayout() {
   const isWelcomePage =
     pathname === "/welcomePage" || pathname === "/(main)/welcomePage";
 
+  // Covers both "/chat-support" and "/(chat-support)/" style paths
+  const isChatSupportScreen = pathname.includes("chat-support");
+
   const showFooter = isMainIndex || isProfileIndex;
 
+  // ===== Hide Android Bottom Navigation Bar =====
   useEffect(() => {
     const hideNavBar = async () => {
       if (Platform.OS === "android") {
@@ -80,6 +101,118 @@ export default function MainLayout() {
     setComingSoonVisible(true);
   };
 
+  // ===== Load initial support conversation state =====
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let isMounted = true;
+    const loadSupportChatState = async () => {
+      try {
+        const res = await getSupportConversation();
+        if (isMounted && res.exists && res.conversation) {
+          setSupportConversationId(res.conversation.id);
+          setSupportUnreadCount(res.unread_count || 0);
+        }
+      } catch (err) {
+        console.error("Failed to load support chat state:", err);
+      }
+    };
+
+    loadSupportChatState();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  // 1. Sync support chat state when screen route changes (only when NOT in active support screen)
+  useEffect(() => {
+    if (!user?.id || isChatSupportScreen) return;
+
+    let isMounted = true;
+    getSupportConversation()
+      .then((res) => {
+        if (isMounted && res.exists) {
+          setSupportConversationId(res.conversation?.id || null);
+          setSupportUnreadCount(res.unread_count || 0);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pathname, user?.id, isChatSupportScreen]);
+
+  // 2. Realtime Broadcast Subscription
+  useEffect(() => {
+    if (!user?.id || !echo) return;
+
+    const channelName = `App.Models.User.${user.id}`;
+    const channel = echo.private(channelName);
+
+    channel.notification((notificationData: any) => {
+      if (notificationData.conversation_type !== "support") return;
+
+      // Increment count only if user is not on the support screen
+      if (!isChatSupportScreen) {
+        setSupportUnreadCount((prev) => prev + 1);
+        setSupportNotification(notificationData);
+
+        Animated.spring(supportSlideAnim, {
+          toValue: 50,
+          useNativeDriver: true,
+        }).start();
+
+        if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+        dismissTimerRef.current = setTimeout(() => {
+          closeSupportNotification();
+        }, 5000);
+      }
+    });
+
+    return () => {
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+      if (echo) echo.leave(channelName);
+    };
+  }, [user?.id, isChatSupportScreen]);
+
+  const closeSupportNotification = () => {
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+    }
+    Animated.timing(supportSlideAnim, {
+      toValue: -100,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => setSupportNotification(null));
+  };
+
+  const handleSupportNotificationPress = async () => {
+    const convoId =
+      supportNotification?.conversation_id || supportConversationId;
+    closeSupportNotification();
+
+    try {
+      await markConversationAsRead(convoId || undefined);
+    } catch (err) {
+      console.error("Failed to mark support conversation as read:", err);
+    }
+
+    setSupportUnreadCount(0);
+    router.push("/(chat-support)/");
+  };
+
+  const handleHeaderSupportPress = async () => {
+    try {
+      await markConversationAsRead(supportConversationId || undefined);
+    } catch (err) {
+      console.error("Failed to mark support conversation as read:", err);
+    }
+
+    setSupportUnreadCount(0);
+    router.push("/(chat-support)/");
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
@@ -96,13 +229,8 @@ export default function MainLayout() {
     <QueryClientProvider client={queryClient}>
       <StatusBar hidden={true} />
 
-      {/* ✅ MODAL */}
+      {/* ===== COMING SOON MODAL ===== */}
       <Modal
-        // transparent
-        // visible={comingSoonVisible}
-        // animationType="fade"
-        // onRequestClose={() => setComingSoonVisible(false)}
-
         animationType="fade"
         transparent={true}
         visible={comingSoonVisible}
@@ -126,8 +254,6 @@ export default function MainLayout() {
               alignItems: "center",
             }}
           >
-            {/* <Ionicons name="time-outline" size={50} color="#034194" /> */}
-
             <Text className="text-xl font-bold text-center mb-3 text-primary">
               Coming Soon
             </Text>
@@ -151,14 +277,60 @@ export default function MainLayout() {
         </View>
       </Modal>
 
+      {/* ===== SUPPORT CHAT NOTIFICATION TOAST ===== */}
+      {supportNotification && (
+        <Animated.View
+          style={{
+            transform: [{ translateY: supportSlideAnim }],
+            position: "absolute",
+            top: 0,
+            left: 16,
+            right: 16,
+            zIndex: 999,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={handleSupportNotificationPress}
+            className="bg-white rounded-2xl p-4 shadow-lg flex-row items-center border border-slate-100"
+            style={{
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 12,
+              elevation: 5,
+            }}
+          >
+            <View className="bg-[#0084FF]/10 w-10 h-10 rounded-full items-center justify-center mr-3">
+              <Ionicons name="chatbubble-ellipses" size={20} color="#034194" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-slate-900 font-bold text-sm">
+                Support Reply
+              </Text>
+              <Text numberOfLines={1} className="text-slate-500 text-xs mt-0.5">
+                {supportNotification.body || "You received a new message."}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={closeSupportNotification}
+              className="p-2"
+            >
+              <Ionicons name="close" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
       <View className="flex-1 bg-white">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           className="flex-1"
         >
-          {/* --- GLOBAL HEADER --- */}
+          {/* ===== GLOBAL HEADER ===== */}
           {isWelcomePage ? null : isMainIndex ? (
             <View className="bg-primary mb-12 z-10 w-full h-28 items-center justify-between pt-8">
+              {/* Information Icon */}
               <View
                 className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full shadow-brand"
                 style={{ elevation: 8 }}
@@ -174,6 +346,7 @@ export default function MainLayout() {
                 </TouchableOpacity>
               </View>
 
+              {/* Logo */}
               <View
                 className="absolute bottom-[-43px] bg-white rounded-full shadow-brand"
                 style={{ elevation: 6 }}
@@ -185,16 +358,28 @@ export default function MainLayout() {
                 />
               </View>
 
+              {/* Chat Support Action Icon */}
               <View
                 className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full shadow-brand"
                 style={{ elevation: 8 }}
               >
                 <TouchableOpacity
-                  onPress={() => router.push("/(chat-support)/")}
+                  onPress={handleHeaderSupportPress}
+                  className="relative"
+                  activeOpacity={0.7}
                 >
                   <View className="bg-white rounded-full border border-primary/20 p-2 shadow-brand">
                     <Entypo name="message" size={35} color="#034194" />
                   </View>
+
+                  {/* Unread badge for support chat */}
+                  {supportUnreadCount > 0 && (
+                    <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border-2 border-white">
+                      <Text className="text-white text-[10px] font-extrabold text-center">
+                        {supportUnreadCount > 9 ? "9+" : supportUnreadCount}
+                      </Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -238,13 +423,12 @@ export default function MainLayout() {
                                             : ""}
                 </Text>
 
-                {/* <View style={{ width: 28 }} /> */}
-                <View className="w-[31px]"></View>
+                <View className="w-[31px]" />
               </View>
             </View>
           )}
 
-          {/* --- MAIN CONTENT --- */}
+          {/* ===== MAIN CONTENT STACK ===== */}
           <View className="flex-1">
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
@@ -269,7 +453,7 @@ export default function MainLayout() {
             </Stack>
           </View>
 
-          {/* --- FOOTER --- */}
+          {/* ===== FOOTER ===== */}
           {showFooter && (
             <View
               style={{
@@ -291,7 +475,7 @@ export default function MainLayout() {
                   <Text className="text-white text-[10px] mt-1">Home</Text>
                 </TouchableOpacity>
 
-                {/* STATUS - COMING SOON */}
+                {/* Status - Coming Soon */}
                 <TouchableOpacity
                   className="items-center pe-2 flex-1"
                   onPress={handleComingSoon}
@@ -300,7 +484,7 @@ export default function MainLayout() {
                   <Text className="text-white text-[10px] mt-1">Status</Text>
                 </TouchableOpacity>
 
-                {/* CAMERA */}
+                {/* Camera */}
                 <View
                   className="flex-1 items-center justify-center"
                   style={{ height: 50 }}
@@ -325,7 +509,7 @@ export default function MainLayout() {
                   </TouchableOpacity>
                 </View>
 
-                {/* HISTORY - COMING SOON */}
+                {/* History */}
                 <TouchableOpacity
                   className="items-center ps-2 flex-1"
                   onPress={() => router.push("/history")}
@@ -334,7 +518,7 @@ export default function MainLayout() {
                   <Text className="text-white text-[10px] mt-1">History</Text>
                 </TouchableOpacity>
 
-                {/* PROFILE */}
+                {/* Profile */}
                 <TouchableOpacity
                   className="items-center flex-1"
                   onPress={() => router.push("/profile")}

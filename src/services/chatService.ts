@@ -98,10 +98,24 @@ export const sendMessage = async (
 /**
  * Mark all messages inside the conversation as read
  */
+// export const markConversationAsRead = async (
+//   conversationId: string | number,
+// ): Promise<{ status: string }> => {
+//   const res = await api.post(`/conversations/${conversationId}/read`);
+//   return res.data;
+// };
+
+/**
+ * Mark active support conversation as read
+ */
 export const markConversationAsRead = async (
-  conversationId: string | number,
+  conversationId?: string | number,
 ): Promise<{ status: string }> => {
-  const res = await api.post(`/conversations/${conversationId}/read`);
+  const endpoint = conversationId
+    ? `/conversations/${conversationId}/read`
+    : `/support-chat/read`;
+
+  const res = await api.post(endpoint);
   return res.data;
 };
 
@@ -119,6 +133,7 @@ export interface SupportChatResponse {
     last_page: number;
     has_more: boolean;
   };
+  unread_count?: number;
 }
 
 /**
