@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import api from "@/services/api";
+
 import echo from "@/services/echo";
 import "../../global.css";
 
@@ -36,6 +37,7 @@ export default function RootLayout() {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [notification, setNotification] = useState<any>(null);
   const slideAnim = useRef(new Animated.Value(-100)).current;
+  const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // 2. Hide Navigation Bar (Android)
   useEffect(() => {
@@ -111,6 +113,14 @@ export default function RootLayout() {
     channel.notification((notificationData: any) => {
       console.log("🔔 New Notification Received:", notificationData);
 
+      // Ignore anything that isn't an intellectual-property conversation message
+      if (notificationData.conversation_type !== "intellectual") {
+        console.log(
+          "🔕 Ignoring notification, not an intellectual-property message.",
+        );
+        return;
+      }
+
       // Increment global unread state value dynamically
       setUnreadCount((prev) => prev + 1);
 
@@ -128,13 +138,15 @@ export default function RootLayout() {
         useNativeDriver: true,
       }).start();
 
-      // Auto-hide after 5 seconds
-      setTimeout(() => {
+      // Clear existing auto-dismiss timer and set a new one
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = setTimeout(() => {
         closeNotification();
       }, 5000);
     });
 
     return () => {
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
       if (echo) {
         echo.leave(channelName);
         console.log(`👋 Left notification channel: ${channelName}`);
@@ -143,6 +155,9 @@ export default function RootLayout() {
   }, [userId]);
 
   const closeNotification = () => {
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+    }
     Animated.timing(slideAnim, {
       toValue: -100,
       duration: 300,
@@ -150,12 +165,23 @@ export default function RootLayout() {
     }).start(() => setNotification(null));
   };
 
-  const handleNotificationPress = () => {
+  const handleNotificationPress = async () => {
     if (!notification?.conversation_id) return;
 
     const convoId = notification.conversation_id;
     closeNotification();
 
+    // 1. Mark conversation as read on the backend
+    try {
+      await api.post(`/conversations/${convoId}/read`);
+    } catch (err) {
+      console.error("❌ Failed to mark conversation as read:", err);
+    }
+
+    // 2. Refetch or decrease unread count locally
+    fetchUnreadCount();
+
+    // 3. Route to the chat thread
     router.push({
       pathname: "/(intellectual-chat)/",
       params: {
