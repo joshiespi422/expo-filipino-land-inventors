@@ -72,12 +72,18 @@ export default function TrackOrder() {
   const shippedAt = order.shipped_at || tracking.shipped_at;
   const deliveredAt = order.delivered_at || tracking.delivered_at;
   const cancelledAt = order.cancelled_at || tracking.cancelled_at;
+  const returnRequestedAt =
+    order.return_requested_at || tracking.return_requested_at;
+  const returnApprovedAt =
+    order.return_approved_at || tracking.return_approved_at;
   const returnedAt = order.returned_at || tracking.returned_at;
 
   const isCancelled = order.status === "cancelled" || !!cancelledAt;
-  const isReturned = order.status === "returned" || !!returnedAt;
 
-  // Build the dynamic order flow steps
+  // Detect if return flow should be activated
+  const hasReturnInitiated = !!returnRequestedAt;
+
+  // Standard delivery steps
   const steps: TimelineStep[] = [
     {
       key: "created",
@@ -137,9 +143,43 @@ export default function TrackOrder() {
         : "Pending delivery.",
       timestamp: deliveredAt,
       isCompleted: !!deliveredAt,
-      isCurrent: !!deliveredAt,
+      isCurrent: !!deliveredAt && !returnRequestedAt,
     },
   ];
+
+  // Show the return timeline only after a return has been requested.
+  if (returnRequestedAt) {
+    steps.push(
+      {
+        key: "return_requested",
+        title: "Return Requested",
+        description: "Return request submitted.",
+        timestamp: returnRequestedAt,
+        isCompleted: true,
+        isCurrent: !returnApprovedAt,
+      },
+      {
+        key: "return_approved",
+        title: "Return Approved",
+        description: returnApprovedAt
+          ? "Seller approved the return request."
+          : "Awaiting seller approval.",
+        timestamp: returnApprovedAt,
+        isCompleted: !!returnApprovedAt,
+        isCurrent: !!returnApprovedAt && !returnedAt,
+      },
+      {
+        key: "returned",
+        title: "Order Returned",
+        description: returnedAt
+          ? "Item has been successfully returned."
+          : "Awaiting item return.",
+        timestamp: returnedAt,
+        isCompleted: !!returnedAt,
+        isCurrent: !!returnedAt,
+      },
+    );
+  }
 
   const formatDate = (isoString: string | null) => {
     if (!isoString) return "--";
@@ -164,7 +204,7 @@ export default function TrackOrder() {
             #{order.order_number || `ORD-${order.id}`}
           </Text>
         </View>
-        <View className="bg-blue px-3 py-1.5 rounded-full  border border-primary">
+        <View className="bg-blue px-3 py-1.5 rounded-full border border-primary">
           <Text className="text-xs font-semibold text-[#034194] capitalize">
             {order.status_label || order.status || "In Progress"}
           </Text>
@@ -184,14 +224,10 @@ export default function TrackOrder() {
             </Text>
           </View>
         </View>
-      ) : isReturned ? (
+      ) : order.status === "returned" || !!returnedAt ? (
         /* RETURNED BANNER */
         <View className="mx-4 my-2 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex-row items-center">
-          <Ionicons
-            className="return-up-back-circle"
-            size={28}
-            color="#f59e0b"
-          />
+          <Ionicons name="return-up-back-circle" size={28} color="#f59e0b" />
           <View className="ml-3 flex-1">
             <Text className="text-amber-800 font-bold text-sm">
               Order Returned
@@ -201,8 +237,10 @@ export default function TrackOrder() {
             </Text>
           </View>
         </View>
-      ) : (
-        /* TIMELINE CARD */
+      ) : null}
+
+      {/* TIMELINE CARD */}
+      {!isCancelled && (
         <View className="m-4 p-5 bg-white mb-2 rounded-2xl border border-slate-200 shadow-sm">
           <Text className="font-bold text-slate-800 text-base mb-4">
             Delivery Status
@@ -267,7 +305,7 @@ export default function TrackOrder() {
       )}
 
       {/* RECIPIENT / SHIPPING INFO */}
-      <View className=" mb-2 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
+      <View className="mb-2 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
         <View className="flex-row items-center mb-2">
           <Ionicons name="location-sharp" size={18} color="#034194" />
           <Text className="ml-2 font-bold text-slate-800 text-sm">

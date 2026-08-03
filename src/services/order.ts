@@ -175,6 +175,22 @@ export const fetchOrderBadgesAPI = async (): Promise<OrderBadges> => {
   return response.data.data.badges;
 };
 
+// export const updateOrderStatusAPI = async (
+//   orderId: number,
+//   status:
+//     | "cancelled"
+//     | "delivered"
+//     | "completed"
+//     | "return_requested"
+//     | "return_approved"
+//     | "returned",
+// ) => {
+//   const response = await api.post(`/store/orders/${orderId}/status`, {
+//     status,
+//   });
+//   return response.data;
+// };
+
 export const updateOrderStatusAPI = async (
   orderId: number,
   status:
@@ -184,9 +200,11 @@ export const updateOrderStatusAPI = async (
     | "return_requested"
     | "return_approved"
     | "returned",
+  extra?: { cancellation_reason?: string },
 ) => {
   const response = await api.post(`/store/orders/${orderId}/status`, {
     status,
+    ...extra,
   });
   return response.data;
 };

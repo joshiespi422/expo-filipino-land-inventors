@@ -13,9 +13,13 @@ import {
   Alert,
   FlatList,
   Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -48,6 +52,13 @@ export default function OrderList() {
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+
+  // --- CANCEL ORDER MODAL STATE ---
+  const [cancelModalOrderId, setCancelModalOrderId] = useState<number | null>(
+    null,
+  );
+  const [cancellationReason, setCancellationReason] = useState<string>("");
+  const [cancelReasonError, setCancelReasonError] = useState<string>("");
 
   const getOrders = useCallback(
     async (
@@ -120,44 +131,56 @@ export default function OrderList() {
     setSelectedSlug(slug);
   };
 
+  // --- CANCEL ORDER: opens the reason modal instead of a plain Alert ---
   const handleCancelOrder = (orderId: number) => {
-    Alert.alert(
-      "Cancel Order",
-      "Are you sure you want to cancel this order? This action cannot be undone.",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes, Cancel",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setActionLoadingId(orderId);
-              const response = await updateOrderStatusAPI(orderId, "cancelled");
-              if (response.success) {
-                Alert.alert(
-                  "Success",
-                  response.message || "Order successfully cancelled.",
-                );
-                handleTabChange("cancelled");
-              } else {
-                Alert.alert(
-                  "Error",
-                  response.message || "Failed to cancel order.",
-                );
-              }
-            } catch (error: any) {
-              Alert.alert(
-                "Error",
-                error?.response?.data?.message ||
-                  "Something went wrong while cancelling the order.",
-              );
-            } finally {
-              setActionLoadingId(null);
-            }
-          },
-        },
-      ],
-    );
+    setCancellationReason("");
+    setCancelReasonError("");
+    setCancelModalOrderId(orderId);
+  };
+
+  const closeCancelModal = () => {
+    if (actionLoadingId !== null) return; // don't allow closing mid-submit
+    setCancelModalOrderId(null);
+    setCancellationReason("");
+    setCancelReasonError("");
+  };
+
+  const submitCancelOrder = async () => {
+    if (!cancelModalOrderId) return;
+
+    const trimmedReason = cancellationReason.trim();
+    if (!trimmedReason) {
+      setCancelReasonError("Please tell us why you're cancelling.");
+      return;
+    }
+
+    const orderId = cancelModalOrderId;
+
+    try {
+      setActionLoadingId(orderId);
+      const response = await updateOrderStatusAPI(orderId, "cancelled", {
+        cancellation_reason: trimmedReason,
+      });
+      if (response.success) {
+        setCancelModalOrderId(null);
+        setCancellationReason("");
+        setCancelReasonError("");
+        Alert.alert(
+          "Success",
+          response.message || "Order successfully cancelled.",
+        );
+        handleTabChange("cancelled");
+      } else {
+        setCancelReasonError(response.message || "Failed to cancel order.");
+      }
+    } catch (error: any) {
+      setCancelReasonError(
+        error?.response?.data?.message ||
+          "Something went wrong while cancelling the order.",
+      );
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   const handleOrderReceived = (orderId: number) => {
@@ -559,6 +582,9 @@ export default function OrderList() {
                   {/* TRACK ORDER BUTTON */}
                   {(item.status === "to-pay" ||
                     item.status === "to-ship" ||
+                    item.status === "return_requested" ||
+                    item.status === "return_approved" ||
+                    item.status === "returned" ||
                     item.status === "shipped") && (
                     <TouchableOpacity
                       onPress={() =>
@@ -598,6 +624,80 @@ export default function OrderList() {
           }
         />
       )}
+
+      {/* CANCEL ORDER REASON MODAL */}
+      <Modal
+        visible={cancelModalOrderId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeCancelModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="flex-1 justify-center items-center bg-black/40 px-6"
+        >
+          <View className="bg-white w-full rounded-2xl p-5">
+            <Text className="text-base font-bold text-slate-900 mb-1">
+              Cancel Order
+            </Text>
+            <Text className="text-sm text-slate-500 mb-3">
+              Please tell us why you are cancelling this order. This action
+              cannot be undone.
+            </Text>
+
+            <TextInput
+              value={cancellationReason}
+              onChangeText={(text) => {
+                setCancellationReason(text);
+                if (cancelReasonError) setCancelReasonError("");
+              }}
+              placeholder="e.g. Changed my mind, found a better price..."
+              placeholderTextColor="#94a3b8"
+              multiline
+              numberOfLines={3}
+              maxLength={500}
+              editable={actionLoadingId === null}
+              className="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 min-h-[80px]"
+              textAlignVertical="top"
+            />
+
+            {cancelReasonError ? (
+              <Text className="text-[#D70127] text-xs mt-1">
+                {cancelReasonError}
+              </Text>
+            ) : null}
+
+            <View className="flex-row justify-end mt-4 gap-2">
+              <TouchableOpacity
+                onPress={closeCancelModal}
+                className="px-4 py-2 rounded-lg border border-slate-300"
+                disabled={actionLoadingId !== null}
+              >
+                <Text className="text-slate-700 text-sm font-semibold">
+                  Nevermind
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={submitCancelOrder}
+                disabled={actionLoadingId !== null}
+                className="px-4 py-2 rounded-lg bg-[#D70127] flex-row items-center"
+              >
+                {actionLoadingId === cancelModalOrderId ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#fff"
+                    style={{ marginRight: 6 }}
+                  />
+                ) : null}
+                <Text className="text-white text-sm font-semibold">
+                  Yes, Cancel Order
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
