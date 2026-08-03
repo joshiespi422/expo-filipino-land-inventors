@@ -132,6 +132,8 @@ export default function DashboardPage() {
 
   const handleMenuPress = (item: any) => {
     if (item.label === "News & Event") {
+      // News doesn't need from parameter, it's a simple route
+      console.log("📍 [Dashboard] Navigating to News & Event");
       router.push(item.href as any);
       return;
     }
@@ -141,7 +143,16 @@ export default function DashboardPage() {
       setPendingFeature(item.label);
       setShowAlert(true);
     } else {
-      router.push(item.href as any);
+      // ✅ CRITICAL: Pass from:"home" so back button knows where to return
+      // This ensures that when users click back from the feature page,
+      // they return to home instead of wherever they were before
+      console.log(
+        `📍 [Dashboard] Navigating to ${item.label} from home/dashboard`,
+      );
+      router.push({
+        pathname: item.href as any,
+        params: { from: "home" },
+      });
     }
   };
 

@@ -70,6 +70,7 @@ export default function MainLayout() {
   const isNewsSearch = pathname === "/news/search";
   const isLoadWallet = pathname === "/load";
   const isInfo = pathname === "/info";
+  const isNotification = pathname === "/notification";
 
   const isHistory = pathname === "/history";
   const isCameraQr = pathname === "/camera";
@@ -80,7 +81,8 @@ export default function MainLayout() {
   // Covers both "/chat-support" and "/(chat-support)/" style paths
   const isChatSupportScreen = pathname.includes("chat-support");
 
-  const showFooter = isMainIndex || isProfileIndex;
+  const showFooter =
+    isMainIndex || isProfileIndex || isHistory || isNotification;
 
   // ===== Hide Android Bottom Navigation Bar =====
   useEffect(() => {
@@ -215,7 +217,14 @@ export default function MainLayout() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 justify-center items-center bg-white">
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#ffffff",
+        }}
+      >
         <ActivityIndicator size="large" color="#034194" />
       </View>
     );
@@ -292,7 +301,7 @@ export default function MainLayout() {
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={handleSupportNotificationPress}
-            className="bg-white rounded-2xl p-4 shadow-lg flex-row items-center border border-slate-100"
+            className="bg-white rounded-2xl p-4 flex-row items-center border border-slate-100"
             style={{
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 4 },
@@ -322,21 +331,21 @@ export default function MainLayout() {
         </Animated.View>
       )}
 
-      <View className="flex-1 bg-white">
+      <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1"
+          style={{ flex: 1 }}
         >
           {/* ===== GLOBAL HEADER ===== */}
           {isWelcomePage ? null : isMainIndex ? (
             <View className="bg-primary mb-12 z-10 w-full h-28 items-center justify-between pt-8">
               {/* Information Icon */}
               <View
-                className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full shadow-brand"
                 style={{ elevation: 8 }}
+                className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full"
               >
                 <TouchableOpacity onPress={() => router.push("/info")}>
-                  <View className="bg-white rounded-full border border-primary/20 p-2 shadow-brand">
+                  <View className="bg-white rounded-full border border-primary/20 p-2">
                     <Ionicons
                       name="information-circle"
                       size={35}
@@ -348,8 +357,8 @@ export default function MainLayout() {
 
               {/* Logo */}
               <View
-                className="absolute bottom-[-43px] bg-white rounded-full shadow-brand"
                 style={{ elevation: 6 }}
+                className="absolute bottom-[-43px] bg-white rounded-full"
               >
                 <Image
                   source={logo}
@@ -360,15 +369,15 @@ export default function MainLayout() {
 
               {/* Chat Support Action Icon */}
               <View
-                className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full shadow-brand"
                 style={{ elevation: 8 }}
+                className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full"
               >
                 <TouchableOpacity
                   onPress={handleHeaderSupportPress}
                   className="relative"
                   activeOpacity={0.7}
                 >
-                  <View className="bg-white rounded-full border border-primary/20 p-2 shadow-brand">
+                  <View className="bg-white rounded-full border border-primary/20 p-2">
                     <Entypo name="message" size={35} color="#034194" />
                   </View>
 
@@ -388,7 +397,7 @@ export default function MainLayout() {
               <View className="flex-row justify-between items-center w-full px-6">
                 <TouchableOpacity
                   onPress={() => router.back()}
-                  className="w-[31px]"
+                  style={{ width: 31 }}
                 >
                   <Ionicons name="chevron-back" size={28} color="white" />
                 </TouchableOpacity>
@@ -416,20 +425,22 @@ export default function MainLayout() {
                                       ? "News & Events"
                                       : isNewsDetails
                                         ? "News Details"
-                                        : isNewsSearch
-                                          ? "Search News"
-                                          : isLoadWallet
-                                            ? "Load Wallet"
-                                            : ""}
+                                        : isNotification
+                                          ? "Notification"
+                                          : isNewsSearch
+                                            ? "Search News"
+                                            : isLoadWallet
+                                              ? "Load Wallet"
+                                              : ""}
                 </Text>
 
-                <View className="w-[31px]" />
+                <View style={{ width: 31 }} />
               </View>
             </View>
           )}
 
           {/* ===== MAIN CONTENT STACK ===== */}
-          <View className="flex-1">
+          <View style={{ flex: 1 }}>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen
@@ -450,6 +461,14 @@ export default function MainLayout() {
                 options={{ animation: "fade" }}
               />
               <Stack.Screen name="load/index" options={{ animation: "fade" }} />
+              <Stack.Screen
+                name="notification/index"
+                options={{ animation: "fade" }}
+              />
+              <Stack.Screen
+                name="intellectual/index"
+                options={{ animation: "fade" }}
+              />
             </Stack>
           </View>
 
@@ -475,13 +494,13 @@ export default function MainLayout() {
                   <Text className="text-white text-[10px] mt-1">Home</Text>
                 </TouchableOpacity>
 
-                {/* Status - Coming Soon */}
+                {/* History */}
                 <TouchableOpacity
                   className="items-center pe-2 flex-1"
-                  onPress={handleComingSoon}
+                  onPress={() => router.push("/history")}
                 >
-                  <Image source={Status} style={{ width: 31, height: 31 }} />
-                  <Text className="text-white text-[10px] mt-1">Status</Text>
+                  <Image source={History} style={{ width: 31, height: 31 }} />
+                  <Text className="text-white text-[10px] mt-1">History</Text>
                 </TouchableOpacity>
 
                 {/* Camera */}
@@ -509,13 +528,15 @@ export default function MainLayout() {
                   </TouchableOpacity>
                 </View>
 
-                {/* History */}
+                {/* Status - Coming Soon */}
                 <TouchableOpacity
                   className="items-center ps-2 flex-1"
-                  onPress={() => router.push("/history")}
+                  onPress={() => router.push("/notification")}
                 >
-                  <Image source={History} style={{ width: 31, height: 31 }} />
-                  <Text className="text-white text-[10px] mt-1">History</Text>
+                  <Image source={Status} style={{ width: 31, height: 31 }} />
+                  <Text className="text-white text-[10px] mt-1">
+                    Notification
+                  </Text>
                 </TouchableOpacity>
 
                 {/* Profile */}
@@ -523,11 +544,15 @@ export default function MainLayout() {
                   className="items-center flex-1"
                   onPress={() => router.push("/profile")}
                 >
-                  <View className="w-[31px] h-[31px]">
+                  <View style={{ width: 31, height: 31 }}>
                     {user?.avatar ? (
                       <Image
                         source={{ uri: user.avatar }}
-                        className="w-full h-full rounded-full"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: 999,
+                        }}
                       />
                     ) : (
                       <Ionicons name="person-circle" size={33} color="white" />

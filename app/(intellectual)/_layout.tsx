@@ -1,7 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
-import { Stack, usePathname, useRouter } from "expo-router";
+import {
+  Stack,
+  useLocalSearchParams,
+  usePathname,
+  useRouter,
+} from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -21,10 +26,11 @@ import "../../global.css";
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
+  const router = useRouter();
   const pathname = usePathname();
+  const params = useLocalSearchParams<{ from?: string }>();
   const isChat = pathname === "/chat-intellectual";
   const isChatList = pathname === "/chat-list";
-  const router = useRouter();
 
   // 1. Use a ref to track if we are in the chat without causing re-renders/re-subscriptions
   const isChatRef = useRef(isChat);
@@ -38,6 +44,39 @@ export default function RootLayout() {
   const [notification, setNotification] = useState<any>(null);
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleBackPress = () => {
+    try {
+      // ✅ PRIORITY 1: Check if launched from a specific source
+      // This ensures we return to the exact page user came from
+      if (params.from === "notification") {
+        console.log("↩️  [Intellectual Back] Returning to notification page");
+        router.replace("/(main)/notification");
+        return;
+      }
+
+      if (params.from === "home") {
+        console.log("↩️  [Intellectual Back] Returning to home");
+        router.replace("/(main)");
+        return;
+      }
+
+      // PRIORITY 2: Use navigation history if available
+      // (for when from parameter is not provided)
+      if (router.canGoBack()) {
+        console.log("↩️ [Intellectual Back] Using router.back()");
+        router.back();
+        return;
+      }
+
+      // PRIORITY 3: Fallback to home
+      console.log("↩️ [Intellectual Back] Fallback to home");
+      router.replace("/(main)");
+    } catch (e) {
+      console.error("❌ [Intellectual Back] Error:", e);
+      router.replace("/(main)");
+    }
+  };
 
   // 2. Hide Navigation Bar (Android)
   useEffect(() => {
@@ -255,9 +294,12 @@ export default function RootLayout() {
               <View className="flex-row justify-between items-center w-full px-6">
                 {/* Left Side: Back Arrow */}
                 <View className="w-10">
-                  <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="chevron-back" size={28} color="white" />
-                  </TouchableOpacity>
+                  {/* Left Side: Back Arrow */}
+                  <View className="w-10">
+                    <TouchableOpacity onPress={handleBackPress}>
+                      <Ionicons name="chevron-back" size={28} color="white" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {/* Center Title Layout */}
