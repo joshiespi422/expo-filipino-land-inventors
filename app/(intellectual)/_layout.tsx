@@ -45,31 +45,96 @@ export default function RootLayout() {
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // const handleBackPress = () => {
+  //   try {
+  //     if (params.from === "notification") {
+  //       console.log("↩️  [Intellectual Back] Returning to notification page");
+  //       router.replace("/(main)/notification");
+  //       return;
+  //     }
+
+  //     if (params.from === "home") {
+  //       console.log("↩️  [Intellectual Back] Returning to home");
+  //       router.replace("/(main)");
+  //       return;
+  //     }
+
+  //     if (router.canGoBack()) {
+  //       console.log("↩️ [Intellectual Back] Using router.back()");
+  //       router.back();
+  //       return;
+  //     }
+
+  //     console.log("↩️ [Intellectual Back] Fallback to home");
+  //     router.replace("/(main)");
+  //   } catch (e) {
+  //     console.error("❌ [Intellectual Back] Error:", e);
+  //     router.replace("/(main)");
+  //   }
+  // };
+
+  const currentHref = React.useMemo(() => {
+    const qs = new URLSearchParams(
+      Object.entries(params).reduce(
+        (acc, [k, v]) => {
+          if (v !== undefined) acc[k] = String(v);
+          return acc;
+        },
+        {} as Record<string, string>,
+      ),
+    ).toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }, [pathname, params]);
+
+  const historyRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    const stack = historyRef.current;
+    const top = stack[stack.length - 1];
+    const belowTop = stack[stack.length - 2];
+
+    if (top === currentHref) {
+      // same screen re-render, ignore
+      return;
+    }
+    if (belowTop === currentHref) {
+      // we've moved BACK to the previous tracked entry
+      // (e.g. hardware back / swipe gesture) — sync by popping
+      stack.pop();
+      return;
+    }
+    // otherwise this is a forward navigation — track it
+    stack.push(currentHref);
+  }, [currentHref]);
+
   const handleBackPress = () => {
     try {
-      // ✅ PRIORITY 1: Check if launched from a specific source
-      // This ensures we return to the exact page user came from
+      const stack = historyRef.current;
+
+      if (stack.length > 1) {
+        // We're deeper than the entry screen — step back one screen
+        // within this group.
+        stack.pop();
+        const prevHref = stack[stack.length - 1];
+        console.log("↩️ [Intellectual Back] Popping to", prevHref);
+        router.replace(prevHref as any);
+        return;
+      }
+
+      // We're at the entry screen of this group — exit based on
+      // how we originally arrived.
       if (params.from === "notification") {
-        console.log("↩️  [Intellectual Back] Returning to notification page");
+        console.log(
+          "↩️ [Intellectual Back] Entry screen, returning to notification",
+        );
         router.replace("/(main)/notification");
         return;
       }
-
       if (params.from === "home") {
-        console.log("↩️  [Intellectual Back] Returning to home");
+        console.log("↩️ [Intellectual Back] Entry screen, returning to home");
         router.replace("/(main)");
         return;
       }
-
-      // PRIORITY 2: Use navigation history if available
-      // (for when from parameter is not provided)
-      if (router.canGoBack()) {
-        console.log("↩️ [Intellectual Back] Using router.back()");
-        router.back();
-        return;
-      }
-
-      // PRIORITY 3: Fallback to home
       console.log("↩️ [Intellectual Back] Fallback to home");
       router.replace("/(main)");
     } catch (e) {
