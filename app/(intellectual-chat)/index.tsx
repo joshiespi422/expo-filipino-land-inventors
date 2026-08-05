@@ -42,6 +42,22 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+/**
+ * Resolve the logged-in user's ID regardless of which response
+ * shape /profile returns (plain object, { user: {...} }, or a
+ * JSON:API envelope like { data: { id, attributes } }).
+ */
+function resolveUserId(payload: any): string | number | null {
+  return (
+    payload?.id ??
+    payload?.data?.id ??
+    payload?.user?.id ??
+    payload?.data?.user?.id ??
+    payload?.data?.attributes?.id ??
+    null
+  );
+}
+
 function ChatIntellectualPageInner() {
   const { conversationId, title } = useLocalSearchParams();
   const router = useRouter();
@@ -68,6 +84,11 @@ function ChatIntellectualPageInner() {
 
   const flatListRef = useRef<FlatList>(null);
   const channelRef = useRef<any>(null);
+  // Forces the composer TextInput to fully remount after every send.
+  // This guarantees a genuinely empty native input, independent of
+  // ref.clear() (which can silently no-op under some component
+  // wrappers) or React state-update timing races.
+  const [inputResetKey, setInputResetKey] = useState(0);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -109,10 +130,7 @@ function ChatIntellectualPageInner() {
 
     const apiBaseUrl = api.defaults.baseURL || "";
     const domainUrl = apiBaseUrl.replace(/\/api\/?$/, "");
-    const final = `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
-
-    console.log("DEBUG PATH:", { rawPath, final });
-    return final;
+    return `${domainUrl}/storage/${rawPath.replace(/^\/+/, "")}`;
   }, []);
 
   const handleOpenImage = (selectedUri: string) => {
@@ -137,7 +155,6 @@ function ChatIntellectualPageInner() {
 
     try {
       setDownloadingFileId(attachment.id);
-      console.log("🔄 Starting download for:", fileName);
 
       const hasPermission = await requestFilePermissions();
       if (!hasPermission) {
@@ -150,12 +167,6 @@ function ChatIntellectualPageInner() {
       }
 
       let baseDir: string | null = null;
-
-      console.log("FileSystem directories:", {
-        cacheDirectory: FileSystem.cacheDirectory,
-        documentDirectory: FileSystem.documentDirectory,
-        temporaryDirectory: FileSystem.temporaryDirectory,
-      });
 
       if (FileSystem.cacheDirectory && FileSystem.cacheDirectory.length > 0) {
         baseDir = FileSystem.cacheDirectory;
@@ -172,7 +183,6 @@ function ChatIntellectualPageInner() {
       }
 
       if (!baseDir || baseDir.length === 0) {
-        console.error("All FileSystem directories are unavailable");
         throw new Error(
           "No writable directory available. Try saving to gallery instead.",
         );
@@ -189,18 +199,9 @@ function ChatIntellectualPageInner() {
         .substring(0, 50);
       const localUri = `${baseDir}download_${timestamp}_${randomSuffix}_${safeFileName}`;
 
-      console.log("Download starting:", {
-        url: finalUrl,
-        savePath: localUri,
-        usedDir: baseDir,
-      });
-
       const { uri } = await FileSystem.downloadAsync(finalUrl, localUri);
 
-      console.log("✓ Download completed:", uri);
-
       if (await Sharing.isAvailableAsync()) {
-        console.log("📤 Sharing file...");
         await Sharing.shareAsync(uri, {
           mimeType: attachment.mime_type || "application/octet-stream",
           dialogTitle: `Share ${fileName}`,
@@ -211,11 +212,7 @@ function ChatIntellectualPageInner() {
 
       setDownloadingFileId(null);
     } catch (error) {
-      console.error("❌ Primary download failed:", error);
-
       try {
-        console.log("🔄 Attempting fallback: Save to Media Library...");
-
         const mediaPermission = await MediaLibrary.requestPermissionsAsync();
 
         if (mediaPermission.status !== "granted") {
@@ -224,16 +221,12 @@ function ChatIntellectualPageInner() {
 
         const tempUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}temp_${Date.now()}_${fileName}`;
 
-        console.log("📥 Downloading to temp:", tempUri);
-
         const downloadResult = await FileSystem.downloadAsync(
           finalUrl,
           tempUri,
         );
 
         if (downloadResult.status === 200) {
-          console.log("✓ Download succeeded, saving to gallery...");
-
           const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
           await MediaLibrary.createAlbumAsync("Downloads", asset, false);
 
@@ -242,7 +235,7 @@ function ChatIntellectualPageInner() {
           return;
         }
       } catch (fallbackError) {
-        console.error("❌ Fallback also failed:", fallbackError);
+        console.error("Fallback download failed:", fallbackError);
       }
 
       setDownloadingFileId(null);
@@ -258,8 +251,7 @@ function ChatIntellectualPageInner() {
       try {
         try {
           const userRes = await api.get("/profile");
-          const resolvedId = userRes.data?.id || userRes.data?.user?.id || null;
-          setUserId(resolvedId);
+          setUserId(resolveUserId(userRes.data));
         } catch (userErr) {
           setUserId(null);
         }
@@ -270,7 +262,6 @@ function ChatIntellectualPageInner() {
             1, // Load page 1
           );
 
-          // ✅ FIXED: chatService.ts now reverses messages
           // Messages come as [newest, newest-1, ..., oldest]
           // Perfect for inverted FlatList where index 0 is at bottom (newest)
           setMessages(conversationData.messages || []);
@@ -307,12 +298,10 @@ function ChatIntellectualPageInner() {
 
       if (newMessages.length > 0) {
         setMessages((prev) => {
-          // ✅ FIXED: newMessages already reversed by chatService
-          // They're older than prev, so append to end
-          // Array stays [newest ... oldest] order
+          // newMessages already reversed by chatService, older than prev,
+          // so append to end — array stays [newest ... oldest] order
           const combined = [...prev, ...newMessages];
 
-          // Deduplicate by ID
           const seen = new Set<string | number>();
           return combined.filter((msg) => {
             const msgId = String(msg.id);
@@ -355,19 +344,19 @@ function ChatIntellectualPageInner() {
         };
 
         setMessages((prev) => {
+          // Already present — either arrived via our own send response
+          // already, or this is a duplicate broadcast. Skip either way.
           if (prev.some((m) => String(m.id) === String(messageData.id)))
             return prev;
 
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
-          // ✅ New message is always newest, so prepend to front
-          // This keeps newest-first ordering: [newMsg, ...prev]
-          const hasTemp = prev.some((m) => String(m.id).startsWith("temp-"));
-          if (hasTemp) {
-            return prev.map((m) =>
-              String(m.id).startsWith("temp-") ? processedMessage : m,
-            );
-          }
+          // NOTE: we intentionally do NOT touch any "temp-*" placeholders
+          // here. Each temp message is resolved deterministically by its
+          // own sendMessage() response in processMessagePayload — doing
+          // it here too (by prefix match) would replace EVERY pending
+          // temp with this one message when multiple sends are in
+          // flight, producing duplicate keys.
           return [processedMessage, ...prev];
         });
       });
@@ -390,7 +379,25 @@ function ChatIntellectualPageInner() {
     setSending(true);
 
     try {
-      await sendMessage(conversationId as string, payload);
+      const savedMessage = await sendMessage(conversationId as string, payload);
+
+      // Replace ONLY this specific temp entry with the real message.
+      // If the Echo broadcast for this same message already arrived
+      // and got appended in the meantime, drop this temp instead of
+      // creating a duplicate.
+      setMessages((prev) => {
+        const alreadyArrivedViaEcho = prev.some(
+          (m) => String(m.id) === String(savedMessage.id),
+        );
+
+        if (alreadyArrivedViaEcho) {
+          return prev.filter((m) => String(m.id) !== tempId);
+        }
+
+        return prev.map((m) =>
+          String(m.id) === tempId ? { ...savedMessage } : m,
+        );
+      });
     } catch (err) {
       console.error("Upload error details:", err);
       Alert.alert("Delivery Fail", "We couldn't deliver this message.");
@@ -403,7 +410,15 @@ function ChatIntellectualPageInner() {
   const handleSend = async () => {
     if (!draft.trim() || sending) return;
     const textToSend = draft.trim();
+
+    // Clear the React state AND force the TextInput to remount with a
+    // fresh key. setDraft alone is async/batched — if you keep typing
+    // immediately after tapping send, fast keystrokes can land on the
+    // native buffer before React re-renders it as empty, merging with
+    // the old text. Bumping the key unmounts the old native input and
+    // mounts a brand new, guaranteed-empty one instead.
     setDraft("");
+    setInputResetKey((k) => k + 1);
 
     const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
@@ -416,7 +431,7 @@ function ChatIntellectualPageInner() {
     };
 
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    // ✅ Prepend temp message (newest goes to front)
+    // Prepend temp message (newest goes to front)
     setMessages((prev) => [tempMessage, ...prev]);
 
     await processMessagePayload({ body: textToSend }, tempId);
@@ -446,6 +461,7 @@ function ChatIntellectualPageInner() {
         formData.append("body", bodyText);
       }
       setDraft("");
+      setInputResetKey((k) => k + 1);
 
       const rawUri = targetAsset.uri;
       const filename =
@@ -501,6 +517,7 @@ function ChatIntellectualPageInner() {
           formData.append("body", bodyText);
         }
         setDraft("");
+        setInputResetKey((k) => k + 1);
 
         const rawUri = targetFile.uri;
         const filename =
@@ -581,8 +598,6 @@ function ChatIntellectualPageInner() {
               source={{ uri: finalPathValue }}
               style={styles.media}
               resizeMode="cover"
-              onLoad={() => console.log("Loaded:", finalPathValue)}
-              onError={(e) => console.log("Error:", e.nativeEvent.error)}
             />
           </TouchableOpacity>
         );
@@ -628,13 +643,7 @@ function ChatIntellectualPageInner() {
         </TouchableOpacity>
       );
     },
-    [
-      normalizePath,
-      downloadingFileId,
-      imageRefresh,
-      handleOpenImage,
-      handleDownloadFile,
-    ],
+    [normalizePath, downloadingFileId, imageRefresh],
   );
 
   const renderItem = useCallback(
@@ -645,7 +654,8 @@ function ChatIntellectualPageInner() {
         ? true
         : userId !== null
           ? String(item.sender_id) === String(userId)
-          : String(item.sender_id) === "14";
+          : // userId not resolved yet — don't misclassify as "them"
+            false;
 
       let showDateHeader = false;
       let dateString = "";
@@ -659,7 +669,7 @@ function ChatIntellectualPageInner() {
           weekday: "long",
         });
 
-        // ✅ In inverted layouts:
+        // In inverted layouts:
         // - index 0 is the newest message (bottom of UI)
         // - index (messages.length - 1) is the oldest message (top of UI)
         if (index === messages.length - 1) {
@@ -818,31 +828,36 @@ function ChatIntellectualPageInner() {
           </View>
         )}
 
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          contentContainerStyle={styles.threadContent}
-          inverted={true}
-          onEndReached={loadMoreMessages}
-          onEndReachedThreshold={0.15}
-          ListEmptyComponent={
-            !loading ? (
-              <View
-                style={{
-                  alignItems: "center",
-                  paddingVertical: 40,
-                  transform: [{ scaleY: -1 }], // Keeps empty component text readable in inverted list
-                }}
-              >
-                <Text style={{ color: COLORS.inkFaint }}>
-                  No messages yet. Start the conversation!
-                </Text>
-              </View>
-            ) : null
-          }
-        />
+        <View style={{ flex: 1 }}>
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            contentContainerStyle={styles.threadContent}
+            inverted={true}
+            onEndReached={loadMoreMessages}
+            onEndReachedThreshold={0.15}
+          />
+
+          {messages.length === 0 && (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                paddingTop: 60,
+                alignItems: "center",
+              }}
+              pointerEvents="none"
+            >
+              <Text style={{ color: COLORS.inkFaint }}>
+                No messages yet. Say hello!
+              </Text>
+            </View>
+          )}
+        </View>
 
         <View style={styles.composer}>
           <TouchableOpacity
@@ -854,6 +869,7 @@ function ChatIntellectualPageInner() {
 
           <View style={styles.compField}>
             <TextInput
+              key={inputResetKey}
               placeholder={`Message ${title || "Agent"}...`}
               placeholderTextColor={COLORS.inkFaint}
               style={styles.compInput}

@@ -989,29 +989,36 @@ function ChatSupportPageInner() {
           </View>
         )}
 
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          contentContainerStyle={styles.threadContent}
-          inverted={true}
-          onEndReached={loadMoreMessages}
-          onEndReachedThreshold={0.15}
-          ListEmptyComponent={
+        <View style={{ flex: 1 }}>
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            contentContainerStyle={styles.threadContent}
+            inverted={true}
+            onEndReached={loadMoreMessages}
+            onEndReachedThreshold={0.15}
+          />
+
+          {messages.length === 0 && (
             <View
               style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                paddingTop: 60,
                 alignItems: "center",
-                paddingVertical: 40,
-                transform: [{ scaleY: -1 }],
               }}
+              pointerEvents="none"
             >
               <Text style={{ color: COLORS.inkFaint }}>
                 No messages yet. Say hello!
               </Text>
             </View>
-          }
-        />
+          )}
+        </View>
 
         <View style={styles.composer}>
           <TouchableOpacity

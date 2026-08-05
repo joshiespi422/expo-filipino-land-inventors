@@ -50,6 +50,22 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+/**
+ * Resolve the logged-in user's ID regardless of which response
+ * shape /profile returns (plain object, { user: {...} }, or a
+ * JSON:API envelope like { data: { id, attributes } }).
+ */
+function resolveUserId(payload: any): string | number | null {
+  return (
+    payload?.id ??
+    payload?.data?.id ??
+    payload?.user?.id ??
+    payload?.data?.user?.id ??
+    payload?.data?.attributes?.id ??
+    null
+  );
+}
+
 function ChatSellerPageInner() {
   const { storeId, storeName, productId } = useLocalSearchParams<{
     storeId: string;
@@ -84,6 +100,11 @@ function ChatSellerPageInner() {
   const flatListRef = useRef<FlatList>(null);
   const channelRef = useRef<any>(null);
   const conversationIdRef = useRef<number | null>(null);
+  // Forces the composer TextInput to fully remount after every send.
+  // This guarantees a genuinely empty native input, independent of
+  // ref.clear() (which can silently no-op under some component
+  // wrappers) or React state-update timing races.
+  const [inputResetKey, setInputResetKey] = useState(0);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -199,7 +220,7 @@ function ChatSellerPageInner() {
       try {
         try {
           const userRes = await api.get("/profile");
-          setUserId(userRes.data?.id || userRes.data?.user?.id || null);
+          setUserId(resolveUserId(userRes.data));
         } catch {
           setUserId(null);
         }
@@ -290,17 +311,19 @@ function ChatSellerPageInner() {
         if (!messageData || !messageData.id) return;
 
         setMessages((prev) => {
+          // Already present — either arrived via our own send response
+          // already, or this is a duplicate broadcast. Skip either way.
           if (prev.some((m) => String(m.id) === String(messageData.id)))
             return prev;
 
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
-          const hasTemp = prev.some((m) => String(m.id).startsWith("temp-"));
-          if (hasTemp) {
-            return prev.map((m) =>
-              String(m.id).startsWith("temp-") ? messageData : m,
-            );
-          }
+          // NOTE: we intentionally do NOT touch any "temp-*" placeholders
+          // here. Each temp message is resolved deterministically by its
+          // own sendShopMessage() response in deliverPayload — doing it
+          // here too (by prefix match) would replace EVERY pending temp
+          // with this one message when multiple sends are in flight,
+          // producing duplicate keys.
           return [messageData, ...prev];
         });
       });
@@ -338,9 +361,24 @@ function ChatSellerPageInner() {
         setHasMorePages(full.pagination.has_more);
       } else {
         const message = await sendShopMessage(conversation.id, payload as any);
-        setMessages((prev) =>
-          prev.map((m) => (String(m.id) === tempId ? message : m)),
-        );
+
+        // Replace ONLY this specific temp entry with the real message.
+        // If the Echo broadcast for this same message already arrived
+        // and got appended in the meantime, drop this temp instead of
+        // creating a duplicate.
+        setMessages((prev) => {
+          const alreadyArrivedViaEcho = prev.some(
+            (m) => String(m.id) === String(message.id),
+          );
+
+          if (alreadyArrivedViaEcho) {
+            return prev.filter((m) => String(m.id) !== tempId);
+          }
+
+          return prev.map((m) =>
+            String(m.id) === tempId ? { ...message } : m,
+          );
+        });
       }
     } catch (err) {
       console.error("Failed to send message:", err);
@@ -354,7 +392,15 @@ function ChatSellerPageInner() {
   const handleSend = async () => {
     if (!draft.trim() || sending || !storeId) return;
     const textToSend = draft.trim();
+
+    // Clear the React state AND force the TextInput to remount with a
+    // fresh key. setDraft alone is async/batched — if you keep typing
+    // immediately after tapping send, fast keystrokes can land on the
+    // native buffer before React re-renders it as empty, merging with
+    // the old text. Bumping the key unmounts the old native input and
+    // mounts a brand new, guaranteed-empty one instead.
     setDraft("");
+    setInputResetKey((k) => k + 1);
 
     const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
@@ -412,6 +458,7 @@ function ChatSellerPageInner() {
       const asset = result.assets[0];
       const bodyText = draft.trim();
       setDraft("");
+      setInputResetKey((k) => k + 1);
 
       const filename =
         asset.fileName || asset.uri.split("/").pop() || "upload.jpg";
@@ -451,6 +498,7 @@ function ChatSellerPageInner() {
         const file = result.assets[0];
         const bodyText = draft.trim();
         setDraft("");
+        setInputResetKey((k) => k + 1);
 
         const filename = file.name || file.uri.split("/").pop() || "document";
         const mime = file.mimeType || "application/octet-stream";
@@ -736,31 +784,36 @@ function ChatSellerPageInner() {
           </View>
         )}
 
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          contentContainerStyle={styles.threadContent}
-          inverted={true}
-          onEndReached={loadMoreMessages}
-          onEndReachedThreshold={0.15}
-          ListEmptyComponent={
-            !loading ? (
-              <View
-                style={{
-                  alignItems: "center",
-                  paddingVertical: 40,
-                  transform: [{ scaleY: -1 }],
-                }}
-              >
-                <Text style={{ color: COLORS.inkFaint }}>
-                  No messages yet. Say hello to start the conversation.
-                </Text>
-              </View>
-            ) : null
-          }
-        />
+        <View style={{ flex: 1 }}>
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            contentContainerStyle={styles.threadContent}
+            inverted={true}
+            onEndReached={loadMoreMessages}
+            onEndReachedThreshold={0.15}
+          />
+
+          {messages.length === 0 && (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                paddingTop: 60,
+                alignItems: "center",
+              }}
+              pointerEvents="none"
+            >
+              <Text style={{ color: COLORS.inkFaint }}>
+                No messages yet. Say hello!
+              </Text>
+            </View>
+          )}
+        </View>
 
         <View style={styles.composer}>
           <TouchableOpacity
@@ -772,6 +825,7 @@ function ChatSellerPageInner() {
 
           <View style={styles.compField}>
             <TextInput
+              key={inputResetKey}
               placeholder={`Message...`}
               placeholderTextColor={COLORS.inkFaint}
               style={styles.compInput}
