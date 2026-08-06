@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 
+import { useUIStore } from "@/store/useUIStore";
 import * as NavigationBar from "expo-navigation-bar";
 
 import {
@@ -24,10 +25,10 @@ import {
 } from "@/services/chatService";
 import echo from "@/services/echo";
 
+import Camera from "../../assets/images/icon/camera.png";
 import History from "../../assets/images/icon/History.png";
 import Home from "../../assets/images/icon/Home.png";
-import Status from "../../assets/images/icon/Status.png";
-import Camera from "../../assets/images/icon/camera.png";
+import Notification from "../../assets/images/icon/notification.png";
 import logo from "../../assets/images/logo.png";
 
 import "../../global.css";
@@ -36,11 +37,9 @@ const queryClient = new QueryClient();
 
 export default function MainLayout() {
   const { token, isLoading, user } = useAuthStore();
+  const { comingSoonVisible, setComingSoonVisible } = useUIStore(); // ✅ Use store
   const router = useRouter();
   const pathname = usePathname();
-
-  // Modal State
-  const [comingSoonVisible, setComingSoonVisible] = useState(false);
 
   // ===== SUPPORT CHAT: unread badge + realtime toast =====
   const [supportConversationId, setSupportConversationId] = useState<
@@ -487,19 +486,19 @@ export default function MainLayout() {
               <View className="flex-row w-full max-w-[600px] px-4 items-center">
                 {/* Home */}
                 <TouchableOpacity
-                  className="items-center flex-1"
+                  className="items-center flex-1 mt-1"
                   onPress={() => router.push("/")}
                 >
-                  <Image source={Home} style={{ width: 31, height: 31 }} />
+                  <Image source={Home} style={{ width: 28, height: 28 }} />
                   <Text className="text-white text-[10px] mt-1">Home</Text>
                 </TouchableOpacity>
 
                 {/* History */}
                 <TouchableOpacity
-                  className="items-center pe-2 flex-1"
+                  className="items-center pe-2 flex-1 mt-1"
                   onPress={() => router.push("/history")}
                 >
-                  <Image source={History} style={{ width: 31, height: 31 }} />
+                  <Image source={History} style={{ width: 28, height: 28 }} />
                   <Text className="text-white text-[10px] mt-1">History</Text>
                 </TouchableOpacity>
 
@@ -528,12 +527,15 @@ export default function MainLayout() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Status - Coming Soon */}
+                {/* Notification - Coming Soon */}
                 <TouchableOpacity
-                  className="items-center ps-2 flex-1"
+                  className="items-center ps-2 mt-1 flex-1"
                   onPress={() => router.push("/notification")}
                 >
-                  <Image source={Status} style={{ width: 31, height: 31 }} />
+                  <Image
+                    source={Notification}
+                    style={{ width: 28, height: 28 }}
+                  />
                   <Text className="text-white text-[10px] mt-1">
                     Notification
                   </Text>

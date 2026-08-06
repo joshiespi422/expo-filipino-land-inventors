@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { useUIStore } from "@/store/useUIStore";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -43,7 +44,8 @@ import image from "../../assets/images/image.png";
 const { width } = Dimensions.get("window");
 
 export default function DashboardPage() {
-  const { user, setUser } = useAuthStore(); // Added setUser
+  const { user, setUser } = useAuthStore();
+  const { handleComingSoon } = useUIStore();
   const router = useRouter();
   const [pageLoading, setPageLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -131,9 +133,11 @@ export default function DashboardPage() {
   };
 
   const handleMenuPress = (item: any) => {
-    if (item.label === "News & Event") {
-      // News doesn't need from parameter, it's a simple route
-      console.log("📍 [Dashboard] Navigating to News & Event");
+    if (
+      item.label === "FISMPC Online Store" ||
+      item.label === "Coop Membership" ||
+      item.label === "News & Event"
+    ) {
       router.push(item.href as any);
       return;
     }
@@ -330,7 +334,10 @@ export default function DashboardPage() {
                 >
                   <FontAwesome name="plus" size={22} color="#034194" />
                 </TouchableOpacity>
-                <TouchableOpacity className="bg-white h-10 w-10 flex justify-center items-center rounded-lg">
+                <TouchableOpacity
+                  onPress={handleComingSoon}
+                  className="bg-white h-10 w-10 flex justify-center items-center rounded-lg"
+                >
                   <FontAwesome name="send" size={20} color="#034194" />
                 </TouchableOpacity>
               </View>
