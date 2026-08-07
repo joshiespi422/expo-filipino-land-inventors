@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   ScrollView,
   Switch,
   Text,
@@ -13,6 +14,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 export default function ManageAddressesScreen() {
   const [addresses, setAddresses] = useState<any[]>([]);
@@ -26,6 +31,10 @@ export default function ManageAddressesScreen() {
   const [provinces, setProvinces] = useState<any[]>([]);
   const [cities, setCities] = useState<any[]>([]);
   const [barangays, setBarangays] = useState<any[]>([]);
+
+  // Needed so the "Save Address" bar and modal content never sit under the
+  // phone's gesture/nav bar (Android) or home indicator (iOS).
+  const insets = useSafeAreaInsets();
 
   // Form State adapted to Migration payload parameters
   const [form, setForm] = useState({
@@ -249,6 +258,7 @@ export default function ManageAddressesScreen() {
       <ScrollView
         className="flex-1 px-4 pt-6"
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
       >
         <View className="flex-row justify-between items-center mb-6">
           <Text className="text-2xl font-black text-gray-800">
@@ -271,7 +281,7 @@ export default function ManageAddressesScreen() {
             <View className="flex-row justify-between items-start mb-2">
               <View className="flex-row items-center">
                 <View
-                  className={`px-3 py-1 rounded-full ${item.label === "home" ? "bg-green-50" : "bg-blue"}`}
+                  className={`px-3 py-1 rounded-full ${item.label === "home" ? "bg-green-50" : "bg-blue-50"}`}
                 >
                   <Text
                     className={`font-bold text-xs capitalize ${item.label === "home" ? "text-green-600" : "text-[#034194]"}`}
@@ -338,9 +348,19 @@ export default function ManageAddressesScreen() {
       </ScrollView>
 
       {/* Input Modal for Add/Edit Form */}
-      <Modal visible={modalVisible} animationType="slide" transparent={false}>
-        <View className="flex-1 bg-white pt-12">
-          <View className="flex-row justify-between items-center px-5 pb-4 border-b border-gray-100">
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={false}
+        // Lets our SafeAreaView below control insets instead of the OS
+        // drawing the modal edge-to-edge under the nav bar.
+        statusBarTranslucent={Platform.OS === "android"}
+      >
+        {/* edges=['top','bottom'] keeps content clear of the status bar
+            AND the bottom nav bar / home indicator whenever this modal
+            is open — this is what was causing the bottom gap/overlap. */}
+        <SafeAreaView edges={["top", "bottom"]} className="flex-1 bg-white">
+          <View className="flex-row justify-between items-center px-5 py-4 border-b border-gray-100">
             <Text className="text-xl font-bold text-gray-800">
               {editingAddressId ? "Edit Address" : "New Address"}
             </Text>
@@ -355,6 +375,7 @@ export default function ManageAddressesScreen() {
           <ScrollView
             className="flex-1 px-5 pt-4"
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
             <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
               Label Type
@@ -364,7 +385,7 @@ export default function ManageAddressesScreen() {
                 <TouchableOpacity
                   key={type}
                   onPress={() => setForm({ ...form, label: type })}
-                  className={`flex-1 py-3 rounded-xl items-center border capitalize ${form.label === type ? "border-[#034194] bg-blue/40" : "border-gray-200"}`}
+                  className={`flex-1 py-3 rounded-xl items-center border capitalize ${form.label === type ? "border-[#034194] bg-blue-50" : "border-gray-200"}`}
                 >
                   <Text
                     className={`font-bold ${form.label === type ? "text-[#034194]" : "text-gray-500"}`}
@@ -578,7 +599,14 @@ export default function ManageAddressesScreen() {
             <View className="h-10" />
           </ScrollView>
 
-          <View className="p-5 bg-white border-t border-gray-100">
+          {/* paddingBottom here is the actual fix: without insets.bottom,
+              this bar either hugs the nav bar with no breathing room, or
+              (on some Android devices with translucent nav) sits partly
+              underneath it, leaving a dead gap above the real bottom edge. */}
+          <View
+            className="px-5 pt-5 bg-white border-t border-gray-100"
+            style={{ paddingBottom: insets.bottom + 16 }}
+          >
             <TouchableOpacity
               onPress={handleSave}
               disabled={actionLoading}
@@ -593,7 +621,7 @@ export default function ManageAddressesScreen() {
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       <CustomAlert
