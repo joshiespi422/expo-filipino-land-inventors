@@ -90,12 +90,11 @@ export default function NotificationsPage() {
       try {
         console.log("📍 [Notification] Original route:", item.route);
 
-        // Sanitize route from backend format
-        let sanitizedRoute = item.route.replace(/\([^)]+\)\//g, "");
-        console.log("📍 [Notification] Sanitized route:", sanitizedRoute);
+        // Split path and query parameters safely
+        const [rawPath, queryString] = item.route.split("?");
 
-        const [rawPath, queryString] = sanitizedRoute.split("?");
-        const cleanPath = `/(intellectual)/${rawPath.replace(/^\/+/, "")}`;
+        // Ensure leading slash for Expo Router
+        const cleanPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
         console.log("📍 [Notification] Clean path:", cleanPath);
 
         const params: Record<string, string> = {};
@@ -106,7 +105,7 @@ export default function NotificationsPage() {
           });
         }
 
-        // ✅ CRITICAL: Add from="notification" so back button knows where to go
+        // Add navigation origin context
         params.from = "notification";
         console.log("📍 [Notification] Final params:", params);
 
@@ -197,6 +196,7 @@ export default function NotificationsPage() {
                   >
                     {item.title}
                   </Text>
+                  {/* <Text>{item.route}</Text> */}
                   <Text className="text-[10px] text-slate-400 mt-0.5 font-medium">
                     {item.timestamp}
                   </Text>
