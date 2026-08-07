@@ -16,6 +16,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   Text,
@@ -23,6 +24,10 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 // --- SEPARATE VIDEO PLAYER COMPONENT ---
 function ReviewVideoPlayer({ videoUrl }: { videoUrl: string }) {
@@ -62,6 +67,23 @@ export default function ToRateScreen() {
     RateItem[]
   >([]);
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+
+  const isFeedbackModalVisible = selectedFeedbackItems.length > 0;
+  const isImageModalVisible = !!selectedImageUri;
+
+  // Used to pad the bottom sheet's content below the actual bottom edge —
+  // that's the fix for the gap: the sheet needs breathing room that
+  // accounts for the phone's gesture/nav bar or home indicator, same
+  // pattern as the addresses screen's Save button bar.
+  const insets = useSafeAreaInsets();
+
+  const closeFeedbackModal = () => {
+    setSelectedFeedbackItems([]);
+  };
+
+  const closeImageModal = () => {
+    setSelectedImageUri(null);
+  };
 
   const loadOrders = async (page = 1, shouldRefresh = false) => {
     try {
@@ -195,16 +217,14 @@ export default function ToRateScreen() {
             <TouchableOpacity
               onPress={() => handleViewFeedback(item.id)}
               disabled={isFetchingThis}
-              className="border border-[#034194] bg-blue px-4 py-2 rounded-lg flex-row items-center"
+              className="border border-[#034194] bg-blue-50 px-4 py-2 rounded-lg flex-row items-center"
             >
               {isFetchingThis ? (
                 <ActivityIndicator size="small" color="#034194" />
               ) : (
-                <>
-                  <Text className="text-xs text-[#034194] font-semibold">
-                    View Feedback
-                  </Text>
-                </>
+                <Text className="text-xs text-[#034194] font-semibold">
+                  View Feedback
+                </Text>
               )}
             </TouchableOpacity>
           ) : (
@@ -277,158 +297,215 @@ export default function ToRateScreen() {
         keyExtractor={(item) => String(item.id)}
         renderItem={renderOrderItem}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={["#034194"]}
+          />
         }
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.3}
+        onEndReachedThreshold={0.5}
         ListFooterComponent={
           loadingMore ? (
-            <ActivityIndicator size="small" color="#034194" className="py-4" />
+            <ActivityIndicator
+              size="small"
+              color="#034194"
+              style={{ marginVertical: 16 }}
+            />
           ) : null
         }
         ListEmptyComponent={
           <View className="items-center justify-center py-20">
-            <Ionicons name="receipt-outline" size={48} color="#cbd5e1" />
-            <Text className="text-slate-400 font-medium mt-3">
+            <Ionicons name="star-outline" size={48} color="#94A3B8" />
+            <Text className="text-slate-500 font-semibold text-sm mt-3">
+              No orders found
+            </Text>
+            <Text className="text-slate-400 text-xs mt-1">
               {activeTab === "to-rate"
-                ? "No orders to rate yet."
-                : "No rated orders found."}
+                ? "You have no pending items to rate."
+                : "You haven't rated any orders yet."}
             </Text>
           </View>
         }
+        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        showsVerticalScrollIndicator={false}
       />
 
-      {/* FEEDBACK DETAIL MODAL */}
+      {/* VIEW FEEDBACK MODAL */}
       <Modal
-        visible={selectedFeedbackItems.length > 0}
-        transparent
+        visible={isFeedbackModalVisible}
         animationType="slide"
-        onRequestClose={() => setSelectedFeedbackItems([])}
+        transparent={true}
+        onRequestClose={closeFeedbackModal}
+        statusBarTranslucent={Platform.OS === "android"}
       >
-        <TouchableWithoutFeedback onPress={() => setSelectedFeedbackItems([])}>
+        <TouchableWithoutFeedback onPress={closeFeedbackModal}>
           <View className="flex-1 bg-black/50 justify-end">
             <TouchableWithoutFeedback onPress={() => {}}>
-              <View className="bg-white rounded-t-3xl p-5 max-h-[85%]">
-                {/* Header */}
-                <View className="flex-row justify-between items-center pb-3 border-b border-slate-100">
-                  <Text className="font-bold text-base text-slate-800">
-                    Your Feedback
-                  </Text>
+              <SafeAreaView
+                edges={["bottom"]}
+                className="bg-white rounded-t-3xl max-h-[85%]"
+              >
+                {/* Modal Drag Handle & Header */}
+                <View className="p-4 border-b border-slate-100 flex-row justify-between items-center">
+                  <View className="flex-row items-center">
+                    <Ionicons name="star" size={20} color="#EAB308" />
+                    <Text className="text-base font-bold text-slate-800 ml-2">
+                      Your Submitted Feedback
+                    </Text>
+                  </View>
                   <TouchableOpacity
-                    onPress={() => setSelectedFeedbackItems([])}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPress={closeFeedbackModal}
+                    className="p-1 rounded-full bg-slate-100"
                   >
-                    <Ionicons name="close-circle" size={26} color="#94a3b8" />
+                    <Ionicons name="close" size={20} color="#64748B" />
                   </TouchableOpacity>
                 </View>
 
-                {/* Feedback List */}
+                {/* Modal Body */}
                 <ScrollView
-                  className="mt-3"
-                  showsVerticalScrollIndicator={true}
+                  className="p-4"
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
                 >
-                  {selectedFeedbackItems.map((item, idx) => {
+                  {selectedFeedbackItems.map((item, index) => {
                     const review = item.review;
-                    const rating = review?.rating ?? 5;
-                    const comment = review?.comment;
-                    const videoUrl = review?.video_url;
-                    const images = review?.images || [];
 
                     return (
                       <View
-                        key={item.id || idx}
-                        className="mb-4 p-4 bg-slate-50 rounded-2xl border border-slate-200"
+                        key={item.order_item_id || index}
+                        className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100"
                       >
-                        <Text className="font-bold text-slate-800 text-sm mb-1">
-                          {item.product_name}
-                        </Text>
-
-                        {/* Stars */}
-                        <View className="flex-row items-center mb-2">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <Ionicons
-                              key={s}
-                              name="star"
-                              size={16}
-                              color={s <= rating ? "#f59e0b" : "#cbd5e1"}
-                              style={{ marginRight: 2 }}
-                            />
-                          ))}
+                        {/* Product info */}
+                        <View className="flex-row items-center mb-3">
+                          <Image
+                            source={{
+                              uri:
+                                item.product_image ||
+                                "https://via.placeholder.com/100",
+                            }}
+                            className="w-12 h-12 rounded-xl bg-slate-200"
+                          />
+                          <View className="ml-3 flex-1">
+                            <Text
+                              className="font-bold text-slate-800 text-sm"
+                              numberOfLines={1}
+                            >
+                              {item.product_name}
+                            </Text>
+                            {item.variant_name && (
+                              <Text className="text-xs text-slate-400">
+                                {item.variant_name}
+                              </Text>
+                            )}
+                          </View>
                         </View>
 
-                        {/* Review text */}
-                        {comment ? (
-                          <Text className="text-xs text-slate-700 leading-relaxed mb-3">
-                            "{comment}"
-                          </Text>
-                        ) : (
-                          <Text className="text-xs text-slate-400 italic mb-3">
-                            No written comment provided.
-                          </Text>
-                        )}
-
-                        {/* Review Video Section */}
-                        {videoUrl ? (
-                          <ReviewVideoPlayer videoUrl={videoUrl} />
-                        ) : null}
-
-                        {/* Review Images Section */}
-                        {images.length > 0 && (
-                          <View className="mb-3">
-                            <Text className="text-[11px] font-semibold text-slate-400 mb-1.5">
-                              Photos:
-                            </Text>
-                            <ScrollView
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                              className="flex-row"
-                            >
-                              {images.map((imgUri, imgIdx) => (
-                                <TouchableOpacity
-                                  key={imgIdx}
-                                  activeOpacity={0.8}
-                                  onPress={() => setSelectedImageUri(imgUri)}
-                                  className="mr-2"
-                                >
-                                  <Image
-                                    source={{ uri: imgUri }}
-                                    className="w-20 h-20 rounded-xl bg-slate-200"
-                                    resizeMode="cover"
+                        {/* Rating stars & date */}
+                        {review ? (
+                          <>
+                            <View className="flex-row justify-between items-center mb-2">
+                              <View className="flex-row items-center space-x-1">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Ionicons
+                                    key={star}
+                                    name={
+                                      star <= review.rating
+                                        ? "star"
+                                        : "star-outline"
+                                    }
+                                    size={16}
+                                    color={
+                                      star <= review.rating
+                                        ? "#EAB308"
+                                        : "#CBD5E1"
+                                    }
                                   />
-                                </TouchableOpacity>
-                              ))}
-                            </ScrollView>
-                          </View>
+                                ))}
+                                <Text className="text-xs font-bold text-slate-700 ml-1.5">
+                                  {review.rating}.0
+                                </Text>
+                              </View>
+                              <Text className="text-[11px] text-slate-400">
+                                {review.created_at}
+                              </Text>
+                            </View>
+
+                            {/* Comment */}
+                            {review.comment ? (
+                              <Text className="text-slate-700 text-xs leading-5 bg-white p-3 rounded-xl border border-slate-100 mb-3">
+                                {review.comment}
+                              </Text>
+                            ) : null}
+
+                            {/* Video */}
+                            {review.video_url ? (
+                              <ReviewVideoPlayer videoUrl={review.video_url} />
+                            ) : null}
+
+                            {/* Images */}
+                            {review.images && review.images.length > 0 && (
+                              <View className="mt-1">
+                                <Text className="text-[11px] font-semibold text-slate-400 mb-1.5">
+                                  Photos:
+                                </Text>
+                                <ScrollView
+                                  horizontal
+                                  showsHorizontalScrollIndicator={false}
+                                  className="flex-row"
+                                >
+                                  {review.images.map((imgUri, imgIdx) => (
+                                    <TouchableOpacity
+                                      key={imgIdx}
+                                      onPress={() =>
+                                        setSelectedImageUri(imgUri)
+                                      }
+                                      className="mr-2"
+                                    >
+                                      <Image
+                                        source={{ uri: imgUri }}
+                                        className="w-20 h-20 rounded-xl bg-slate-200"
+                                        resizeMode="cover"
+                                      />
+                                    </TouchableOpacity>
+                                  ))}
+                                </ScrollView>
+                              </View>
+                            )}
+                          </>
+                        ) : (
+                          <Text className="text-xs italic text-slate-400">
+                            No review details available.
+                          </Text>
                         )}
                       </View>
                     );
                   })}
                 </ScrollView>
-              </View>
+              </SafeAreaView>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* FULLSCREEN IMAGE MODAL */}
+      {/* FULL-SCREEN IMAGE PREVIEW MODAL */}
       <Modal
-        visible={!!selectedImageUri}
-        transparent
+        visible={isImageModalVisible}
+        transparent={true}
         animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setSelectedImageUri(null)}
+        onRequestClose={closeImageModal}
       >
         <View className="flex-1 bg-black justify-center items-center">
           <TouchableOpacity
-            onPress={() => setSelectedImageUri(null)}
-            className="absolute top-12 right-6 z-10"
+            onPress={closeImageModal}
+            className="absolute top-12 right-6 z-10 p-2 bg-white/20 rounded-full"
           >
-            <Ionicons name="close" size={32} color="#ffffff" />
+            <Ionicons name="close" size={28} color="white" />
           </TouchableOpacity>
           {selectedImageUri && (
             <Image
               source={{ uri: selectedImageUri }}
-              className="w-full h-4/5"
+              className="w-full h-3/4"
               resizeMode="contain"
             />
           )}
