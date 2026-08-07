@@ -6,6 +6,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface ItemRatingState {
   order_item_id: number;
@@ -31,9 +33,50 @@ interface ItemRatingState {
   images: MediaFile[];
 }
 
+const MAX_VIDEO_DURATION_SEC = 60; // 1 minute limit
+const MAX_VIDEO_SIZE_MB = 100; // 100 MB limit
+
+// --- VIDEO PREVIEW COMPONENT ---
+function LocalVideoPreview({
+  videoUri,
+  onRemove,
+  disabled,
+}: {
+  videoUri: string;
+  onRemove: () => void;
+  disabled: boolean;
+}) {
+  const player = useVideoPlayer(videoUri, (player) => {
+    player.loop = false;
+  });
+
+  return (
+    <View className="w-full h-48 bg-black rounded-xl overflow-hidden relative my-2">
+      <VideoView
+        style={{ width: "100%", height: "100%" }}
+        player={player}
+        allowsFullscreen
+        allowsPictureInPicture
+      />
+      {!disabled && (
+        <TouchableOpacity
+          onPress={onRemove}
+          className="absolute top-2 right-2 bg-red-500 rounded-full p-1 z-10"
+        >
+          <Ionicons name="close" size={16} color="#fff" />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
 export default function RatingProductsScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
+
+  // Used so the footer submit bar clears the phone's bottom nav bar /
+  // home indicator instead of sitting flush against (or under) it.
+  const insets = useSafeAreaInsets();
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -51,7 +94,7 @@ export default function RatingProductsScreen() {
       setIsLoading(true);
       const res = await fetchOrderForRatingAPI(orderId!);
 
-      if (res.success) {
+      if (res.success && res.data?.order) {
         setStoreName(res.data.order.store?.name || "Store");
         const initialStates: ItemRatingState[] = res.data.order.items.map(
           (item) => ({
@@ -59,16 +102,15 @@ export default function RatingProductsScreen() {
             product_name: item.product_name,
             product_image: item.product_image,
             variant_name: item.variant_name,
-            rating: 5,
-            comment: "",
-            is_anonymous: false,
+            rating: item.review?.rating ?? 5,
+            comment: item.review?.comment ?? "",
+            is_anonymous: item.review?.is_anonymous ?? false,
             video: null,
             images: [],
           }),
         );
         setItemRatings(initialStates);
       } else {
-        // Backend returned success: false (e.g. already rated) with 200-ish handling
         Alert.alert(
           "Not Available",
           res.message || "This order can no longer be rated.",
@@ -76,7 +118,6 @@ export default function RatingProductsScreen() {
         );
       }
     } catch (err: any) {
-      // 409 = already rated, 403 = unauthorized, etc — surface the real message
       const status = err?.response?.status;
       const serverMessage = err?.response?.data?.message;
 
@@ -104,6 +145,7 @@ export default function RatingProductsScreen() {
     field: keyof ItemRatingState,
     value: any,
   ) => {
+    if (isSubmitting) return;
     setItemRatings((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
@@ -112,6 +154,8 @@ export default function RatingProductsScreen() {
   };
 
   const pickImages = async (index: number) => {
+    if (isSubmitting) return;
+
     const currentImages = itemRatings[index].images;
     if (currentImages.length >= 5) {
       Alert.alert("Limit Reached", "You can upload up to 5 images per item.");
@@ -123,13 +167,13 @@ export default function RatingProductsScreen() {
     if (!permissionResult.granted) {
       Alert.alert(
         "Permission required",
-        "Permission to access camera roll is required!",
+        "Permission to access photo library is required!",
       );
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions?.Images ?? "images",
       allowsMultipleSelection: true,
       selectionLimit: 5 - currentImages.length,
       quality: 0.8,
@@ -146,24 +190,44 @@ export default function RatingProductsScreen() {
   };
 
   const pickVideo = async (index: number) => {
+    if (isSubmitting) return;
+
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
       Alert.alert(
         "Permission required",
-        "Permission to access camera roll is required!",
+        "Permission to access video library is required!",
       );
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: ImagePicker.MediaTypeOptions?.Videos ?? "videos",
       allowsEditing: true,
+      videoMaxDuration: MAX_VIDEO_DURATION_SEC,
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets.length > 0) {
       const asset = result.assets[0];
+
+      if (asset.duration && asset.duration > MAX_VIDEO_DURATION_SEC * 1000) {
+        Alert.alert(
+          "Video Too Long",
+          `Please select a video that is ${MAX_VIDEO_DURATION_SEC} seconds or shorter.`,
+        );
+        return;
+      }
+
+      if (asset.fileSize && asset.fileSize > MAX_VIDEO_SIZE_MB * 1024 * 1024) {
+        Alert.alert(
+          "Video Too Large",
+          `The video file size must be under ${MAX_VIDEO_SIZE_MB}MB.`,
+        );
+        return;
+      }
+
       const videoFile: MediaFile = {
         uri: asset.uri,
         name: asset.fileName || `video_${Date.now()}.mp4`,
@@ -174,6 +238,7 @@ export default function RatingProductsScreen() {
   };
 
   const removeImage = (itemIndex: number, imgIdx: number) => {
+    if (isSubmitting) return;
     const updatedImages = itemRatings[itemIndex].images.filter(
       (_, idx) => idx !== imgIdx,
     );
@@ -181,10 +246,13 @@ export default function RatingProductsScreen() {
   };
 
   const removeVideo = (itemIndex: number) => {
+    if (isSubmitting) return;
     updateItemState(itemIndex, "video", null);
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     try {
       setIsSubmitting(true);
       const payload = itemRatings.map((item) => ({
@@ -212,15 +280,28 @@ export default function RatingProductsScreen() {
       const status = err?.response?.status;
       const data = err?.response?.data;
 
-      // Laravel validation errors: { message, errors: { "items.0.rating": [...] } }
       if (status === 422 && data?.errors) {
-        const firstField = Object.keys(data.errors)[0];
-        const firstMessage = data.errors[firstField]?.[0];
+        const errorMessages: string[] = [];
+
+        Object.keys(data.errors).forEach((key) => {
+          const fieldMsg = data.errors[key]?.[0];
+          if (!fieldMsg) return;
+
+          const match = key.match(/^items\.(\d+)\.(.+)$/);
+          if (match) {
+            const itemNum = parseInt(match[1], 10) + 1;
+            const fieldName = match[2].replace("_", " ");
+            errorMessages.push(`Item #${itemNum} (${fieldName}): ${fieldMsg}`);
+          } else {
+            errorMessages.push(fieldMsg);
+          }
+        });
+
         Alert.alert(
           "Validation Error",
-          firstMessage ||
+          errorMessages.join("\n") ||
             data.message ||
-            "Please check your review and try again.",
+            "Please check your entry.",
         );
       } else if (status === 409) {
         Alert.alert(
@@ -232,7 +313,7 @@ export default function RatingProductsScreen() {
       } else if (status === 401 || status === 403) {
         Alert.alert(
           "Unauthorized",
-          data?.message || "You can't rate this order.",
+          data?.message || "You cannot rate this order.",
         );
       } else {
         Alert.alert(
@@ -256,7 +337,10 @@ export default function RatingProductsScreen() {
 
   return (
     <View className="flex-1 bg-slate-100">
-      <ScrollView className="flex-1 px-4">
+      <ScrollView
+        className="flex-1 px-4"
+        contentContainerStyle={{ paddingBottom: 16 }}
+      >
         <View className="pt-4">
           {itemRatings.map((item, index) => (
             <View
@@ -265,12 +349,16 @@ export default function RatingProductsScreen() {
             >
               {/* PRODUCT SUMMARY */}
               <View className="flex-row items-center pb-3 mb-3 border-b border-slate-100">
-                <Image
-                  source={{
-                    uri: `${item.product_image}`,
-                  }}
-                  className="w-14 h-14 rounded-lg"
-                />
+                {item.product_image ? (
+                  <Image
+                    source={{ uri: item.product_image }}
+                    className="w-14 h-14 rounded-lg bg-slate-200"
+                  />
+                ) : (
+                  <View className="w-14 h-14 rounded-lg bg-slate-200 justify-center items-center">
+                    <Ionicons name="image-outline" size={24} color="#94a3b8" />
+                  </View>
+                )}
 
                 <View className="ml-3 flex-1">
                   <Text
@@ -296,6 +384,7 @@ export default function RatingProductsScreen() {
                   {[1, 2, 3, 4, 5].map((star) => (
                     <TouchableOpacity
                       key={star}
+                      disabled={isSubmitting}
                       onPress={() => updateItemState(index, "rating", star)}
                     >
                       <Ionicons
@@ -311,6 +400,7 @@ export default function RatingProductsScreen() {
               {/* COMMENT INPUT */}
               <View className="mt-4">
                 <TextInput
+                  editable={!isSubmitting}
                   multiline
                   numberOfLines={4}
                   placeholder="Share your thoughts about this product..."
@@ -318,7 +408,9 @@ export default function RatingProductsScreen() {
                   onChangeText={(text) =>
                     updateItemState(index, "comment", text)
                   }
-                  className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 min-h-[90px]"
+                  className={`bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 min-h-[90px] ${
+                    isSubmitting ? "opacity-50" : ""
+                  }`}
                   textAlignVertical="top"
                 />
               </View>
@@ -326,40 +418,44 @@ export default function RatingProductsScreen() {
               {/* MEDIA UPLOAD SECTION */}
               <View className="mt-4">
                 <Text className="text-xs font-semibold text-slate-600 mb-2">
-                  Add Photo / Video
+                  Add Photo / Video (Max 100mb)
                 </Text>
-                <View className="flex-row flex-wrap gap-2 items-center">
-                  {item.video && (
-                    <View className="w-20 h-20 bg-slate-900 rounded-xl justify-center items-center relative">
-                      <Ionicons name="videocam" size={28} color="#fff" />
-                      <TouchableOpacity
-                        onPress={() => removeVideo(index)}
-                        className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5"
-                      >
-                        <Ionicons name="close" size={14} color="#fff" />
-                      </TouchableOpacity>
-                    </View>
-                  )}
 
+                {/* VIDEO PLAYER PREVIEW */}
+                {item.video && (
+                  <LocalVideoPreview
+                    videoUri={item.video.uri}
+                    onRemove={() => removeVideo(index)}
+                    disabled={isSubmitting}
+                  />
+                )}
+
+                {/* PHOTOS LIST & UPLOAD BUTTONS */}
+                <View className="flex-row flex-wrap gap-2 items-center mt-1">
                   {item.images.map((img, imgIdx) => (
                     <View key={imgIdx} className="w-20 h-20 relative">
                       <Image
                         source={{ uri: img.uri }}
                         className="w-full h-full rounded-xl bg-slate-200"
                       />
-                      <TouchableOpacity
-                        onPress={() => removeImage(index, imgIdx)}
-                        className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5"
-                      >
-                        <Ionicons name="close" size={14} color="#fff" />
-                      </TouchableOpacity>
+                      {!isSubmitting && (
+                        <TouchableOpacity
+                          onPress={() => removeImage(index, imgIdx)}
+                          className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5"
+                        >
+                          <Ionicons name="close" size={14} color="#fff" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   ))}
 
                   {item.images.length < 5 && (
                     <TouchableOpacity
+                      disabled={isSubmitting}
                       onPress={() => pickImages(index)}
-                      className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-xl justify-center items-center bg-slate-50"
+                      className={`w-20 h-20 border-2 border-dashed border-slate-300 rounded-xl justify-center items-center bg-slate-50 ${
+                        isSubmitting ? "opacity-50" : ""
+                      }`}
                     >
                       <Ionicons
                         name="camera-outline"
@@ -374,8 +470,11 @@ export default function RatingProductsScreen() {
 
                   {!item.video && (
                     <TouchableOpacity
+                      disabled={isSubmitting}
                       onPress={() => pickVideo(index)}
-                      className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-xl justify-center items-center bg-slate-50"
+                      className={`w-20 h-20 border-2 border-dashed border-slate-300 rounded-xl justify-center items-center bg-slate-50 ${
+                        isSubmitting ? "opacity-50" : ""
+                      }`}
                     >
                       <Ionicons
                         name="videocam-outline"
@@ -399,6 +498,7 @@ export default function RatingProductsScreen() {
                   </Text>
                 </View>
                 <Switch
+                  disabled={isSubmitting}
                   value={item.is_anonymous}
                   onValueChange={(val) =>
                     updateItemState(index, "is_anonymous", val)
@@ -411,17 +511,26 @@ export default function RatingProductsScreen() {
         </View>
       </ScrollView>
 
-      {/* FOOTER SUBMIT BUTTON */}
-      <View className="p-4 bg-white border-t border-slate-200">
+      {/* FOOTER SUBMIT BUTTON — paddingBottom uses the device's safe-area
+          inset so the button always clears the gesture/nav bar or home
+          indicator instead of sitting flush against (or under) it. */}
+      <View
+        className="px-4 pt-4 bg-white border-t border-slate-200"
+        style={{ paddingBottom: insets.bottom + 16 }}
+      >
         <TouchableOpacity
           disabled={isSubmitting}
           onPress={handleSubmit}
-          className="bg-primary py-3.5 rounded-xl justify-center items-center flex-row"
+          className={`py-3.5 rounded-xl justify-center items-center flex-row ${
+            isSubmitting ? "bg-slate-400" : "bg-[#034194]"
+          }`}
         >
-          {isSubmitting ? (
+          {isSubmitting && (
             <ActivityIndicator size="small" color="#fff" className="mr-2" />
-          ) : null}
-          <Text className="text-white font-bold text-base">Submit Review</Text>
+          )}
+          <Text className="text-white font-bold text-base">
+            {isSubmitting ? "Submitting..." : "Submit Review"}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
