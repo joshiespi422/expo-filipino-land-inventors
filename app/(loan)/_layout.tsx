@@ -1,9 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
-import { Stack, usePathname, useRouter, useSegments } from "expo-router";
+import {
+  Stack,
+  useLocalSearchParams,
+  usePathname,
+  useRouter,
+  useSegments,
+} from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -19,6 +25,7 @@ const queryClient = new QueryClient();
 export default function RootLayout() {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useLocalSearchParams<{ from?: string }>();
   const segments = useSegments() as string[];
 
   const isCongratulationsPage = segments.some((s) => s === "congratulations");
@@ -33,6 +40,71 @@ export default function RootLayout() {
     segments[segments.length - 1] === "index" ||
     (segments.includes("(loan)") && segments.length === 1);
 
+  // --- HISTORY STACK TRACKING ---
+  const currentHref = React.useMemo(() => {
+    const qs = new URLSearchParams(
+      Object.entries(params).reduce(
+        (acc, [k, v]) => {
+          if (v !== undefined) acc[k] = String(v);
+          return acc;
+        },
+        {} as Record<string, string>,
+      ),
+    ).toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }, [pathname, params]);
+
+  const historyRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    const stack = historyRef.current;
+    const top = stack[stack.length - 1];
+    const belowTop = stack[stack.length - 2];
+
+    if (top === currentHref) {
+      // same screen re-render, ignore
+      return;
+    }
+    if (belowTop === currentHref) {
+      // we've moved BACK to the previous tracked entry
+      // (e.g. hardware back / swipe gesture) — sync by popping
+      stack.pop();
+      return;
+    }
+    // otherwise this is a forward navigation — track it
+    stack.push(currentHref);
+  }, [currentHref]);
+
+  const handleBackPress = () => {
+    try {
+      const stack = historyRef.current;
+
+      if (stack.length > 1) {
+        // We're deeper than the entry screen — step back one screen
+        // within this group.
+        stack.pop();
+        const prevHref = stack[stack.length - 1];
+        console.log("↩️ [Loan Back] Popping to", prevHref);
+        router.replace(prevHref as any);
+        return;
+      }
+
+      // We're at the entry screen of this group — exit based on
+      // how we originally arrived.
+      if (params.from === "notification") {
+        console.log("↩️ [Loan Back] Entry screen, returning to notification");
+        router.replace("/(main)/notification");
+        return;
+      }
+      console.log("↩️ [Loan Back] Entry screen, returning to home");
+      router.replace("../(main)/");
+    } catch (e) {
+      console.error("❌ [Loan Back] Error:", e);
+      router.replace("../(main)/");
+    }
+  };
+
+  // --- HIDE NAV BAR (Android) ---
   useEffect(() => {
     const hideNavBar = async () => {
       if (Platform.OS === "android") {
@@ -46,14 +118,6 @@ export default function RootLayout() {
     };
     hideNavBar();
   }, []);
-
-  const handleBackPress = () => {
-    if (isLoanIndex) {
-      router.replace("../(main)/");
-      return;
-    }
-    router.back();
-  };
 
   return (
     <QueryClientProvider client={queryClient}>
