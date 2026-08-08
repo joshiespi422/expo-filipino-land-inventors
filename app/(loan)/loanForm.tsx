@@ -4,6 +4,7 @@ import {
   computeLoan,
   createLoan,
   getLoanableAmount,
+  getLoans,
 } from "@/services/loanService";
 import { ComputeLoanResponse } from "@/types/loan.types";
 import { Picker } from "@react-native-picker/picker";
@@ -34,6 +35,10 @@ export default function LoanFormPage() {
   const [amount, setAmount] = useState("");
   const [months, setMonths] = useState("6");
   const [maxLimit, setMaxLimit] = useState(0);
+
+  // NEW: dynamic max term months (driven by settings.default_term_months)
+  const [maxTermMonths, setMaxTermMonths] = useState(12);
+
   const [computedData, setComputedData] = useState<ComputeLoanResponse | null>(
     null,
   );
@@ -58,13 +63,36 @@ export default function LoanFormPage() {
     }, []),
   );
 
-  // Initial Load: Fetch Max Loanable Amount
+  // Initial Load: Fetch Max Loanable Amount + Default Term Months (from settings)
   useEffect(() => {
     const init = async () => {
       try {
         setPageLoading(true);
-        const limit = await getLoanableAmount();
+
+        const [limit, loansRes] = await Promise.all([
+          getLoanableAmount(),
+          getLoans(),
+        ]);
+
         setMaxLimit(parseFloat(limit));
+
+        // Pull default_term_months from settings, same as index page
+        const defaultTermMonths = loansRes?.meta?.settings?.default_term_months;
+
+        if (defaultTermMonths && Number(defaultTermMonths) > 0) {
+          const termMonths = Number(defaultTermMonths);
+          setMaxTermMonths(termMonths);
+
+          // Clamp the currently selected months value so it never
+          // exceeds the allowed range (e.g. default "6" but max is 3)
+          setMonths((prevMonths) => {
+            const prevNum = parseInt(prevMonths, 10);
+            if (!prevNum || prevNum > termMonths) {
+              return String(termMonths >= 6 ? 6 : termMonths);
+            }
+            return prevMonths;
+          });
+        }
       } catch (error) {
         console.error("Failed to fetch limit", error);
       } finally {
@@ -182,6 +210,9 @@ export default function LoanFormPage() {
     );
   }
 
+  // Build the months range dynamically: 1 -> maxTermMonths
+  const monthOptions = Array.from({ length: maxTermMonths }, (_, i) => i + 1);
+
   return (
     <View className="flex-1 bg-white">
       <ScrollView
@@ -227,7 +258,7 @@ export default function LoanFormPage() {
                     dropdownIconColor="#000000"
                     style={{ color: "#000000" }}
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+                    {monthOptions.map((m) => (
                       <Picker.Item
                         key={m}
                         label={`${m} Months`}
