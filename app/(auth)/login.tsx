@@ -1,5 +1,7 @@
 import { authService } from "@/services/authService";
+import { biometricService } from "@/services/biometricService";
 import { useAuthStore } from "@/store/useAuthStore";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -40,11 +42,24 @@ export default function LoginPage() {
     message: "",
   });
 
+  const [biometricAlert, setBiometricAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
   const [loadingState, setLoadingState] = useState({
     page: true,
     action: false,
     nav: false,
+    biometric: false,
   });
+
+  // Biometric state
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometryLabel, setBiometryLabel] = useState<string>("Biometrics");
+  const [currentDeviceId, setCurrentDeviceId] = useState<string>("");
+  const [hasBiometricEnabled, setHasBiometricEnabled] = useState(false);
 
   const isProcessing = useRef(false);
 
@@ -54,6 +69,33 @@ export default function LoginPage() {
       400,
     );
     return () => clearTimeout(timer);
+  }, []);
+
+  // Initialize biometric support
+  useEffect(() => {
+    const initBiometric = async () => {
+      try {
+        // Check biometric support
+        const { available, biometryType } =
+          await biometricService.isSupported();
+        setBiometricAvailable(available);
+        setBiometryLabel(biometricService.getBiometryLabel(biometryType));
+
+        // Get device ID
+        const deviceId = await biometricService.getDeviceId();
+        setCurrentDeviceId(deviceId);
+
+        // Check if user has biometric enabled
+        if (available) {
+          const publicKey = await biometricService.createKeys();
+          setHasBiometricEnabled(!!publicKey);
+        }
+      } catch (error) {
+        console.error("Biometric initialization error:", error);
+      }
+    };
+
+    initBiometric();
   }, []);
 
   // 🔥 SAVE POSITION WHEN KEYBOARD OPENS
@@ -78,6 +120,10 @@ export default function LoginPage() {
 
   const showAlert = (title: string, message: string) => {
     setAlert({ visible: true, title, message });
+  };
+
+  const showBiometricAlert = (title: string, message: string) => {
+    setBiometricAlert({ visible: true, title, message });
   };
 
   const handleLogin = async () => {
@@ -118,6 +164,74 @@ export default function LoginPage() {
     }
   };
 
+  const handleBiometricLogin = async () => {
+    if (
+      isProcessing.current ||
+      loadingState.action ||
+      loadingState.nav ||
+      loadingState.biometric
+    )
+      return;
+
+    if (!biometricAvailable) {
+      showBiometricAlert(
+        "Not Supported",
+        "Biometric authentication is not available on this device.",
+      );
+      return;
+    }
+
+    if (!hasBiometricEnabled) {
+      showBiometricAlert(
+        "Not Enabled",
+        "Please enable biometric login in your security settings first.",
+      );
+      return;
+    }
+
+    isProcessing.current = true;
+    setLoadingState((prev) => ({ ...prev, biometric: true }));
+
+    try {
+      // Prompt biometric authentication
+      const authenticated = await biometricService.promptBiometrics(
+        `Authenticate with ${biometryLabel} to login`,
+      );
+
+      if (!authenticated) {
+        isProcessing.current = false;
+        setLoadingState((prev) => ({ ...prev, biometric: false }));
+        return;
+      }
+
+      // Get public key
+      const publicKey = await biometricService.createKeys();
+
+      // Attempt biometric login
+      const data = await authService.biometricLogin(currentDeviceId, publicKey);
+      await setAuth(data.token, data.user);
+
+      setLoadingState((prev) => ({ ...prev, nav: true }));
+      router.replace("/(main)");
+    } catch (error: any) {
+      let msg = "Biometric login failed. Please try again.";
+
+      if (error?.errors) {
+        const errorValues = Object.values(error.errors);
+        msg = Array.isArray(errorValues[0])
+          ? errorValues[0][0]
+          : String(errorValues[0]);
+      } else if (error?.message) {
+        msg = error.message;
+      }
+
+      showBiometricAlert("Login Failed", msg);
+
+      isProcessing.current = false;
+      setLoadingState((prev) => ({ ...prev, biometric: false }));
+    }
+  };
+
   const handleForgotPassword = () => {
     if (isDisabled) return;
     router.push("/forgetPassword");
@@ -136,7 +250,7 @@ export default function LoginPage() {
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        bounces={false} // 🔥 prevents snap-back issues
+        bounces={false}
         onScroll={(e) => {
           scrollPosition.current = e.nativeEvent.contentOffset.y;
         }}
@@ -160,6 +274,45 @@ export default function LoginPage() {
                       title="Login Account"
                       description="Log in to your account to securely access your dashboard and manage your features."
                     />
+
+                    {/* --- BIOMETRIC LOGIN BUTTON --- */}
+                    {biometricAvailable && hasBiometricEnabled && (
+                      <TouchableOpacity
+                        onPress={handleBiometricLogin}
+                        disabled={isDisabled || loadingState.biometric}
+                        activeOpacity={0.8}
+                        className={`mb-4 p-4 rounded-2xl flex-row justify-center items-center border-2 ${
+                          isDisabled || loadingState.biometric
+                            ? "border-slate-300 bg-slate-50"
+                            : "border-primary bg-primary/5"
+                        }`}
+                      >
+                        {loadingState.biometric ? (
+                          <ActivityIndicator color="#034194" />
+                        ) : (
+                          <>
+                            <Ionicons
+                              name="finger-print"
+                              size={20}
+                              color="#034194"
+                              style={{ marginRight: 8 }}
+                            />
+                            <Text className="text-primary font-bold text-base">
+                              Login with {biometryLabel}
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {/* --- DIVIDER --- */}
+                    {biometricAvailable && hasBiometricEnabled && (
+                      <View className="flex-row items-center mb-4">
+                        <View className="flex-1 h-[1px] bg-gray-200" />
+                        <Text className="px-3 text-gray-400 text-xs">OR</Text>
+                        <View className="flex-1 h-[1px] bg-gray-200" />
+                      </View>
+                    )}
 
                     <AuthInput
                       label="Mobile Number"
@@ -220,11 +373,20 @@ export default function LoginPage() {
         </View>
       </ScrollView>
 
+      {/* --- REGULAR LOGIN ALERT --- */}
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
         onClose={() => setAlert({ ...alert, visible: false })}
+      />
+
+      {/* --- BIOMETRIC LOGIN ALERT --- */}
+      <CustomAlert
+        visible={biometricAlert.visible}
+        title={biometricAlert.title}
+        message={biometricAlert.message}
+        onClose={() => setBiometricAlert({ ...biometricAlert, visible: false })}
       />
     </KeyboardAvoidingView>
   );

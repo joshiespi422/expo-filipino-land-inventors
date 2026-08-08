@@ -16,6 +16,24 @@ export const authService = {
     }
   },
 
+  /**
+   * Biometric login using device_id and public_key
+   */
+  biometricLogin: async (deviceId: string, publicKey: string) => {
+    try {
+      const response = await api.post("/login/biometric", {
+        device_id: deviceId,
+        public_key: publicKey,
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.response && error.response.data) {
+        throw error.response.data;
+      }
+      throw { message: "Network error. Please check your connection." };
+    }
+  },
+
   logout: async (token: string) => {
     try {
       const response = await api.post(
