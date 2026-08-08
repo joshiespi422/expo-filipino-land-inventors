@@ -24,6 +24,7 @@ import {
   markConversationAsRead,
 } from "@/services/chatService";
 import echo from "@/services/echo";
+import { getNotifications } from "@/services/notificationService";
 
 import Camera from "../../assets/images/icon/camera.png";
 import History from "../../assets/images/icon/History.png";
@@ -47,6 +48,7 @@ export default function MainLayout() {
   >(null);
   const [supportUnreadCount, setSupportUnreadCount] = useState(0);
   const [supportNotification, setSupportNotification] = useState<any>(null);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const supportSlideAnim = useRef(new Animated.Value(-100)).current;
   const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -70,6 +72,7 @@ export default function MainLayout() {
   const isLoadWallet = pathname === "/load";
   const isInfo = pathname === "/info";
   const isNotification = pathname === "/notification";
+  const isBiometric = pathname === "/profile/biometricSettings";
 
   const isHistory = pathname === "/history";
   const isCameraQr = pathname === "/camera";
@@ -176,6 +179,28 @@ export default function MainLayout() {
       if (echo) echo.leave(channelName);
     };
   }, [user?.id, isChatSupportScreen]);
+
+  // ===== Fetch/Sync Notification Count on Route Change & Initial Load =====
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let isMounted = true;
+    const loadNotificationCount = async () => {
+      try {
+        const { unreadCount } = await getNotifications();
+        if (isMounted) {
+          setNotificationUnreadCount(unreadCount);
+        }
+      } catch (error) {
+        console.error("Failed to load notification count:", error);
+      }
+    };
+
+    loadNotificationCount();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, pathname]);
 
   const closeSupportNotification = () => {
     if (dismissTimerRef.current) {
@@ -430,7 +455,9 @@ export default function MainLayout() {
                                             ? "Search News"
                                             : isLoadWallet
                                               ? "Load Wallet"
-                                              : ""}
+                                              : isBiometric
+                                                ? "Quick & Secure Login"
+                                                : ""}
                 </Text>
 
                 <View style={{ width: 31 }} />
@@ -499,7 +526,9 @@ export default function MainLayout() {
                   onPress={() => router.push("/history")}
                 >
                   <Image source={History} style={{ width: 28, height: 28 }} />
-                  <Text className="text-white text-[10px] mt-1">History</Text>
+                  <Text className="text-white text-[10px] mt-1">
+                    Transactions
+                  </Text>
                 </TouchableOpacity>
 
                 {/* Camera */}
@@ -527,15 +556,30 @@ export default function MainLayout() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Notification - Coming Soon */}
+                {/* Notification */}
                 <TouchableOpacity
                   className="items-center ps-2 mt-1 flex-1"
                   onPress={() => router.push("/notification")}
+                  activeOpacity={0.7}
                 >
-                  <Image
-                    source={Notification}
-                    style={{ width: 28, height: 28 }}
-                  />
+                  <View className="relative">
+                    <Image
+                      source={Notification}
+                      style={{ width: 28, height: 28 }}
+                    />
+
+                    {/* Unread notification badge */}
+                    {notificationUnreadCount > 0 && (
+                      <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border-2 border-white">
+                        <Text className="text-white text-[9px] font-extrabold text-center">
+                          {notificationUnreadCount > 9
+                            ? "9+"
+                            : notificationUnreadCount}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
                   <Text className="text-white text-[10px] mt-1">
                     Notification
                   </Text>

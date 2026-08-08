@@ -12,9 +12,17 @@ export interface NotificationItem {
   isRead: boolean;
 }
 
-export const getNotifications = async (): Promise<NotificationItem[]> => {
+export interface NotificationsResponse {
+  notifications: NotificationItem[];
+  unreadCount: number;
+}
+
+export const getNotifications = async (): Promise<NotificationsResponse> => {
   const res = await api.get("/notifications");
-  return res.data.data;
+  return {
+    notifications: res.data.data,
+    unreadCount: res.data.unread_count ?? 0,
+  };
 };
 
 export const markNotificationAsRead = async (id: string): Promise<void> => {

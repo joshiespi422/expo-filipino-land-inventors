@@ -1,5 +1,6 @@
 import {
   getNotifications,
+  markAllNotificationsAsRead,
   markNotificationAsRead,
   NotificationItem,
 } from "@/services/notificationService";
@@ -21,14 +22,18 @@ export default function NotificationsPage() {
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState("All");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
 
   // Fetch notifications
   const fetchNotifications = async () => {
     try {
-      const data = await getNotifications();
+      const { notifications: data, unreadCount: count } =
+        await getNotifications();
       setNotifications(data);
+      setUnreadCount(count);
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
     } finally {
@@ -46,6 +51,29 @@ export default function NotificationsPage() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchNotifications();
+  };
+
+  const handleMarkAllRead = async () => {
+    if (unreadCount === 0 || markingAll) return;
+
+    // Optimistic update
+    setMarkingAll(true);
+    const prevNotifications = notifications;
+    const prevUnreadCount = unreadCount;
+
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setUnreadCount(0);
+
+    try {
+      await markAllNotificationsAsRead();
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+      // Revert on failure
+      setNotifications(prevNotifications);
+      setUnreadCount(prevUnreadCount);
+    } finally {
+      setMarkingAll(false);
+    }
   };
 
   // Helper function to map notification types to Ionicons & Colors
@@ -83,6 +111,7 @@ export default function NotificationsPage() {
       setNotifications((prev) =>
         prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)),
       );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
       markNotificationAsRead(item.id).catch(console.error);
     }
 
@@ -90,10 +119,8 @@ export default function NotificationsPage() {
       try {
         console.log("📍 [Notification] Original route:", item.route);
 
-        // Split path and query parameters safely
         const [rawPath, queryString] = item.route.split("?");
 
-        // Ensure leading slash for Expo Router
         const cleanPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
         console.log("📍 [Notification] Clean path:", cleanPath);
 
@@ -105,7 +132,6 @@ export default function NotificationsPage() {
           });
         }
 
-        // Add navigation origin context
         params.from = "notification";
         console.log("📍 [Notification] Final params:", params);
 
@@ -135,25 +161,58 @@ export default function NotificationsPage() {
 
   return (
     <View className="flex-1 bg-slate-100">
-      {/* Category Tabs */}
-      <View className="flex-row bg-white border-b border-slate-200 px-4 py-2">
-        {notificationTabs.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            onPress={() => setSelectedTab(tab)}
-            className={`px-4 py-2 rounded-full mr-2 ${
-              selectedTab === tab ? "bg-[#034194]" : "bg-slate-100"
-            }`}
-          >
-            <Text
-              className={`text-xs font-semibold ${
-                selectedTab === tab ? "text-white" : "text-slate-600"
+      {/* Category Tabs + Mark All Read */}
+      <View className="flex-row items-center justify-between bg-white border-b border-slate-200 px-4 py-2">
+        <View className="flex-row">
+          {notificationTabs.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              onPress={() => setSelectedTab(tab)}
+              className={`px-4 py-2 rounded-full mr-2 flex-row items-center ${
+                selectedTab === tab ? "bg-[#034194]" : "bg-slate-100"
               }`}
             >
-              {tab}
-            </Text>
+              <Text
+                className={`text-xs font-semibold ${
+                  selectedTab === tab ? "text-white" : "text-slate-600"
+                }`}
+              >
+                {tab}
+              </Text>
+              {tab === "Unread" && unreadCount > 0 && (
+                <View
+                  className={`ml-1.5 rounded-full px-1.5 py-0.5 ${
+                    selectedTab === tab ? "bg-white/25" : "bg-[#034194]"
+                  }`}
+                >
+                  <Text
+                    className={`text-[10px] font-bold ${
+                      selectedTab === tab ? "text-white" : "text-white"
+                    }`}
+                  >
+                    {unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {unreadCount > 0 && (
+          <TouchableOpacity
+            onPress={handleMarkAllRead}
+            disabled={markingAll}
+            className="px-3 py-1.5"
+          >
+            {markingAll ? (
+              <ActivityIndicator size="small" color="#034194" />
+            ) : (
+              <Text className="text-xs font-semibold text-[#034194]">
+                Mark all read
+              </Text>
+            )}
           </TouchableOpacity>
-        ))}
+        )}
       </View>
 
       {/* Notifications List */}
@@ -174,7 +233,6 @@ export default function NotificationsPage() {
                 item.isRead ? "bg-white" : "bg-blue-50/60"
               }`}
             >
-              {/* Dynamic Icon Indicator */}
               <View className={`p-2.5 rounded-full mr-3 ${iconInfo.bg}`}>
                 <Ionicons
                   name={iconInfo.name}
@@ -183,7 +241,6 @@ export default function NotificationsPage() {
                 />
               </View>
 
-              {/* Text Details */}
               <View className="flex-1 pr-2">
                 <View className="flex-row justify-between items-start mb-0.5">
                   <Text
@@ -196,7 +253,6 @@ export default function NotificationsPage() {
                   >
                     {item.title}
                   </Text>
-                  {/* <Text>{item.route}</Text> */}
                   <Text className="text-[10px] text-slate-400 mt-0.5 font-medium">
                     {item.timestamp}
                   </Text>
@@ -214,7 +270,6 @@ export default function NotificationsPage() {
                 </Text>
               </View>
 
-              {/* Unread Indicator Dot */}
               {!item.isRead && (
                 <View className="w-2 h-2 rounded-full bg-[#034194] self-center ml-1" />
               )}
