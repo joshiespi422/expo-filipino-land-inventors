@@ -17,7 +17,8 @@
       "bundleIdentifier": "com.jospay.fismpc",
       "statusBarHidden": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Allow FISMPC to use Face ID for secure authentication."
       }
     },
     "android": {
@@ -29,7 +30,9 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "WRITE_EXTERNAL_STORAGE",
-        "READ_EXTERNAL_STORAGE"
+        "READ_EXTERNAL_STORAGE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
       ],
       "softwareKeyboardLayoutMode": "resize"
     },
@@ -47,6 +50,12 @@
       "expo-navigation-bar",
       "expo-secure-store",
       "@react-native-community/datetimepicker",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow FISMPC to use Face ID for secure authentication."
+        }
+      ],
       [
         "expo-camera",
         {
