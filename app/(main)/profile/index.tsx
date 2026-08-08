@@ -321,6 +321,12 @@ export default function ProfileScreen() {
                 title="Security & Password"
                 onPress={() => router.push("/profile/changePassword")}
               />
+              <ProfileMenuItem
+                icon="finger-print-outline"
+                title="Quick & Secure Login"
+                onPress={() => router.push("/profile/biometricSettings")}
+                isLast
+              />
             </View>
           </View>
         )}
@@ -416,11 +422,13 @@ export default function ProfileScreen() {
   );
 }
 
-function ProfileMenuItem({ icon, title, onPress }: any) {
+function ProfileMenuItem({ icon, title, onPress, isLast }: any) {
   return (
     <TouchableOpacity
       onPress={onPress}
-      className="flex-row items-center justify-between p-4 border-b border-gray-50"
+      className={`flex-row items-center justify-between p-4 ${
+        isLast ? "" : "border-b border-gray-50"
+      }`}
     >
       <View className="flex-row items-center">
         <View className="bg-blue p-2 rounded-lg">

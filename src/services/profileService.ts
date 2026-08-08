@@ -112,4 +112,33 @@ export const profileService = {
     const response = await api.delete(`/profile/address/${id}`);
     return response.data;
   },
+
+  // --- QUICK AND SECURE LOGIN / BIOMETRIC
+
+  getAuthDevices: async () => {
+    const response = await api.get("/profile/auth-devices");
+    return response.data.data || [];
+  },
+
+  registerAuthDevice: async (data: {
+    device_id: string;
+    platform: "android" | "ios";
+    public_key: string;
+    device_name?: string;
+  }) => {
+    const response = await api.post("/profile/auth-devices", data);
+    return response.data;
+  },
+
+  disableAuthDevice: async (id: number) => {
+    const response = await api.patch(`/profile/auth-devices/${id}/disable`);
+
+    return response.data;
+  },
+
+  removeAuthDevice: async (id: number) => {
+    const response = await api.delete(`/profile/auth-devices/${id}`);
+
+    return response.data;
+  },
 };
