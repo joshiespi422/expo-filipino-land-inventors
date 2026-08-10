@@ -62,6 +62,7 @@ export default function DashboardPage() {
 
   const isActive = statusName === "active";
   const isApproved = statusName === "approved";
+  const isRejected = statusName === "rejected";
   const isForApproval = statusName === "for_approval";
 
   // 1. Create a centralized data fetching function
@@ -140,6 +141,11 @@ export default function DashboardPage() {
     ) {
       router.push(item.href as any);
       return;
+    }
+
+    if (!isMember) {
+      setPendingFeature(item.label);
+      setShowAlert(true);
     }
 
     // Other features require MEMBER
@@ -254,6 +260,25 @@ export default function DashboardPage() {
         //     color="white"
         //   />
         // ),
+      };
+    }
+
+    // --- REJECTED: Needs to contact support ---
+    if (isBasic && isRejected) {
+      return {
+        title: "Application Rejected",
+        message: (
+          <>
+            Your profile submission was not approved, so{" "}
+            <Text className="font-bold text-slate-800">{pendingFeature}</Text>{" "}
+            isn't available yet. Please chat with our support team to find out
+            why and how to proceed.
+          </>
+        ),
+        buttonText: "Chat with Support",
+        buttonColor: "bg-[#D70127]",
+        textColor: "text-[#D70127]",
+        route: "/(intellectual-chat)/",
       };
     }
 
