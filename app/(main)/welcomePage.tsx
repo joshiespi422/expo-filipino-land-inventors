@@ -152,7 +152,7 @@ export default function CongratulationPage() {
     setNavigating(true);
 
     setTimeout(() => {
-      router.push("../(main)/");
+      router.replace("../(main)/");
     }, 700);
   };
 
