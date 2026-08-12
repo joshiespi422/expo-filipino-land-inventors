@@ -45,34 +45,6 @@ export default function RootLayout() {
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // const handleBackPress = () => {
-  //   try {
-  //     if (params.from === "notification") {
-  //       console.log("↩️  [Intellectual Back] Returning to notification page");
-  //       router.replace("/(main)/notification");
-  //       return;
-  //     }
-
-  //     if (params.from === "home") {
-  //       console.log("↩️  [Intellectual Back] Returning to home");
-  //       router.replace("/(main)");
-  //       return;
-  //     }
-
-  //     if (router.canGoBack()) {
-  //       console.log("↩️ [Intellectual Back] Using router.back()");
-  //       router.back();
-  //       return;
-  //     }
-
-  //     console.log("↩️ [Intellectual Back] Fallback to home");
-  //     router.replace("/(main)");
-  //   } catch (e) {
-  //     console.error("❌ [Intellectual Back] Error:", e);
-  //     router.replace("/(main)");
-  //   }
-  // };
-
   const currentHref = React.useMemo(() => {
     const qs = new URLSearchParams(
       Object.entries(params).reduce(
