@@ -1,10 +1,10 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { profileService } from "@/services/profileService";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -76,11 +76,26 @@ export default function ChangePasswordScreen() {
     new_password_confirmation: "",
   });
 
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    onCloseAction: undefined as (() => void) | undefined,
+  });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    onCloseAction?: () => void,
+  ) => {
+    setAlert({ visible: true, title, message, onCloseAction });
+  };
+
   const handleChangePassword = async () => {
     Keyboard.dismiss();
 
     if (form.new_password !== form.new_password_confirmation) {
-      Alert.alert("Error", "New passwords do not match");
+      showAlert("Error", "New passwords do not match");
       return;
     }
 
@@ -90,15 +105,15 @@ export default function ChangePasswordScreen() {
     try {
       const response = await profileService.changePassword(form);
       if (response.success) {
-        Alert.alert("Success", "Password updated successfully!", [
-          { text: "OK", onPress: () => router.back() },
-        ]);
+        showAlert("Success", "Password updated successfully!", () =>
+          router.back(),
+        );
       }
     } catch (error: any) {
       if (error.response?.status === 422) {
         setErrors(error.response.data.errors || {});
       } else {
-        Alert.alert(
+        showAlert(
           "Error",
           error.response?.data?.message || "Could not update password",
         );
@@ -182,6 +197,16 @@ export default function ChangePasswordScreen() {
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
+
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        onClose={() => {
+          setAlert({ ...alert, visible: false });
+          alert.onCloseAction?.();
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
