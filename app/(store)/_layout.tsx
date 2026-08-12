@@ -411,7 +411,7 @@ export default function RootLayout() {
                 {/* NOTIFICATION */}
                 <TouchableOpacity
                   className="items-center flex-1"
-                  onPress={() => router.push("/notification")}
+                  onPress={() => router.push("/(store)/notification")}
                 >
                   <Image
                     source={isNotification ? NotifBlue : NotifGrey}
