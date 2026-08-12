@@ -41,6 +41,8 @@ import News from "../../assets/images/icon/News.png";
 // import Suggest from "../../assets/images/icon/Suggest.png";
 import image from "../../assets/images/image.png";
 
+const SCREEN = Dimensions.get("screen");
+
 const { width } = Dimensions.get("window");
 
 export default function DashboardPage() {
@@ -133,47 +135,112 @@ export default function DashboardPage() {
     }
   };
 
+  // const handleMenuPress = (item: any) => {
+  //   if (
+  //     item.label === "FISMPC Online Store" ||
+  //     item.label === "Coop Membership" ||
+  //     item.label === "News & Event"
+  //   ) {
+  //     router.push(item.href as any);
+  //     return;
+  //   }
+
+  //   if (!isMember) {
+  //     setPendingFeature(item.label);
+  //     setShowAlert(true);
+  //   }
+
+  //   // Other features require MEMBER
+  //   if (!isMember) {
+  //     setPendingFeature(item.label);
+  //     setShowAlert(true);
+  //   } else {
+  //     // ✅ CRITICAL: Pass from:"home" so back button knows where to return
+  //     // This ensures that when users click back from the feature page,
+  //     // they return to home instead of wherever they were before
+  //     console.log(
+  //       `📍 [Dashboard] Navigating to ${item.label} from home/dashboard`,
+  //     );
+  //     router.push({
+  //       pathname: item.href as any,
+  //       params: { from: "home" },
+  //     });
+  //   }
+  // };
+
   const handleMenuPress = (item: any) => {
+    if (item.comingSoon) {
+      handleComingSoon();
+      return;
+    }
+
+    // 1. Check if the user is Basic and either For Approval or Rejected.
+    // If so, block them from accessing FISMPC Online Store, Coop Membership, and News & Event (and show the alert).
+    if (
+      (isBasic && isForApproval) ||
+      (isBasic && isRejected) ||
+      (isBasic && isActive)
+    ) {
+      if (
+        item.label === "FISMPC Online Store" ||
+        item.label === "Coop Membership" ||
+        item.label === "News & Event"
+      ) {
+        setPendingFeature(item.label);
+        setShowAlert(true);
+        return;
+      }
+    }
+
+    // 2. Normal free access items for other users/statuses
     if (
       item.label === "FISMPC Online Store" ||
       item.label === "Coop Membership" ||
       item.label === "News & Event"
     ) {
-      router.push(item.href as any);
-      return;
-    }
-
-    if (!isMember) {
-      setPendingFeature(item.label);
-      setShowAlert(true);
-    }
-
-    // Other features require MEMBER
-    if (!isMember) {
-      setPendingFeature(item.label);
-      setShowAlert(true);
-    } else {
-      // ✅ CRITICAL: Pass from:"home" so back button knows where to return
-      // This ensures that when users click back from the feature page,
-      // they return to home instead of wherever they were before
-      console.log(
-        `📍 [Dashboard] Navigating to ${item.label} from home/dashboard`,
-      );
       router.push({
         pathname: item.href as any,
         params: { from: "home" },
       });
+      return;
     }
+
+    // 3. If the user is not a member (e.g. Basic + Active or Basic + Approved capital setup), show alert
+    if (!isMember) {
+      setPendingFeature(item.label);
+      setShowAlert(true);
+      return;
+    }
+
+    // 4. Authorized Members: Proceed with navigation
+    console.log(
+      `📍 [Dashboard] Navigating to ${item.label} from home/dashboard`,
+    );
+    router.push({
+      pathname: item.href as any,
+      params: { from: "home" },
+    });
   };
 
   const menuItems = [
-    { label: "Business Training", href: "/(business)/", source: Businessicon },
+    {
+      label: "Business Training",
+      href: "/(business)/",
+      source: Businessicon,
+      comingSoon: true,
+    },
     {
       label: "Intellectual Property Assistant",
       href: "/(intellectual)/",
       source: Intellectual,
+      comingSoon: true,
     },
-    { label: "Loan Assistance", href: "/(loan)/", source: Loan },
+    {
+      label: "Loan Assistance",
+      href: "/(loan)/",
+      source: Loan,
+      comingSoon: true,
+    },
     // {
     //   label: "Funding & Invest Opportunities",
     //   href: "/(auth)/login",
@@ -186,12 +253,17 @@ export default function DashboardPage() {
     // },
     // { label: "R & D Collaboration", href: "/", source: RD },
     // { label: "Ask an Expert Assistance", href: "/", source: Ask },
-    { label: "FISMPC Online Store", href: "/(store)/", source: FISMPC },
+    {
+      label: "FISMPC Online Store",
+      href: "/(store)/",
+      source: FISMPC,
+      comingSoon: true,
+    },
     // { label: "Product Validation Services", href: "/", source: Product },
     // { label: "Lost & Found", href: "/", source: Lost },
     // { label: "Suggest a Service", href: "/", source: Suggest },
     { label: "Coop Membership", href: "/(coop)/", source: Coop },
-    { label: "News & Event", href: "/news", source: News },
+    { label: "News & Event", href: "/news", source: News, comingSoon: true },
   ];
 
   const getPopupContent = () => {
@@ -354,7 +426,8 @@ export default function DashboardPage() {
               </View>
               <View className="flex-row gap-3">
                 <TouchableOpacity
-                  onPress={() => router.push("/load")}
+                  // onPress={() => router.push("/load")}
+                  onPress={handleComingSoon}
                   className="bg-white h-10 w-10 flex justify-center items-center rounded-lg"
                 >
                   <FontAwesome name="plus" size={22} color="#034194" />
@@ -414,14 +487,25 @@ export default function DashboardPage() {
       </View>
 
       <Modal
-        animationType="fade"
-        transparent={true}
         visible={showAlert}
-        statusBarTranslucent={true}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setShowAlert(false)}
       >
         {/* THIS is the important fix */}
-        <View className="flex-1 bg-black/20">
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: SCREEN.width,
+            height: SCREEN.height,
+            backgroundColor: "rgba(0,0,0,0.4)",
+          }}
+          className="justify-center"
+        >
           <View className="flex-1 justify-center items-center px-5">
             <View className="bg-white p-6 rounded-[30px] items-center w-full max-w-[380px] shadow-2xl">
               {/* <View
