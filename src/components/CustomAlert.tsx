@@ -1,9 +1,9 @@
 import * as NavigationBar from "expo-navigation-bar";
 import React, { useEffect } from "react";
 import {
+  Dimensions,
   Modal,
   Platform,
-  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -17,6 +17,7 @@ interface CustomAlertProps {
   onConfirm?: () => void;
   confirmText?: string;
 }
+const SCREEN = Dimensions.get("screen");
 
 export const CustomAlert = ({
   visible,
@@ -37,14 +38,25 @@ export const CustomAlert = ({
 
   return (
     <Modal
-      transparent
       visible={visible}
+      transparent
       animationType="fade"
-      statusBarTranslucent={true}
+      statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={onClose}
     >
       {/* OVERLAY */}
-      <View style={styles.modalOverlay} className="p-6">
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: SCREEN.width,
+          height: SCREEN.height,
+          backgroundColor: "rgba(0,0,0,0.4)",
+        }}
+        className="justify-center p-6"
+      >
         {/* MODAL BOX */}
         <View className="bg-white w-full max-w-[400px] rounded-[35px] p-6 shadow-2xl elevation-10">
           <Text className="text-primary text-2xl font-bold text-center mb-3">
@@ -91,12 +103,3 @@ export const CustomAlert = ({
     </Modal>
   );
 };
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});
