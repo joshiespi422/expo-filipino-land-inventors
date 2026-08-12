@@ -17,6 +17,15 @@ import {
   View,
 } from "react-native";
 
+const MAX_ID_IMAGE_MB = 10;
+const MAX_ID_IMAGE_BYTES = MAX_ID_IMAGE_MB * 1024 * 1024;
+
+// Explicit color for every Picker's selected-value text/items.
+// Android otherwise inherits this from the system day/night theme,
+// which causes invisible text on white cards when a standalone build
+// runs on a phone in dark mode.
+const pickerTextStyle = { color: "#1f2937" };
+
 export default function EditProfileScreen() {
   const params = useLocalSearchParams();
 
@@ -65,6 +74,7 @@ export default function EditProfileScreen() {
   };
 
   const isFormComplete = () => {
+    // Province is excluded from the base required fields array
     const requiredFields = [
       "name",
       "phone",
@@ -72,7 +82,6 @@ export default function EditProfileScreen() {
       "gender",
       "birthdate",
       "region",
-      "province",
       "city",
       "barangay",
       "valid_id_type",
@@ -80,11 +89,18 @@ export default function EditProfileScreen() {
       "street",
       "postal_code",
     ];
-    return (
-      requiredFields.every((field) => !!form[field]) &&
-      !!form.front_valid_id_picture &&
-      !!form.back_valid_id_picture
-    );
+
+    const baseFieldsComplete = requiredFields.every((field) => !!form[field]);
+    const imagesComplete =
+      !!form.front_valid_id_picture && !!form.back_valid_id_picture;
+
+    // NCR region code in PSGC API is "130000000"
+    const isNCR = form.region === "130000000";
+
+    // If it's NCR, province is valid (true). Otherwise, require the province field.
+    const isProvinceComplete = isNCR ? true : !!form.province;
+
+    return baseFieldsComplete && imagesComplete && isProvinceComplete;
   };
 
   useEffect(() => {
@@ -151,27 +167,42 @@ export default function EditProfileScreen() {
 
   const pickImage = async (field: string) => {
     if (!isEditing) return;
-    const result = await DocumentPicker.getDocumentAsync({ type: "image/*" });
-    if (result.canceled) return;
-    const file = result.assets?.[0];
 
-    if (file?.size && file.size > 5120 * 1024) {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        copyToCacheDirectory: true, // ensures a stable, readable local URI on both platforms
+      });
+
+      if (result.canceled) return;
+      const file = result.assets?.[0];
+      if (!file) return;
+
+      if (file.size && file.size > MAX_ID_IMAGE_BYTES) {
+        setAlert({
+          visible: true,
+          title: "File Too Large",
+          message: `Please select an image smaller than ${MAX_ID_IMAGE_MB}MB.`,
+        });
+        return;
+      }
+
+      setForm((prev: any) => ({
+        ...prev,
+        [field]: {
+          uri: file.uri,
+          name: file.name,
+          type: file.mimeType || "image/jpeg",
+        },
+      }));
+    } catch (err) {
+      console.error("Image Pick Error:", err);
       setAlert({
         visible: true,
-        title: "File Too Large",
-        message: "Please select an image smaller than 5MB.",
+        title: "Selection Failed",
+        message: "Could not select that image. Please try another one.",
       });
-      return;
     }
-
-    setForm((prev: any) => ({
-      ...prev,
-      [field]: {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType || "image/jpeg",
-      },
-    }));
   };
 
   const handleUpdate = async () => {
@@ -192,11 +223,16 @@ export default function EditProfileScreen() {
         title: "Success",
         message: "Profile updated.",
       });
-    } catch (err) {
+    } catch (err: any) {
+      const errors = err.response?.data?.errors;
+      const errorMessage = errors
+        ? (Object.values(errors).flat()[0] as string)
+        : err.response?.data?.message || "Failed to update profile.";
+
       setAlert({
         visible: true,
         title: "Error",
-        message: "Failed to update profile.",
+        message: errorMessage,
       });
     } finally {
       setSaving(false);
@@ -252,20 +288,6 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* <Text className={label}>Full Name (Locked)</Text>
-        <TextInput
-          value={form.name}
-          editable={false}
-          className={`${inputStyle} bg-gray-100 border-gray-200 color-gray-500`}
-        />
-
-        <Text className={label}>Phone Number (Locked)</Text>
-        <TextInput
-          value={form.phone}
-          editable={false}
-          className={`${inputStyle} bg-gray-100 border-gray-200 color-gray-500`}
-        /> */}
-
         {/* --- BASIC INFO --- */}
         {showInfo && (
           <View className={card}>
@@ -305,10 +327,12 @@ export default function EditProfileScreen() {
                 <Picker
                   selectedValue={form.gender}
                   onValueChange={(v) => setForm({ ...form, gender: v })}
+                  style={pickerTextStyle}
+                  dropdownIconColor="#034194"
                 >
-                  <Picker.Item label="Select Gender" value="" />
-                  <Picker.Item label="Male" value="Male" />
-                  <Picker.Item label="Female" value="Female" />
+                  <Picker.Item label="Select Gender" value="" color="#9CA3AF" />
+                  <Picker.Item label="Male" value="Male" color="#1f2937" />
+                  <Picker.Item label="Female" value="Female" color="#1f2937" />
                 </Picker>
               </View>
             ) : (
@@ -351,10 +375,17 @@ export default function EditProfileScreen() {
                     });
                     fetchProvinces(v);
                   }}
+                  style={pickerTextStyle}
+                  dropdownIconColor="#034194"
                 >
-                  <Picker.Item label="Select Region" value="" />
+                  <Picker.Item label="Select Region" value="" color="#9CA3AF" />
                   {regions.map((r) => (
-                    <Picker.Item key={r.code} label={r.name} value={r.code} />
+                    <Picker.Item
+                      key={r.code}
+                      label={r.name}
+                      value={r.code}
+                      color="#1f2937"
+                    />
                   ))}
                 </Picker>
               </View>
@@ -373,10 +404,25 @@ export default function EditProfileScreen() {
                     setForm({ ...form, province: v, city: "", barangay: "" });
                     fetchCities(v);
                   }}
+                  style={pickerTextStyle}
+                  dropdownIconColor="#034194"
                 >
-                  <Picker.Item label="Select Province" value="" />
+                  <Picker.Item
+                    label={
+                      form.region === "130000000"
+                        ? "N/A (NCR Selected)"
+                        : "Select Province"
+                    }
+                    value=""
+                    color="#9CA3AF"
+                  />
                   {provinces.map((p) => (
-                    <Picker.Item key={p.code} label={p.name} value={p.code} />
+                    <Picker.Item
+                      key={p.code}
+                      label={p.name}
+                      value={p.code}
+                      color="#1f2937"
+                    />
                   ))}
                 </Picker>
               </View>
@@ -395,10 +441,17 @@ export default function EditProfileScreen() {
                     setForm({ ...form, city: v, barangay: "" });
                     fetchBarangays(v);
                   }}
+                  style={pickerTextStyle}
+                  dropdownIconColor="#034194"
                 >
-                  <Picker.Item label="Select City" value="" />
+                  <Picker.Item label="Select City" value="" color="#9CA3AF" />
                   {cities.map((c) => (
-                    <Picker.Item key={c.code} label={c.name} value={c.code} />
+                    <Picker.Item
+                      key={c.code}
+                      label={c.name}
+                      value={c.code}
+                      color="#1f2937"
+                    />
                   ))}
                 </Picker>
               </View>
@@ -414,10 +467,21 @@ export default function EditProfileScreen() {
                 <Picker
                   selectedValue={form.barangay}
                   onValueChange={(v) => setForm({ ...form, barangay: v })}
+                  style={pickerTextStyle}
+                  dropdownIconColor="#034194"
                 >
-                  <Picker.Item label="Select Barangay" value="" />
+                  <Picker.Item
+                    label="Select Barangay"
+                    value=""
+                    color="#9CA3AF"
+                  />
                   {barangays.map((b) => (
-                    <Picker.Item key={b.code} label={b.name} value={b.code} />
+                    <Picker.Item
+                      key={b.code}
+                      label={b.name}
+                      value={b.code}
+                      color="#1f2937"
+                    />
                   ))}
                 </Picker>
               </View>
@@ -467,10 +531,24 @@ export default function EditProfileScreen() {
                     onValueChange={(v) =>
                       setForm({ ...form, valid_id_type: v })
                     }
+                    style={pickerTextStyle}
+                    dropdownIconColor="#034194"
                   >
-                    <Picker.Item label="Select ID Type" value="" />
-                    <Picker.Item label="National ID" value="National ID" />
-                    <Picker.Item label="Passport" value="Passport" />
+                    <Picker.Item
+                      label="Select ID Type"
+                      value=""
+                      color="#9CA3AF"
+                    />
+                    <Picker.Item
+                      label="National ID"
+                      value="National ID"
+                      color="#1f2937"
+                    />
+                    <Picker.Item
+                      label="Passport"
+                      value="Passport"
+                      color="#1f2937"
+                    />
                   </Picker>
                 </View>
 

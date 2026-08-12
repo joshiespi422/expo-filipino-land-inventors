@@ -37,36 +37,55 @@ export const profileService = {
 
   updateProfile: async (data: any) => {
     const formData = new FormData();
+
+    // List of file fields we'll handle separately
+    const skipKeys = [
+      "front_valid_id_picture",
+      "back_valid_id_picture",
+      "avatar",
+      "id",
+    ];
+
+    // Append all non-file fields
     Object.keys(data).forEach((key) => {
-      const skipKeys = [
-        "front_valid_id_picture",
-        "back_valid_id_picture",
-        "avatar",
-        "id",
-      ];
-      if (
-        !skipKeys.includes(key) &&
-        data[key] !== null &&
-        data[key] !== undefined
-      ) {
-        formData.append(key, String(data[key]));
+      if (!skipKeys.includes(key)) {
+        const value = data[key];
+
+        // Skip null, undefined, or empty strings
+        if (value !== null && value !== undefined && value !== "") {
+          formData.append(key, String(value));
+        }
       }
     });
 
+    // Handle front ID picture
     const frontFile = normalizeFile(data.front_valid_id_picture, "front.jpg");
-    if (frontFile) formData.append("front_valid_id_picture", frontFile as any);
+    if (frontFile) {
+      // @ts-ignore
+      formData.append("front_valid_id_picture", frontFile);
+    }
 
+    // Handle back ID picture
     const backFile = normalizeFile(data.back_valid_id_picture, "back.jpg");
-    if (backFile) formData.append("back_valid_id_picture", backFile as any);
+    if (backFile) {
+      // @ts-ignore
+      formData.append("back_valid_id_picture", backFile);
+    }
 
+    // Use PUT method via _method for compatibility
     formData.append("_method", "PUT");
 
-    const response = await api.post("/profile/update", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-      transformRequest: (data) => data,
-    });
+    try {
+      const response = await api.post("/profile/update", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        transformRequest: (data) => data,
+      });
 
-    return response.data;
+      return response.data;
+    } catch (error) {
+      console.error("Profile update error:", error);
+      throw error;
+    }
   },
 
   updateAvatar: async (fileData: any) => {

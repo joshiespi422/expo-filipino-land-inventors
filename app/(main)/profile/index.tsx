@@ -17,6 +17,9 @@ import {
   View,
 } from "react-native";
 
+const MAX_AVATAR_MB = 5;
+const MAX_AVATAR_BYTES = MAX_AVATAR_MB * 1024 * 1024;
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { clearAuth, user, setUser } = useAuthStore();
@@ -28,8 +31,15 @@ export default function ProfileScreen() {
   const [showOptions, setShowOptions] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
 
-  // State for CustomAlert
+  // State for logout CustomAlert
   const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  // Separate state for avatar upload alerts (no onConfirm needed)
+  const [avatarAlert, setAvatarAlert] = useState({
     visible: false,
     title: "",
     message: "",
@@ -78,6 +88,17 @@ export default function ProfileScreen() {
       const file = result.assets?.[0];
       if (!file) return;
 
+      // Client-side size check — instant feedback, no wasted round trip
+      if (file.size && file.size > MAX_AVATAR_BYTES) {
+        setShowOptions(false);
+        setAvatarAlert({
+          visible: true,
+          title: "File Too Large",
+          message: `Please choose an image under ${MAX_AVATAR_MB}MB.`,
+        });
+        return;
+      }
+
       setUploading(true);
       setShowOptions(false);
 
@@ -89,10 +110,25 @@ export default function ProfileScreen() {
 
       if (response.success) {
         setUser({ ...(user || {}), avatar: response.data.avatar });
-        Alert.alert("Success", "Profile picture updated!");
+        setAvatarAlert({
+          visible: true,
+          title: "Success",
+          message: "Profile picture updated!",
+        });
       }
     } catch (error: any) {
-      Alert.alert("Upload Failed", "Network Error");
+      // Surface the real backend message when we have one, instead of a
+      // generic "Network Error" for every failure type (validation, auth,
+      // actual connectivity issues, etc.)
+      const serverMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.errors?.avatar?.[0];
+
+      setAvatarAlert({
+        visible: true,
+        title: "Upload Failed",
+        message: serverMessage || "Something went wrong. Please try again.",
+      });
     } finally {
       setUploading(false);
     }
@@ -151,13 +187,21 @@ export default function ProfileScreen() {
         />
       }
     >
-      {/* Custom Alert Component */}
+      {/* Logout Confirm Alert */}
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
         onClose={() => setAlert({ ...alert, visible: false })}
         onConfirm={confirmLogout}
+      />
+
+      {/* Avatar Upload Alert (no onConfirm -> renders single "Okay" button) */}
+      <CustomAlert
+        visible={avatarAlert.visible}
+        title={avatarAlert.title}
+        message={avatarAlert.message}
+        onClose={() => setAvatarAlert({ ...avatarAlert, visible: false })}
       />
 
       {/* --- PROFILE HEADER --- */}

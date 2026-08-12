@@ -83,8 +83,16 @@ export default function MainLayout() {
   // Covers both "/chat-support" and "/(chat-support)/" style paths
   const isChatSupportScreen = pathname.includes("chat-support");
 
-  const showFooter =
-    isMainIndex || isProfileIndex || isHistory || isNotification;
+  // ✅ FIX: Use BLACKLIST approach instead of WHITELIST
+  // Show footer on ALL screens EXCEPT these specific ones
+  const hideFooterScreens = [
+    isWelcomePage,
+    isChatSupportScreen,
+    isCameraQr,
+    isInfo,
+  ];
+
+  const showFooter = !hideFooterScreens.some(Boolean);
 
   // ===== Hide Android Bottom Navigation Bar =====
   useEffect(() => {
@@ -228,16 +236,16 @@ export default function MainLayout() {
     router.push("/(chat-support)/");
   };
 
-  const handleHeaderSupportPress = async () => {
-    try {
-      await markConversationAsRead(supportConversationId || undefined);
-    } catch (err) {
-      console.error("Failed to mark support conversation as read:", err);
-    }
+  // const handleHeaderSupportPress = async () => {
+  //   try {
+  //     await markConversationAsRead(supportConversationId || undefined);
+  //   } catch (err) {
+  //     console.error("Failed to mark support conversation as read:", err);
+  //   }
 
-    setSupportUnreadCount(0);
-    router.push("/(chat-support)/");
-  };
+  //   setSupportUnreadCount(0);
+  //   router.push("/(chat-support)/");
+  // };
 
   if (isLoading) {
     return (
