@@ -98,10 +98,10 @@ FISMPC reserves the right to cooperate with law enforcement agencies, regulatory
 
 8. Contact Information
 FILIPINO INVENTORS SOCIETY MULTI-PURPOSE COOPERATIVE (FISMPC)
-- Office Address: [Insert Complete Office Address]
-- Email Address: [Insert Official Email Address]
-- Contact Number: [Insert Telephone/Mobile Number]
-- Website: [Insert Official Website, if available]
+- Contact Number: (02) 1234-5678.
+- Email Address: info@fisinventorscoop.org
+- Address: Unit 405, 4th Floor, 821 Cortes Building, EDSA, South Triangle, Quezon City, Philippines.
+- Website: https://fismulticoop.org/
 
 9. Acceptance
 By creating an account, applying for Cooperative membership, using the Digital Wallet, submitting loan applications, enrolling in Business Training, requesting Intellectual Property Assistance, purchasing products from the FISMPC Online Store, making payments through PayMongo, paying through installment ("Hulugan"), or otherwise accessing or using any feature of the FILIPINO INVENTORS SOCIETY MULTI-PURPOSE COOPERATIVE (FISMPC) Digital Platform, you acknowledge that you have carefully read, understood, and voluntarily agree to be legally bound by these Terms and Conditions of Use, the Privacy Policy, Cooperative policies, and all applicable laws of the Republic of the Philippines.`;
