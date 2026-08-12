@@ -41,6 +41,7 @@ export default function ProfileScreen() {
   const isBasic = userTypeName === "BASIC";
   const isMember = userTypeName === "MEMBER";
   const isActive = statusName === "active";
+  const isRejected = statusName === "rejected";
   const isApproved = statusName === "approved";
   const isForApproval = statusName === "for_approval";
 
@@ -290,6 +291,43 @@ export default function ProfileScreen() {
         </View>
       )}
 
+      {isBasic && isRejected && (
+        <View className="mt-6 px-4">
+          <View className="bg-red-50 border border-[#D70127] p-5 rounded-[30px]">
+            <View className="flex-row items-center">
+              <View className="bg-[#D70127] p-2 rounded-full">
+                <Ionicons name="close-circle" size={20} color="white" />
+              </View>
+              <View className="flex-1 ml-4">
+                <Text className="text-[#D70127] font-bold text-lg">
+                  Application Rejected
+                </Text>
+              </View>
+            </View>
+
+            <Text className="text-[#D70127] text-sm mt-2 leading-5">
+              Your profile submission was not approved. Please chat with our
+              support team to find out why and how to proceed.
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => router.push("/(intellectual-chat)/")}
+              className="bg-[#D70127] mt-4 py-3 rounded-2xl items-center flex-row justify-center"
+            >
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={18}
+                color="white"
+                style={{ marginRight: 8 }}
+              />
+              <Text className="text-white font-bold text-base">
+                Chat with Support
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* --- MENU ITEMS --- */}
       <View className="mt-6 px-4">
         {((isBasic && isForApproval) ||
@@ -352,10 +390,11 @@ export default function ProfileScreen() {
 
       {/* --- MODALS --- */}
       <Modal
-        animationType="fade"
-        transparent={true}
         visible={showOptions}
-        statusBarTranslucent={true}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setShowOptions(false)}
       >
         <View className="flex-1 bg-black/40 justify-center items-center px-5">
@@ -401,7 +440,14 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showFullImage} transparent={false} animationType="fade">
+      <Modal
+        visible={showFullImage}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        // onRequestClose={() => setShowOptions(false)}
+      >
         <View className="flex-1 bg-black items-center justify-center">
           <TouchableOpacity
             onPress={() => setShowFullImage(false)}
