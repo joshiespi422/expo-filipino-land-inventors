@@ -264,10 +264,11 @@ export default function MainLayout() {
 
       {/* ===== COMING SOON MODAL ===== */}
       <Modal
-        animationType="fade"
-        transparent={true}
         visible={comingSoonVisible}
-        statusBarTranslucent={true}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setComingSoonVisible(false)}
       >
         <View
@@ -397,7 +398,8 @@ export default function MainLayout() {
                 className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full"
               >
                 <TouchableOpacity
-                  onPress={handleHeaderSupportPress}
+                  // onPress={handleHeaderSupportPress}
+                  onPress={handleComingSoon}
                   className="relative"
                   activeOpacity={0.7}
                 >
@@ -523,7 +525,8 @@ export default function MainLayout() {
                 {/* History */}
                 <TouchableOpacity
                   className="items-center pe-2 flex-1 mt-1"
-                  onPress={() => router.push("/history")}
+                  // onPress={() => router.push("/history")}
+                  onPress={handleComingSoon}
                 >
                   <Image source={History} style={{ width: 28, height: 28 }} />
                   <Text className="text-white text-[10px] mt-1">
@@ -537,7 +540,8 @@ export default function MainLayout() {
                   style={{ height: 50 }}
                 >
                   <TouchableOpacity
-                    onPress={() => router.push("/camera")}
+                    // onPress={() => router.push("/camera")}
+                    onPress={handleComingSoon}
                     style={{
                       position: "absolute",
                       top: -43,
