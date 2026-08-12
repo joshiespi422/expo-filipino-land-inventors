@@ -1,10 +1,18 @@
+import {
+  AllocationBreakdown,
+  CooperativeServiceOption,
+  CooperativeSummary,
+  cooperativeService,
+} from "@/services/cooperativeService";
 import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
   Modal,
   RefreshControl,
   ScrollView,
@@ -15,6 +23,139 @@ import {
 
 import "../../global.css";
 
+const peso = (value: number) =>
+  `₱${value.toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const ALL_SERVICES_OPTION: CooperativeServiceOption = {
+  id: 0,
+  name: "All Services",
+  slug: "all",
+  description: "Combined view across every service.",
+  icon: null,
+};
+
+// Use the full "screen" (not "window") so the modal backdrop dimensions
+const SCREEN = Dimensions.get("screen");
+
+/* ------------------------------------------------------------------ */
+/* SKELETON PRIMITIVES                                                 */
+/* ------------------------------------------------------------------ */
+
+function SkeletonBlock({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: any;
+}) {
+  const opacity = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 650,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.35,
+          duration: 650,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      className={`bg-slate-200 rounded-lg ${className ?? ""}`}
+      style={[{ opacity }, style]}
+    />
+  );
+}
+
+function PageSkeleton() {
+  return (
+    <View className="px-6 py-10">
+      <SkeletonBlock className="h-8 w-3/5 mb-3" />
+      <SkeletonBlock className="h-4 w-4/5 mb-8" />
+
+      <View className="flex-row gap-x-3 mb-8">
+        <SkeletonBlock className="h-16 flex-1" />
+        <SkeletonBlock className="h-16 flex-1" />
+      </View>
+
+      <SkeletonBlock className="h-28 w-full mb-8 rounded-2xl" />
+
+      <SkeletonBlock className="h-6 w-32 mb-4" />
+      <View className="gap-y-6 mb-10">
+        {[0, 1].map((i) => (
+          <View key={i} className="border border-slate-200 rounded-2xl p-5">
+            <View className="flex-row justify-between mb-4">
+              <SkeletonBlock className="h-5 w-2/5" />
+              <SkeletonBlock className="h-5 w-1/5" />
+            </View>
+            <View className="gap-y-3">
+              <SkeletonBlock className="h-16 w-full rounded-xl" />
+              <SkeletonBlock className="h-16 w-full rounded-xl" />
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <SkeletonBlock className="h-6 w-48 mb-4" />
+      <View className="gap-y-4">
+        {[0, 1, 2].map((i) => (
+          <SkeletonBlock key={i} className="h-24 w-full rounded-xl" />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function SummarySkeleton() {
+  return (
+    <View>
+      <SkeletonBlock className="h-28 w-full mb-8 rounded-2xl" />
+
+      <SkeletonBlock className="h-6 w-32 mb-4" />
+      <View className="gap-y-6 mb-10">
+        {[0, 1].map((i) => (
+          <View key={i} className="border border-slate-200 rounded-2xl p-5">
+            <View className="flex-row justify-between mb-4">
+              <SkeletonBlock className="h-5 w-2/5" />
+              <SkeletonBlock className="h-5 w-1/5" />
+            </View>
+            <View className="gap-y-3">
+              <SkeletonBlock className="h-16 w-full rounded-xl" />
+              <SkeletonBlock className="h-16 w-full rounded-xl" />
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <SkeletonBlock className="h-6 w-48 mb-4" />
+      <View className="gap-y-4">
+        {[0, 1, 2].map((i) => (
+          <SkeletonBlock key={i} className="h-24 w-full rounded-xl" />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* PAGE                                                                 */
+/* ------------------------------------------------------------------ */
+
 export default function CooperativeMembershipPage() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
@@ -22,10 +163,22 @@ export default function CooperativeMembershipPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [selectedYear, setSelectedYear] = useState("2026");
+  // --- filters ---
+  const [years, setYears] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [showYearModal, setShowYearModal] = useState(false);
 
-  const years = ["2026", "2025", "2024"];
+  const [services, setServices] = useState<CooperativeServiceOption[]>([
+    ALL_SERVICES_OPTION,
+  ]);
+  const [selectedService, setSelectedService] =
+    useState<CooperativeServiceOption>(ALL_SERVICES_OPTION);
+  const [showServiceModal, setShowServiceModal] = useState(false);
+
+  // --- data ---
+  const [summary, setSummary] = useState<CooperativeSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   // --- MEMBERSHIP / STATUS FLAGS (same pattern as ProfileScreen) ---
   const userTypeName = user?.user_type?.name?.toUpperCase() || "";
@@ -40,184 +193,107 @@ export default function CooperativeMembershipPage() {
   // Only fully active Members can view cooperative transparency
   const hasAccess = isMember && isActive;
 
-  // YEARLY COOPERATIVE DATA
-  const yearlyData: any = {
-    "2026": {
-      totalFund: "₱1,500,000",
-      transactions: [
-        {
-          title: "Membership Contribution",
-          description:
-            "Total membership fees collected from members and added to the cooperative fund.",
-          amount: "₱500,000",
-        },
-        {
-          title: "Cooperative Earnings",
-          description:
-            "Income generated from cooperative services, investments, and activities.",
-          amount: "₱700,000",
-        },
-        {
-          title: "Member Returns",
-          description:
-            "Amount prepared for member benefits and cooperative sharing.",
-          amount: "₱300,000",
-        },
-      ],
-      allocation: [
-        {
-          name: "Member Returns",
-          description:
-            "Funds distributed back to members as benefits and cooperative earnings sharing.",
-          percentage: "40%",
-          amount: "₱600,000",
-        },
-        {
-          name: "Operations",
-          description:
-            "Funds used for daily cooperative management, maintenance, and administration.",
-          percentage: "30%",
-          amount: "₱450,000",
-        },
-        {
-          name: "Community Projects",
-          description:
-            "Funds allocated for community support programs and cooperative projects.",
-          percentage: "20%",
-          amount: "₱300,000",
-        },
-        {
-          name: "Emergency Reserve",
-          description:
-            "Saved funds for unexpected expenses and cooperative security.",
-          percentage: "10%",
-          amount: "₱150,000",
-        },
-      ],
-    },
-    "2025": {
-      totalFund: "₱1,200,000",
-      transactions: [
-        {
-          title: "Membership Contribution",
-          description: "Total member contributions collected during the year.",
-          amount: "₱400,000",
-        },
-        {
-          title: "Cooperative Earnings",
-          description: "Profit generated from cooperative activities.",
-          amount: "₱500,000",
-        },
-        {
-          title: "Member Returns",
-          description: "Returned earnings distributed to cooperative members.",
-          amount: "₱300,000",
-        },
-      ],
-      allocation: [
-        {
-          name: "Member Returns",
-          description: "Member profit sharing and cooperative benefits.",
-          percentage: "40%",
-          amount: "₱480,000",
-        },
-        {
-          name: "Operations",
-          description: "Administrative and operational expenses.",
-          percentage: "30%",
-          amount: "₱360,000",
-        },
-        {
-          name: "Community Projects",
-          description: "Budget for cooperative community programs.",
-          percentage: "20%",
-          amount: "₱240,000",
-        },
-        {
-          name: "Emergency Reserve",
-          description: "Reserved cooperative emergency fund.",
-          percentage: "10%",
-          amount: "₱120,000",
-        },
-      ],
-    },
-    "2024": {
-      totalFund: "₱900,000",
-      transactions: [
-        {
-          title: "Membership Contribution",
-          description:
-            "Member fees collected and recorded for cooperative growth.",
-          amount: "₱300,000",
-        },
-        {
-          title: "Cooperative Earnings",
-          description: "Annual earnings from cooperative operations.",
-          amount: "₱400,000",
-        },
-        {
-          title: "Member Returns",
-          description: "Benefits returned to cooperative members.",
-          amount: "₱200,000",
-        },
-      ],
-      allocation: [
-        {
-          name: "Member Returns",
-          description: "Funds allocated for member benefits and rewards.",
-          percentage: "40%",
-          amount: "₱360,000",
-        },
-        {
-          name: "Operations",
-          description: "Funds for cooperative maintenance and management.",
-          percentage: "30%",
-          amount: "₱270,000",
-        },
-        {
-          name: "Community Projects",
-          description: "Funds for community development programs.",
-          percentage: "20%",
-          amount: "₱180,000",
-        },
-        {
-          name: "Emergency Reserve",
-          description: "Emergency savings allocation.",
-          percentage: "10%",
-          amount: "₱90,000",
-        },
-      ],
-    },
+  // Helper — checks access directly off a freshly-fetched profile object
+  // instead of the (possibly stale) `user` in the store. Needed because
+  // fetchProfile()/setUser() is async and the component won't re-render
+  // with the new `user` in time for the same effect tick.
+  const canAccessCooperative = (profile: any) => {
+    const type = profile?.user_type?.name?.toUpperCase() || "";
+    const status = profile?.status?.name?.toLowerCase() || "";
+    return type === "MEMBER" && status === "active";
   };
-
-  const currentData = yearlyData[selectedYear];
 
   const fetchProfile = async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
       const data = await profileService.getProfile();
       setUser(data);
+      return data;
     } catch (error) {
       console.error("Profile Fetch Error:", error);
+      return null;
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
+  const fetchFilters = async () => {
+    try {
+      const [yearList, serviceList] = await Promise.all([
+        cooperativeService.getYears(),
+        cooperativeService.getServices(),
+      ]);
+
+      setYears(yearList);
+      setServices([ALL_SERVICES_OPTION, ...serviceList]);
+
+      if (yearList.length > 0) {
+        setSelectedYear((prev) => prev ?? yearList[0]);
+      }
+    } catch (error) {
+      console.error("Cooperative Filters Fetch Error:", error);
+    }
+  };
+
+  const fetchSummary = useCallback(
+    async (year: string, serviceSlug: string) => {
+      setSummaryLoading(true);
+      setSummaryError(null);
+      try {
+        const data = await cooperativeService.getSummary(year, serviceSlug);
+        setSummary(data);
+      } catch (error) {
+        console.error("Cooperative Summary Fetch Error:", error);
+        setSummaryError("Unable to load cooperative fund data right now.");
+      } finally {
+        setSummaryLoading(false);
+      }
+    },
+    [],
+  );
+
+  // Only ever call the cooperative endpoints (years/services/summary) once
+  // we've confirmed the user is an active Member — the API middleware
+  // rejects everyone else with a 403, so gate on the client too.
   useEffect(() => {
-    fetchProfile();
+    (async () => {
+      const profile = await fetchProfile();
+      if (canAccessCooperative(profile)) {
+        fetchFilters();
+      }
+    })();
   }, []);
 
-  const refresh = useCallback(() => {
+  useEffect(() => {
+    if (hasAccess && selectedYear) {
+      fetchSummary(selectedYear, selectedService.slug);
+    }
+  }, [hasAccess, selectedYear, selectedService, fetchSummary]);
+
+  const refresh = useCallback(async () => {
     setRefreshing(true);
-    fetchProfile(true);
-  }, []);
+    const profile = await fetchProfile(true);
+    const canAccess = canAccessCooperative(profile);
+
+    if (canAccess) {
+      await fetchFilters();
+      if (selectedYear) {
+        fetchSummary(selectedYear, selectedService.slug);
+      } else {
+        setRefreshing(false);
+      }
+    } else {
+      setRefreshing(false);
+    }
+  }, [selectedYear, selectedService, fetchSummary]);
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-white">
-        <ActivityIndicator size="large" color="#034194" />
+      <View className="flex-1 bg-white">
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <PageSkeleton />
+        </ScrollView>
       </View>
     );
   }
@@ -333,79 +409,207 @@ export default function CooperativeMembershipPage() {
           {/* --- FULL CONTENT: MEMBER & ACTIVE ONLY --- */}
           {hasAccess ? (
             <>
-              {/* TOTAL FUND */}
-              <View className="bg-slate-50 border border-slate-200 rounded-2xl p-6 items-center mb-8">
-                <Text className="text-slate-500">
-                  TOTAL COOPERATIVE FUND {selectedYear}
-                </Text>
-                <Text className="text-4xl font-black mt-2">
-                  {currentData.totalFund}
-                </Text>
-              </View>
-
-              {/* YEAR SELECT */}
-              <Text className="font-bold text-xl mb-3">Select Year</Text>
-
-              <TouchableOpacity
-                onPress={() => setShowYearModal(true)}
-                className="bg-slate-100 p-5 rounded-xl mb-8"
-              >
-                <Text className="font-bold">{selectedYear}</Text>
-              </TouchableOpacity>
-
-              {/* TRANSACTIONS */}
-              <Text className="text-xl font-bold mb-4">Membership Records</Text>
-
-              <View className="gap-y-4">
-                {currentData.transactions.map((item: any, index: number) => (
-                  <View
-                    key={index}
-                    className="border border-slate-200 rounded-xl p-5"
-                  >
-                    <View className="flex-row justify-between">
-                      <Text className="font-bold text-slate-700 flex-1">
-                        {item.title}
-                      </Text>
-                      <Text className="font-black text-primary">
-                        {item.amount}
-                      </Text>
-                    </View>
-                    <Text className="text-slate-500 mt-2">
-                      {item.description}
-                    </Text>
-                    <Text className="text-xs text-slate-400 mt-3">
-                      Year {selectedYear}
+              {/* FILTERS: YEAR + SERVICE */}
+              <View className="flex-row gap-x-3 mb-8">
+                <TouchableOpacity
+                  onPress={() => setShowYearModal(true)}
+                  disabled={years.length === 0}
+                  className="flex-1 bg-slate-100 p-5 rounded-xl flex-row items-center justify-between"
+                >
+                  <View>
+                    <Text className="text-xs text-slate-400 mb-1">Year</Text>
+                    <Text className="font-bold">
+                      {selectedYear ?? "No data"}
                     </Text>
                   </View>
-                ))}
+                  <Ionicons name="chevron-down" size={18} color="#64748B" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setShowServiceModal(true)}
+                  className="flex-1 bg-slate-100 p-5 rounded-xl flex-row items-center justify-between"
+                >
+                  <View className="flex-1 mr-2">
+                    <Text className="text-xs text-slate-400 mb-1">Service</Text>
+                    <Text className="font-bold" numberOfLines={1}>
+                      {selectedService.name}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-down" size={18} color="#64748B" />
+                </TouchableOpacity>
               </View>
 
-              {/* ALLOCATION */}
-              <Text className="text-xl font-bold mt-10 mb-4">
-                Fund Allocation
-              </Text>
-
-              <View className="gap-y-4">
-                {currentData.allocation.map((item: any, index: number) => (
-                  <View
-                    key={index}
-                    className="border border-slate-200 rounded-xl p-5"
+              {summaryLoading && !summary ? (
+                <SummarySkeleton />
+              ) : summaryError ? (
+                <View className="items-center py-16">
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={36}
+                    color="#F87171"
+                  />
+                  <Text className="text-red-400 font-semibold mt-3 text-center">
+                    {summaryError}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      selectedYear &&
+                      fetchSummary(selectedYear, selectedService.slug)
+                    }
+                    className="bg-primary mt-4 px-6 py-3 rounded-xl"
                   >
-                    <View className="flex-row justify-between">
-                      <Text className="font-bold text-slate-700">
-                        {item.name}
-                      </Text>
-                      <Text className="font-black text-primary">
-                        {item.percentage}
+                    <Text className="text-white font-bold">Try Again</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : summary && years.length > 0 ? (
+                <>
+                  {/* TOTAL FUND */}
+                  <View className="bg-slate-50 border border-slate-200 rounded-2xl p-6 items-center mb-8">
+                    <Text className="text-slate-500">
+                      TOTAL COOPERATIVE FUND {summary.year}
+                      {selectedService.slug !== "all"
+                        ? ` · ${selectedService.name}`
+                        : ""}
+                    </Text>
+                    <Text className="text-4xl font-black mt-2">
+                      {peso(summary.total_fund)}
+                    </Text>
+                    <Text className="text-slate-400 text-xs mt-2">
+                      {summary.total_transactions} recorded transaction
+                      {summary.total_transactions === 1 ? "" : "s"}
+                    </Text>
+                  </View>
+
+                  {/* PER-SERVICE BREAKDOWN — percentage kept here, it's
+                      correctly scoped to each service's own total */}
+                  <Text className="text-xl font-bold mb-4">
+                    {selectedService.slug === "all"
+                      ? "Services"
+                      : "Service Detail"}
+                  </Text>
+
+                  {summary.services.length === 0 ? (
+                    <View className="items-center py-10 mb-4">
+                      <Ionicons
+                        name="file-tray-outline"
+                        size={32}
+                        color="#CBD5E1"
+                      />
+                      <Text className="text-slate-400 mt-3 text-center">
+                        No recorded fund activity for this selection yet.
                       </Text>
                     </View>
-                    <Text className="text-slate-500 mt-2">
-                      {item.description}
-                    </Text>
-                    <Text className="font-bold mt-3">{item.amount}</Text>
+                  ) : (
+                    <View className="gap-y-6 mb-10">
+                      {summary.services.map((service) => (
+                        <View
+                          key={service.id}
+                          className="border border-slate-200 rounded-2xl p-5"
+                        >
+                          <View className="flex-row justify-between items-start">
+                            <Text className="font-bold text-lg text-slate-800 flex-1 mr-2">
+                              {service.name}
+                            </Text>
+                            <Text className="font-black text-primary">
+                              {peso(service.total)}
+                            </Text>
+                          </View>
+
+                          {service.description ? (
+                            <Text className="text-slate-500 mt-1 mb-4">
+                              {service.description}
+                            </Text>
+                          ) : (
+                            <View className="mb-4" />
+                          )}
+
+                          <View className="gap-y-3">
+                            {service.allocations.map(
+                              (allocation: AllocationBreakdown) => (
+                                <View
+                                  key={allocation.id}
+                                  className="bg-slate-50 rounded-xl p-4"
+                                >
+                                  <View className="flex-row justify-between">
+                                    <Text className="font-bold text-slate-700">
+                                      {allocation.name}
+                                    </Text>
+                                    <Text className="font-black text-primary">
+                                      {allocation.actual_percentage}%
+                                    </Text>
+                                  </View>
+                                  <Text className="text-slate-500 text-sm mt-1">
+                                    {allocation.description}
+                                  </Text>
+                                  <View className="flex-row justify-between items-center mt-3">
+                                    <Text className="font-bold">
+                                      {peso(allocation.amount)}
+                                    </Text>
+                                    <Text className="text-xs text-slate-400">
+                                      Target {allocation.configured_percentage}%
+                                      · {allocation.transaction_count} txn
+                                      {allocation.transaction_count === 1
+                                        ? ""
+                                        : "s"}
+                                    </Text>
+                                  </View>
+                                </View>
+                              ),
+                            )}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* GRAND ALLOCATION SUMMARY — amount only, no percentage:
+                      not every service uses every allocation, so a "% of
+                      total fund" here would misrepresent allocations that
+                      only apply to a subset of services. These amounts
+                      still add up to total_fund below. */}
+                  <Text className="text-xl font-bold mb-4">
+                    Fund Allocation Summary
+                  </Text>
+
+                  <View className="gap-y-4">
+                    {summary.allocations.map((item) => (
+                      <View
+                        key={item.id}
+                        className="border border-slate-200 rounded-xl p-5"
+                      >
+                        <Text className="font-bold text-slate-700">
+                          {item.name}
+                        </Text>
+                        <Text className="text-slate-500 mt-2">
+                          {item.description}
+                        </Text>
+                        <Text className="font-black text-primary mt-3">
+                          {peso(item.amount)}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
+
+                  {/* ADD-ALL TOTAL LINE */}
+                  <View className="flex-row justify-between items-center border-t border-slate-200 mt-6 pt-5">
+                    <Text className="font-bold text-lg">Total</Text>
+                    <Text className="font-black text-xl text-primary">
+                      {peso(summary.total_fund)}
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <View className="items-center py-10">
+                  <Ionicons
+                    name="file-tray-outline"
+                    size={40}
+                    color="#CBD5E1"
+                  />
+                  <Text className="text-slate-400 font-semibold mt-3 text-center">
+                    No cooperative fund data has been recorded yet.
+                  </Text>
+                </View>
+              )}
             </>
           ) : (
             <View className="items-center py-10">
@@ -419,9 +623,26 @@ export default function CooperativeMembershipPage() {
         </View>
       </ScrollView>
 
-      {/* YEAR MODAL — only relevant if user has access, but harmless to keep mounted */}
-      <Modal visible={showYearModal} transparent animationType="fade">
-        <View className="flex-1 bg-black/40 justify-center px-8">
+      {/* YEAR MODAL */}
+      <Modal
+        visible={showYearModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => setShowYearModal(false)}
+      >
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: SCREEN.width,
+            height: SCREEN.height,
+            backgroundColor: "rgba(0,0,0,0.4)",
+          }}
+          className="justify-center px-8"
+        >
           <View className="bg-white rounded-2xl p-6">
             <Text className="text-xl font-bold mb-5">Choose Year</Text>
 
@@ -439,6 +660,53 @@ export default function CooperativeMembershipPage() {
             ))}
 
             <TouchableOpacity onPress={() => setShowYearModal(false)}>
+              <Text className="text-center text-red-500 font-bold mt-3">
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* SERVICE MODAL */}
+      <Modal
+        visible={showServiceModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => setShowServiceModal(false)}
+      >
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: SCREEN.width,
+            height: SCREEN.height,
+            backgroundColor: "rgba(0,0,0,0.4)",
+          }}
+          className="justify-center px-8"
+        >
+          <View className="bg-white rounded-2xl p-6">
+            <Text className="text-xl font-bold mb-5">Choose Service</Text>
+
+            <ScrollView style={{ maxHeight: 320 }}>
+              {services.map((service) => (
+                <TouchableOpacity
+                  key={service.slug}
+                  onPress={() => {
+                    setSelectedService(service);
+                    setShowServiceModal(false);
+                  }}
+                  className="bg-slate-100 rounded-xl p-4 mb-3"
+                >
+                  <Text className="text-center font-bold">{service.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity onPress={() => setShowServiceModal(false)}>
               <Text className="text-center text-red-500 font-bold mt-3">
                 Cancel
               </Text>
