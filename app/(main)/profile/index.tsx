@@ -261,7 +261,7 @@ export default function ProfileScreen() {
             </Text>
 
             <TouchableOpacity
-              onPress={() => router.push("/profile/setupProfile")}
+              onPress={() => router.push("/(main-profile)/setupProfile")}
               className="bg-[#C6890F] mt-4 py-3 rounded-2xl items-center flex-row justify-center"
             >
               <Text className="text-white font-bold text-base mr-2">
@@ -386,22 +386,26 @@ export default function ProfileScreen() {
               <ProfileMenuItem
                 icon="person-outline"
                 title="Information"
-                onPress={() => router.push("/profile/editProfile?info")}
+                onPress={() => router.push("/(main-profile)/editProfile?info")}
               />
               <ProfileMenuItem
                 icon="location-outline"
                 title="Address"
-                onPress={() => router.push("/profile/editProfile?location")}
+                onPress={() =>
+                  router.push("/(main-profile)/editProfile?location")
+                }
               />
               <ProfileMenuItem
                 icon="id-card-outline"
                 title="Valid ID"
-                onPress={() => router.push("/profile/editProfile?vakidID")}
+                onPress={() =>
+                  router.push("/(main-profile)/editProfile?vakidID")
+                }
               />
               <ProfileMenuItem
                 icon="lock-closed-outline"
                 title="Security & Password"
-                onPress={() => router.push("/profile/changePassword")}
+                onPress={() => router.push("/(main-profile)/changePassword")}
               />
               <ProfileMenuItem
                 icon="finger-print-outline"

@@ -181,8 +181,7 @@ export default function OtpVerificationPage() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
         ref={scrollRef}
@@ -238,7 +237,7 @@ export default function OtpVerificationPage() {
                         keyboardType="number-pad"
                         maxLength={6}
                         placeholder="Enter OTP Code"
-                        className="border border-slate-200 rounded-2xl px-4 py-4 text-base text-slate-800 bg-slate-50"
+                        className="border border-slate-200 rounded-2xl px-4 py-4 text-base text-slate-800 bg-slate-50 overflow-hidden"
                         editable={!isBusy}
                         onFocus={scrollToInput}
                       />

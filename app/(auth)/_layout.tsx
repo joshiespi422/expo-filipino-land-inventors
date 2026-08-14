@@ -2,12 +2,43 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { StatusBar as ExpoStatusBar } from "expo-status-bar";
+import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import { ActivityIndicator, Platform, StatusBar, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import "../../global.css";
 
 const queryClient = new QueryClient();
+
+function NavigationBarWrapper({ children }: { children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    const setupNavigationBar = async () => {
+      try {
+        await NavigationBar.setVisibilityAsync("visible");
+        await NavigationBar.setButtonStyleAsync("dark");
+      } catch (error) {
+        console.log("NavigationBar setup error:", error);
+      }
+    };
+
+    setupNavigationBar();
+  }, []);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+      <View style={{ flex: 1 }}>{children}</View>
+
+      {/* 🔴 Solid white bottom bar covering the Android Navigation Bar region */}
+      {Platform.OS === "android" && (
+        <View style={{ height: insets.bottom, backgroundColor: "#ffffff" }} />
+      )}
+    </View>
+  );
+}
 
 export default function AuthLayout() {
   const router = useRouter();
@@ -16,30 +47,6 @@ export default function AuthLayout() {
 
   useEffect(() => {
     initialize();
-
-    const configureSystemUI = async () => {
-      if (Platform.OS === "android") {
-        try {
-          // 🔥 TRUE FULLSCREEN MODE
-          await NavigationBar.setBehaviorAsync("sticky-immersive");
-          await NavigationBar.setBackgroundColorAsync("#00000000");
-          await NavigationBar.setPositionAsync("absolute");
-
-          // optional (better fullscreen effect)
-          await NavigationBar.setVisibilityAsync("hidden");
-        } catch (e) {
-          console.log("NavigationBar error:", e);
-        }
-      }
-    };
-
-    configureSystemUI();
-
-    if (Platform.OS === "android") {
-      StatusBar.setTranslucent(true);
-      StatusBar.setBackgroundColor("transparent");
-      StatusBar.setBarStyle("light-content");
-    }
   }, []);
 
   useEffect(() => {
@@ -60,17 +67,16 @@ export default function AuthLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* 🔥 FULLSCREEN STATUS BAR CONTROL */}
-      <ExpoStatusBar style="light" translucent />
+      <StatusBar style="dark" hidden={true} />
 
-      <View className="flex-1 bg-slate-50">
+      <NavigationBarWrapper>
         <Stack
           screenOptions={{
             headerShown: false,
             animation: "fade",
+            navigationBarColor: "#ffffff",
             contentStyle: {
               backgroundColor: "#f8fafc",
-              paddingTop: 0,
             },
           }}
         >
@@ -85,7 +91,7 @@ export default function AuthLayout() {
           <Stack.Screen name="createPassword" />
           <Stack.Screen name="congratulations" />
         </Stack>
-      </View>
+      </NavigationBarWrapper>
     </QueryClientProvider>
   );
 }

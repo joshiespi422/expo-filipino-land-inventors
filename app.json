@@ -4,66 +4,82 @@
     "slug": "fismpc",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/AppLogo.jpg",
+    "icon": "./assets/images/applogoicon.jpg",
+
     "splash": {
       "image": "./assets/images/AppLogo.jpg",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
+
     "scheme": "fismpc",
     "userInterfaceStyle": "light",
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jospay.fismpc",
-      "statusBarHidden": true,
+      "statusBarHidden": false,
+      "statusBarStyle": "dark",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSFaceIDUsageDescription": "Allow FISMPC to use Face ID for secure authentication."
       }
     },
+
     "android": {
       "package": "com.jospay.fismpc",
       "userInterfaceStyle": "light",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/AppLogo.jpg",
+        "foregroundImage": "./assets/images/applogoicon.jpg",
         "backgroundColor": "#FFFFFF"
       },
+
       "predictiveBackGestureEnabled": false,
+
       "permissions": [
         "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE",
         "USE_BIOMETRIC",
         "USE_FINGERPRINT"
       ],
-      "softwareKeyboardLayoutMode": "resize"
+
+      "softwareKeyboardLayoutMode": "pan"
     },
-    "androidStatusBar": {
-      "hidden": true
-    },
-    "androidNavigationBar": {
-      "visible": true
-    },
+
     "plugins": [
       "expo-router",
       "expo-font",
       "expo-image",
       "expo-web-browser",
-      "expo-navigation-bar",
+
+      [
+        "expo-navigation-bar",
+        {
+          "backgroundColor": "#FFFFFF",
+          "barStyle": "dark",
+          "visibility": "visible",
+          "enforceContrast": false
+        }
+      ],
+
       "expo-secure-store",
       "expo-system-ui",
       "@react-native-community/datetimepicker",
+
       [
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow FISMPC to use Face ID for secure authentication."
         }
       ],
+
       [
         "expo-camera",
         {
           "cameraPermission": "Allow Filipino Land Inventors to access your camera to scan QR codes."
         }
       ],
+
       [
         "expo-media-library",
         {
@@ -71,15 +87,18 @@
           "savePhotosPermission": "Allow Filipino Land Inventors to save QR codes to your gallery."
         }
       ],
+
       "expo-sharing",
       "expo-video",
       "./plugins/withDisableForceDark.js"
     ],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true,
       "tsconfigPaths": true
     },
+
     "extra": {
       "eas": {
         "projectId": "ef4a234f-3fe7-42e5-995a-7ca344dad038"

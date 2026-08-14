@@ -28,12 +28,20 @@ export const CustomAlert = ({
   confirmText = "Logout",
 }: CustomAlertProps) => {
   useEffect(() => {
-    if (visible && Platform.OS === "android") {
-      const reHide = async () => {
-        await NavigationBar.setVisibilityAsync("hidden");
-      };
-      reHide();
+    if (Platform.OS === "android") {
+      if (visible) {
+        NavigationBar.setVisibilityAsync("hidden");
+      } else {
+        NavigationBar.setVisibilityAsync("visible");
+      }
     }
+
+    // Cleanup in case component unmounts while visible
+    return () => {
+      if (Platform.OS === "android") {
+        NavigationBar.setVisibilityAsync("visible");
+      }
+    };
   }, [visible]);
 
   return (

@@ -3,7 +3,7 @@ import { biometricService } from "@/services/biometricService";
 import { profileService } from "@/services/profileService";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,15 @@ interface AuthDevice {
 
 export default function BiometricSettingsScreen() {
   const router = useRouter();
+  const isMounted = useRef(true);
+
+  // Maintain mount state to prevent memory leak / navigation state race conditions
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   // Hardware & local state
   const [isSupported, setIsSupported] = useState<boolean>(false);
@@ -42,7 +51,7 @@ export default function BiometricSettingsScreen() {
   const [devices, setDevices] = useState<AuthDevice[]>([]);
   const [currentDevice, setCurrentDevice] = useState<AuthDevice | null>(null);
 
-  // Custom Alert state for confirmations
+  // Custom Alert states
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
     title: string;
@@ -54,7 +63,6 @@ export default function BiometricSettingsScreen() {
     message: "",
   });
 
-  // Custom Alert state for success/info messages
   const [successAlertConfig, setSuccessAlertConfig] = useState<{
     visible: boolean;
     title: string;
@@ -65,41 +73,47 @@ export default function BiometricSettingsScreen() {
     message: "",
   });
 
+  // Safe State Setter Wrapper
+  const safeSetState = useCallback((setter: () => void) => {
+    if (isMounted.current) {
+      setter();
+    }
+  }, []);
+
   // 1. Initialize Biometrics Hardware and fetch devices
   const initData = async (isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
+    if (!isRefresh) safeSetState(() => setLoading(true));
     try {
-      // 1. Hardware checks (Always runs safely)
       const { available, biometryType } = await biometricService.isSupported();
-      setIsSupported(available);
-      setBiometryLabel(biometricService.getBiometryLabel(biometryType));
+      safeSetState(() => {
+        setIsSupported(available);
+        setBiometryLabel(biometricService.getBiometryLabel(biometryType));
+      });
 
       const deviceId = await biometricService.getDeviceId();
-      setCurrentDeviceId(deviceId);
+      safeSetState(() => setCurrentDeviceId(deviceId));
 
-      // 2. Fetch API devices with safe error catching
       try {
         const deviceList: AuthDevice[] = await profileService.getAuthDevices();
-        setDevices(Array.isArray(deviceList) ? deviceList : []);
-
-        const foundCurrent = deviceList.find((d) => d.device_id === deviceId);
-        setCurrentDevice(foundCurrent || null);
+        safeSetState(() => {
+          setDevices(Array.isArray(deviceList) ? deviceList : []);
+          const foundCurrent = deviceList.find((d) => d.device_id === deviceId);
+          setCurrentDevice(foundCurrent || null);
+        });
       } catch (apiError: any) {
         console.error(
-          "Auth Devices API Error (500):",
+          "Auth Devices API Error:",
           apiError?.response?.data || apiError.message,
         );
-        setDevices([]);
-        Alert.alert(
-          "Server Error",
-          "Unable to load registered biometric devices from the server. Please check your network or try again later.",
-        );
+        safeSetState(() => setDevices([]));
       }
     } catch (error) {
-      console.error("Biometric Settings Hardware Init Error:", error);
+      console.error("Biometric Hardware Init Error:", error);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      safeSetState(() => {
+        setLoading(false);
+        setRefreshing(false);
+      });
     }
   };
 
@@ -125,7 +139,6 @@ export default function BiometricSettingsScreen() {
     try {
       setProcessing(true);
 
-      // Prompt biometric authentication
       const authenticated = await biometricService.promptBiometrics(
         `Confirm your ${biometryLabel} to enable quick login`,
       );
@@ -135,10 +148,8 @@ export default function BiometricSettingsScreen() {
         return;
       }
 
-      // Generate or retrieve biometric keypair
       const publicKey = await biometricService.createKeys();
 
-      // Register device with the backend
       const response = await profileService.registerAuthDevice({
         device_id: currentDeviceId,
         platform: biometricService.getPlatform(),
@@ -147,12 +158,15 @@ export default function BiometricSettingsScreen() {
       });
 
       if (response.success) {
-        await initData(true);
-        setSuccessAlertConfig({
-          visible: true,
-          title: "Success",
-          message: "Quick login has been successfully enabled.",
-        });
+        // Defer re-init & modal popups slightly to allow OS biometric prompt to detach
+        setTimeout(async () => {
+          await initData(true);
+          setSuccessAlertConfig({
+            visible: true,
+            title: "Success",
+            message: "Quick login has been successfully enabled.",
+          });
+        }, 100);
       }
     } catch (error: any) {
       console.error("Enable Biometrics Error:", error);
@@ -175,32 +189,30 @@ export default function BiometricSettingsScreen() {
       message: `Are you sure you want to disable ${biometryLabel} login for this device?`,
       onConfirm: async () => {
         setAlertConfig((prev) => ({ ...prev, visible: false }));
-        try {
-          setProcessing(true);
 
-          // Disable on backend
-          await profileService.disableAuthDevice(currentDevice.id);
+        setTimeout(async () => {
+          try {
+            setProcessing(true);
+            await profileService.disableAuthDevice(currentDevice.id);
+            await biometricService.deleteKeys();
 
-          // Delete local biometric keypair
-          await biometricService.deleteKeys();
-
-          await initData(true);
-          setSuccessAlertConfig({
-            visible: true,
-            title: "Success",
-            message: "Quick login has been successfully disabled.",
-          });
-        } catch (error: any) {
-          console.error("Disable Biometrics Error:", error);
-          Alert.alert("Error", "Failed to disable biometric login.");
-        } finally {
-          setProcessing(false);
-        }
+            await initData(true);
+            setSuccessAlertConfig({
+              visible: true,
+              title: "Success",
+              message: "Quick login has been successfully disabled.",
+            });
+          } catch (error: any) {
+            console.error("Disable Biometrics Error:", error);
+            Alert.alert("Error", "Failed to disable biometric login.");
+          } finally {
+            setProcessing(false);
+          }
+        }, 150);
       },
     });
   };
 
-  // Switch Toggle Handler
   const handleToggle = (value: boolean) => {
     if (value) {
       handleEnableBiometrics();
@@ -223,29 +235,29 @@ export default function BiometricSettingsScreen() {
           }"?`,
       onConfirm: async () => {
         setAlertConfig((prev) => ({ ...prev, visible: false }));
-        try {
-          setProcessing(true);
 
-          // Delete on Backend
-          await profileService.removeAuthDevice(device.id);
+        setTimeout(async () => {
+          try {
+            setProcessing(true);
+            await profileService.removeAuthDevice(device.id);
 
-          // If current device, wipe local storage & keys
-          if (isThisDevice) {
-            await biometricService.resetDevice();
+            if (isThisDevice) {
+              await biometricService.resetDevice();
+            }
+
+            await initData(true);
+            setSuccessAlertConfig({
+              visible: true,
+              title: "Success",
+              message: "Device has been successfully removed.",
+            });
+          } catch (error: any) {
+            console.error("Remove Device Error:", error);
+            Alert.alert("Error", "Failed to remove device.");
+          } finally {
+            setProcessing(false);
           }
-
-          await initData(true);
-          setSuccessAlertConfig({
-            visible: true,
-            title: "Success",
-            message: "Device has been successfully removed.",
-          });
-        } catch (error: any) {
-          console.error("Remove Device Error:", error);
-          Alert.alert("Error", "Failed to remove device.");
-        } finally {
-          setProcessing(false);
-        }
+        }, 150);
       },
     });
   };
@@ -272,7 +284,6 @@ export default function BiometricSettingsScreen() {
         />
       }
     >
-      {/* --- CONFIRMATION ALERTS --- */}
       <CustomAlert
         visible={alertConfig.visible}
         title={alertConfig.title}
@@ -281,7 +292,6 @@ export default function BiometricSettingsScreen() {
         onConfirm={alertConfig.onConfirm}
       />
 
-      {/* --- SUCCESS/INFO ALERTS --- */}
       <CustomAlert
         visible={successAlertConfig.visible}
         title={successAlertConfig.title}
@@ -291,7 +301,6 @@ export default function BiometricSettingsScreen() {
         }
       />
 
-      {/* --- HARDWARE SUPPORT CHECK --- */}
       {!isSupported && (
         <View className="m-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex-row items-center">
           <Ionicons name="warning-outline" size={24} color="#D97706" />
@@ -302,7 +311,6 @@ export default function BiometricSettingsScreen() {
         </View>
       )}
 
-      {/* --- CURRENT DEVICE SETTINGS --- */}
       <View className="mt-6 px-4">
         <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
           This Device
@@ -310,7 +318,7 @@ export default function BiometricSettingsScreen() {
 
         <View className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex-row items-center justify-between">
           <View className="flex-row items-center flex-1 mr-3">
-            <View className="bg-blue p-3 rounded-xl">
+            <View className="bg-blue-50 p-3 rounded-xl">
               <Ionicons name="finger-print-outline" size={24} color="#034194" />
             </View>
             <View className="ml-3 flex-1">
@@ -337,7 +345,6 @@ export default function BiometricSettingsScreen() {
         </View>
       </View>
 
-      {/* --- REGISTERED DEVICES LIST --- */}
       <View className="mt-8 px-4 mb-12">
         <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
           Registered Devices ({devices.length})
@@ -385,7 +392,7 @@ export default function BiometricSettingsScreen() {
                             `${item.platform.toUpperCase()} Device`}
                         </Text>
                         {isThisDevice && (
-                          <View className="ml-2 bg-blue px-2 py-0.5 rounded-full">
+                          <View className="ml-2 bg-blue-100 px-2 py-0.5 rounded-full">
                             <Text className="text-[#034194] text-[10px] font-bold">
                               This Device
                             </Text>

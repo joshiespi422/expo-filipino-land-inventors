@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
 import {
   Slot,
@@ -16,10 +15,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import "../../global.css";
-
-const queryClient = new QueryClient();
 
 // --- NAVIGATION BAR WRAPPER ---
 function NavigationBarWrapper({ children }: { children: React.ReactNode }) {
@@ -81,12 +76,15 @@ function CustomHeader() {
     const belowTop = stack[stack.length - 2];
 
     if (top === currentHref) {
+      // same screen re-render, ignore
       return;
     }
     if (belowTop === currentHref) {
+      // moved BACK via swipe/hardware — sync stack by popping
       stack.pop();
       return;
     }
+    // forward navigation — track it
     stack.push(currentHref);
   }, [currentHref]);
 
@@ -96,72 +94,89 @@ function CustomHeader() {
       const stack = historyRef.current;
 
       if (stack.length > 1) {
+        // Deeper than the entry screen -> step back inside this group
         stack.pop();
         const prevHref = stack[stack.length - 1];
-        console.log("↩️ [Coop Back] Popping to", prevHref);
+        console.log("↩️ [Intellectual Back] Popping to", prevHref);
         router.replace(prevHref as any);
         return;
       }
 
+      // Entry screen -> exit based on initial arrival parameter
       if (params.from === "notification") {
-        console.log("↩️ [Coop Back] Returning to notification");
+        console.log("↩️ [Intellectual Back] Returning to notification");
         router.replace("/(main)/notification");
         return;
       }
       if (params.from === "home") {
-        console.log("↩️ [Coop Back] Returning to home");
-        router.replace("/(main)/home");
+        console.log("↩️ [Intellectual Back] Returning to home");
+        router.replace("/(main)");
         return;
       }
 
-      // Default fallback if opened directly or no history
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace("/(main)/home");
-      }
+      // Default exit route for main-profile stack
+      console.log("↩️ [Intellectual Back] Fallback to profile");
+      router.replace("/(main)/profile");
     } catch (e) {
-      console.log("Back navigation error:", e);
-      router.replace("/(main)/home");
+      console.error("❌ [Intellectual Back] Error:", e);
+      router.replace("/(main)/profile");
     }
   };
 
+  // --- ROUTE DISPLAY TITLE ---
+  const isProfileEdit = pathname.includes("editProfile");
+  const isProfileSetup = pathname.includes("setupProfile");
+  const isCongratulations = pathname.includes("congratulations");
+  const isChangePassword = pathname.includes("changePassword");
+
+  const title = isProfileEdit
+    ? "Edit Profile"
+    : isProfileSetup
+      ? "Setup Profile"
+      : isCongratulations
+        ? "Profile"
+        : isChangePassword
+          ? "Security & Password"
+          : "";
+
+  if (!title) return null;
+
   return (
-    <View
-      className="bg-primary w-full items-center rounded-b-2xl pb-4"
-      style={{ paddingTop: Math.max(insets.top + 8, 16) }}
-    >
-      <StatusBar
-        barStyle="light-content"
-        translucent
-        backgroundColor="transparent"
-      />
-      <View className="flex-row justify-between w-full px-6 items-center">
-        <View className="w-[31px]">
-          <TouchableOpacity onPress={handleBackPress} activeOpacity={0.7}>
+    <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
+      <View className="flex-row justify-between items-center w-full px-6">
+        {/* Render back button ONLY if not on congratulations screen */}
+        {!isCongratulations ? (
+          <TouchableOpacity
+            onPress={handleBackPress}
+            style={{ width: 31 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons name="chevron-back" size={28} color="white" />
           </TouchableOpacity>
-        </View>
+        ) : (
+          <View style={{ width: 31 }} />
+        )}
 
-        <View>
-          <Text className="text-white text-2xl font-bold">Coop Membership</Text>
-        </View>
+        <Text
+          className="text-white text-2xl font-bold text-center flex-1"
+          numberOfLines={1}
+        >
+          {title}
+        </Text>
 
-        <View className="w-[31px]" />
+        <View style={{ width: 31 }} />
       </View>
     </View>
   );
 }
 
-export default function RootLayout() {
+// --- MAIN LAYOUT ---
+export default function MainProfileLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <NavigationBarWrapper>
-        <CustomHeader />
-        <View className="flex-1">
-          <Slot />
-        </View>
-      </NavigationBarWrapper>
-    </QueryClientProvider>
+    <NavigationBarWrapper>
+      <StatusBar hidden={true} />
+      <CustomHeader />
+      <Slot />
+    </NavigationBarWrapper>
   );
 }

@@ -1,6 +1,8 @@
 import { useAuthStore } from "@/store/useAuthStore";
+import { useUIStore } from "@/store/useUIStore";
 import { Entypo, Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as NavigationBar from "expo-navigation-bar";
 import { Redirect, Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
@@ -15,9 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-import { useUIStore } from "@/store/useUIStore";
-import * as NavigationBar from "expo-navigation-bar";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   getSupportConversation,
@@ -38,26 +38,33 @@ const queryClient = new QueryClient();
 
 export default function MainLayout() {
   const { token, isLoading, user } = useAuthStore();
-  const { comingSoonVisible, setComingSoonVisible } = useUIStore(); // ✅ Use store
+  const { comingSoonVisible, setComingSoonVisible } = useUIStore();
+
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
 
   // ===== SUPPORT CHAT: unread badge + realtime toast =====
   const [supportConversationId, setSupportConversationId] = useState<
     number | null
   >(null);
+
   const [supportUnreadCount, setSupportUnreadCount] = useState(0);
   const [supportNotification, setSupportNotification] = useState<any>(null);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
-  const supportSlideAnim = useRef(new Animated.Value(-100)).current;
-  const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Route matches
+  const supportSlideAnim = useRef(new Animated.Value(-100)).current;
+
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ===== Route matches =====
+
   const isMainIndex =
     pathname === "/" || pathname === "/(main)" || pathname === "/(main)/";
 
   const isProfileIndex =
     pathname === "/profile" || pathname === "/(main)/profile";
+
   const isProfileCongrats = pathname === "/profile/congratulations";
   const isProfileEdit = pathname === "/profile/editProfile";
   const isProfileSetup = pathname === "/profile/setupProfile";
@@ -80,26 +87,37 @@ export default function MainLayout() {
   const isWelcomePage =
     pathname === "/welcomePage" || pathname === "/(main)/welcomePage";
 
-  // Covers both "/chat-support" and "/(chat-support)/" style paths
   const isChatSupportScreen = pathname.includes("chat-support");
 
   const showFooter =
     isMainIndex || isProfileIndex || isHistory || isNotification;
 
-  // ===== Hide Android Bottom Navigation Bar =====
+  // ============================================================
+  // FORCE ANDROID NAVIGATION BAR TO STAY VISIBLE
+  // ============================================================
+  //
+  // Do NOT use setBackgroundColorAsync here.
+  // The native configuration in app.json handles the white
+  // navigation-bar background.
+  //
   useEffect(() => {
-    const hideNavBar = async () => {
-      if (Platform.OS === "android") {
-        try {
-          await NavigationBar.setBehaviorAsync("sticky-immersive" as any);
-          await NavigationBar.setVisibilityAsync("hidden");
-        } catch (e) {
-          console.log("NavigationBar error:", e);
-        }
+    if (Platform.OS !== "android") return;
+
+    const setupNavigationBar = async () => {
+      try {
+        await NavigationBar.setVisibilityAsync("visible");
+        await NavigationBar.setButtonStyleAsync("dark");
+      } catch (error) {
+        console.log("NavigationBar setup error:", error);
       }
     };
-    hideNavBar();
+
+    setupNavigationBar();
   }, []);
+
+  // ============================================================
+  // SUPPORT CHAT
+  // ============================================================
 
   const handleComingSoon = () => {
     setComingSoonVisible(true);
@@ -110,9 +128,11 @@ export default function MainLayout() {
     if (!user?.id) return;
 
     let isMounted = true;
+
     const loadSupportChatState = async () => {
       try {
         const res = await getSupportConversation();
+
         if (isMounted && res.exists && res.conversation) {
           setSupportConversationId(res.conversation.id);
           setSupportUnreadCount(res.unread_count || 0);
@@ -123,16 +143,18 @@ export default function MainLayout() {
     };
 
     loadSupportChatState();
+
     return () => {
       isMounted = false;
     };
   }, [user?.id]);
 
-  // 1. Sync support chat state when screen route changes (only when NOT in active support screen)
+  // ===== Sync support chat state on route changes =====
   useEffect(() => {
     if (!user?.id || isChatSupportScreen) return;
 
     let isMounted = true;
+
     getSupportConversation()
       .then((res) => {
         if (isMounted && res.exists) {
@@ -147,7 +169,7 @@ export default function MainLayout() {
     };
   }, [pathname, user?.id, isChatSupportScreen]);
 
-  // 2. Realtime Broadcast Subscription
+  // ===== Realtime Broadcast Subscription =====
   useEffect(() => {
     if (!user?.id || !echo) return;
 
@@ -157,7 +179,6 @@ export default function MainLayout() {
     channel.notification((notificationData: any) => {
       if (notificationData.conversation_type !== "support") return;
 
-      // Increment count only if user is not on the support screen
       if (!isChatSupportScreen) {
         setSupportUnreadCount((prev) => prev + 1);
         setSupportNotification(notificationData);
@@ -167,7 +188,10 @@ export default function MainLayout() {
           useNativeDriver: true,
         }).start();
 
-        if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+        if (dismissTimerRef.current) {
+          clearTimeout(dismissTimerRef.current);
+        }
+
         dismissTimerRef.current = setTimeout(() => {
           closeSupportNotification();
         }, 5000);
@@ -175,19 +199,26 @@ export default function MainLayout() {
     });
 
     return () => {
-      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-      if (echo) echo.leave(channelName);
+      if (dismissTimerRef.current) {
+        clearTimeout(dismissTimerRef.current);
+      }
+
+      if (echo) {
+        echo.leave(channelName);
+      }
     };
   }, [user?.id, isChatSupportScreen]);
 
-  // ===== Fetch/Sync Notification Count on Route Change & Initial Load =====
+  // ===== Notification count fetch =====
   useEffect(() => {
     if (!user?.id) return;
 
     let isMounted = true;
+
     const loadNotificationCount = async () => {
       try {
         const { unreadCount } = await getNotifications();
+
         if (isMounted) {
           setNotificationUnreadCount(unreadCount);
         }
@@ -197,15 +228,18 @@ export default function MainLayout() {
     };
 
     loadNotificationCount();
+
     return () => {
       isMounted = false;
     };
   }, [user?.id, pathname]);
 
+  // ===== Close support notification =====
   const closeSupportNotification = () => {
     if (dismissTimerRef.current) {
       clearTimeout(dismissTimerRef.current);
     }
+
     Animated.timing(supportSlideAnim, {
       toValue: -100,
       duration: 300,
@@ -213,9 +247,11 @@ export default function MainLayout() {
     }).start(() => setSupportNotification(null));
   };
 
+  // ===== Support notification press =====
   const handleSupportNotificationPress = async () => {
     const convoId =
       supportNotification?.conversation_id || supportConversationId;
+
     closeSupportNotification();
 
     try {
@@ -225,19 +261,13 @@ export default function MainLayout() {
     }
 
     setSupportUnreadCount(0);
-    router.push("/(chat-support)/");
+
+    router.push("/(chat-support)/" as any);
   };
 
-  const handleHeaderSupportPress = async () => {
-    try {
-      await markConversationAsRead(supportConversationId || undefined);
-    } catch (err) {
-      console.error("Failed to mark support conversation as read:", err);
-    }
-
-    setSupportUnreadCount(0);
-    router.push("/(chat-support)/");
-  };
+  // ============================================================
+  // LOADING
+  // ============================================================
 
   if (isLoading) {
     return (
@@ -254,21 +284,27 @@ export default function MainLayout() {
     );
   }
 
+  // ============================================================
+  // AUTH
+  // ============================================================
+
   if (!token) {
     return <Redirect href="/(auth)/login" />;
   }
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar hidden={true} />
+      {/* Keep status bar dark because the app uses a light background */}
+      <StatusBar style="dark" hidden={true} />
 
-      {/* ===== COMING SOON MODAL ===== */}
+      {/* ============================================================
+          COMING SOON MODAL
+          ============================================================ */}
       <Modal
         visible={comingSoonVisible}
         transparent
         animationType="fade"
         statusBarTranslucent
-        navigationBarTranslucent
         onRequestClose={() => setComingSoonVisible(false)}
       >
         <View
@@ -311,7 +347,9 @@ export default function MainLayout() {
         </View>
       </Modal>
 
-      {/* ===== SUPPORT CHAT NOTIFICATION TOAST ===== */}
+      {/* ============================================================
+          SUPPORT CHAT NOTIFICATION TOAST
+          ============================================================ */}
       {supportNotification && (
         <Animated.View
           style={{
@@ -329,7 +367,10 @@ export default function MainLayout() {
             className="bg-white rounded-2xl p-4 flex-row items-center border border-slate-100"
             style={{
               shadowColor: "#000",
-              shadowOffset: { width: 0, height: 4 },
+              shadowOffset: {
+                width: 0,
+                height: 4,
+              },
               shadowOpacity: 0.1,
               shadowRadius: 12,
               elevation: 5,
@@ -338,14 +379,17 @@ export default function MainLayout() {
             <View className="bg-[#0084FF]/10 w-10 h-10 rounded-full items-center justify-center mr-3">
               <Ionicons name="chatbubble-ellipses" size={20} color="#034194" />
             </View>
+
             <View className="flex-1">
               <Text className="text-slate-900 font-bold text-sm">
                 Support Reply
               </Text>
+
               <Text numberOfLines={1} className="text-slate-500 text-xs mt-0.5">
                 {supportNotification.body || "You received a new message."}
               </Text>
             </View>
+
             <TouchableOpacity
               onPress={closeSupportNotification}
               className="p-2"
@@ -356,12 +400,23 @@ export default function MainLayout() {
         </Animated.View>
       )}
 
-      <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+      {/* ============================================================
+          MAIN APPLICATION
+          ============================================================ */}
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#ffffff",
+        }}
+      >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1 }}
         >
-          {/* ===== GLOBAL HEADER ===== */}
+          {/* ============================================================
+              GLOBAL HEADER
+              ============================================================ */}
+
           {isWelcomePage ? null : isMainIndex ? (
             <View className="bg-primary mb-12 z-10 w-full h-28 items-center justify-between pt-8">
               {/* Information Icon */}
@@ -369,7 +424,7 @@ export default function MainLayout() {
                 style={{ elevation: 8 }}
                 className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full"
               >
-                <TouchableOpacity onPress={() => router.push("/info")}>
+                <TouchableOpacity onPress={() => router.push("/info" as any)}>
                   <View className="bg-white rounded-full border border-primary/20 p-2">
                     <Ionicons
                       name="information-circle"
@@ -387,7 +442,10 @@ export default function MainLayout() {
               >
                 <Image
                   source={logo}
-                  style={{ width: 96, height: 96 }}
+                  style={{
+                    width: 96,
+                    height: 96,
+                  }}
                   resizeMode="contain"
                 />
               </View>
@@ -398,7 +456,6 @@ export default function MainLayout() {
                 className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full"
               >
                 <TouchableOpacity
-                  // onPress={handleHeaderSupportPress}
                   onPress={handleComingSoon}
                   className="relative"
                   activeOpacity={0.7}
@@ -407,7 +464,7 @@ export default function MainLayout() {
                     <Entypo name="message" size={35} color="#034194" />
                   </View>
 
-                  {/* Unread badge for support chat */}
+                  {/* Unread badge */}
                   {supportUnreadCount > 0 && (
                     <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border-2 border-white">
                       <Text className="text-white text-[10px] font-extrabold text-center">
@@ -423,7 +480,9 @@ export default function MainLayout() {
               <View className="flex-row justify-between items-center w-full px-6">
                 <TouchableOpacity
                   onPress={() => router.back()}
-                  style={{ width: 31 }}
+                  style={{
+                    width: 31,
+                  }}
                 >
                   <Ionicons name="chevron-back" size={28} color="white" />
                 </TouchableOpacity>
@@ -467,32 +526,48 @@ export default function MainLayout() {
             </View>
           )}
 
-          {/* ===== MAIN CONTENT STACK ===== */}
-          <View style={{ flex: 1 }}>
+          {/* ============================================================
+              MAIN CONTENT STACK
+              ============================================================ */}
+          <View
+            style={{
+              flex: 1,
+              paddingBottom: showFooter ? 0 : insets.bottom,
+              backgroundColor: "#ffffff",
+            }}
+          >
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
+
               <Stack.Screen
                 name="profile/index"
                 options={{ animation: "fade" }}
               />
+
               <Stack.Screen name="news/index" options={{ animation: "fade" }} />
+
               <Stack.Screen
                 name="news/search"
                 options={{ animation: "fade" }}
               />
+
               <Stack.Screen
                 name="history/index"
                 options={{ animation: "fade" }}
               />
+
               <Stack.Screen
                 name="news/details"
                 options={{ animation: "fade" }}
               />
+
               <Stack.Screen name="load/index" options={{ animation: "fade" }} />
+
               <Stack.Screen
                 name="notification/index"
                 options={{ animation: "fade" }}
               />
+
               <Stack.Screen
                 name="intellectual/index"
                 options={{ animation: "fade" }}
@@ -500,35 +575,55 @@ export default function MainLayout() {
             </Stack>
           </View>
 
-          {/* ===== FOOTER ===== */}
+          {/* ============================================================
+              FOOTER
+              ============================================================ */}
           {showFooter && (
             <View
               style={{
                 borderTopWidth: 5,
                 borderTopColor: "#D70127",
                 width: "100%",
-                height: 80,
+                paddingBottom: insets.bottom,
                 zIndex: 99,
               }}
-              className="justify-center bg-primary items-center"
+              className="justify-center items-center"
             >
-              <View className="flex-row w-full max-w-[600px] px-4 items-center">
+              <View
+                style={{
+                  height: 80,
+                }}
+                className="flex-row w-full bg-primary max-w-[600px] px-4 items-center"
+              >
                 {/* Home */}
                 <TouchableOpacity
                   className="items-center flex-1 mt-1"
-                  onPress={() => router.push("/")}
+                  onPress={() => router.push("/" as any)}
                 >
-                  <Image source={Home} style={{ width: 28, height: 28 }} />
+                  <Image
+                    source={Home}
+                    style={{
+                      width: 28,
+                      height: 28,
+                    }}
+                  />
+
                   <Text className="text-white text-[10px] mt-1">Home</Text>
                 </TouchableOpacity>
 
                 {/* History */}
                 <TouchableOpacity
                   className="items-center pe-2 flex-1 mt-1"
-                  // onPress={() => router.push("/history")}
                   onPress={handleComingSoon}
                 >
-                  <Image source={History} style={{ width: 28, height: 28 }} />
+                  <Image
+                    source={History}
+                    style={{
+                      width: 28,
+                      height: 28,
+                    }}
+                  />
+
                   <Text className="text-white text-[10px] mt-1">
                     Transactions
                   </Text>
@@ -537,10 +632,11 @@ export default function MainLayout() {
                 {/* Camera */}
                 <View
                   className="flex-1 items-center justify-center"
-                  style={{ height: 50 }}
+                  style={{
+                    height: 50,
+                  }}
                 >
                   <TouchableOpacity
-                    // onPress={() => router.push("/camera")}
                     onPress={handleComingSoon}
                     style={{
                       position: "absolute",
@@ -556,23 +652,31 @@ export default function MainLayout() {
                       elevation: 10,
                     }}
                   >
-                    <Image source={Camera} style={{ width: 50, height: 50 }} />
+                    <Image
+                      source={Camera}
+                      style={{
+                        width: 50,
+                        height: 50,
+                      }}
+                    />
                   </TouchableOpacity>
                 </View>
 
                 {/* Notification */}
                 <TouchableOpacity
                   className="items-center ps-2 mt-1 flex-1"
-                  onPress={() => router.push("/notification")}
+                  onPress={() => router.push("/notification" as any)}
                   activeOpacity={0.7}
                 >
                   <View className="relative">
                     <Image
                       source={Notification}
-                      style={{ width: 28, height: 28 }}
+                      style={{
+                        width: 28,
+                        height: 28,
+                      }}
                     />
 
-                    {/* Unread notification badge */}
                     {notificationUnreadCount > 0 && (
                       <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border-2 border-white">
                         <Text className="text-white text-[9px] font-extrabold text-center">
@@ -592,12 +696,19 @@ export default function MainLayout() {
                 {/* Profile */}
                 <TouchableOpacity
                   className="items-center flex-1"
-                  onPress={() => router.push("/profile")}
+                  onPress={() => router.push("/profile" as any)}
                 >
-                  <View style={{ width: 31, height: 31 }}>
+                  <View
+                    style={{
+                      width: 31,
+                      height: 31,
+                    }}
+                  >
                     {user?.avatar ? (
                       <Image
-                        source={{ uri: user.avatar }}
+                        source={{
+                          uri: user.avatar,
+                        }}
                         style={{
                           width: "100%",
                           height: "100%",
@@ -608,6 +719,7 @@ export default function MainLayout() {
                       <Ionicons name="person-circle" size={33} color="white" />
                     )}
                   </View>
+
                   <Text className="text-white text-[10px] mt-1">Profile</Text>
                 </TouchableOpacity>
               </View>

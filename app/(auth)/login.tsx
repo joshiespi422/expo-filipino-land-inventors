@@ -6,7 +6,6 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -29,11 +28,7 @@ export default function LoginPage() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
 
-  const scrollRef = useRef<ScrollView>(null);
-  const scrollPosition = useRef(0);
-
   const [form, setForm] = useState({ number: "", password: "" });
-  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const [alert, setAlert] = useState({
@@ -75,17 +70,14 @@ export default function LoginPage() {
   useEffect(() => {
     const initBiometric = async () => {
       try {
-        // Check biometric support
         const { available, biometryType } =
           await biometricService.isSupported();
         setBiometricAvailable(available);
         setBiometryLabel(biometricService.getBiometryLabel(biometryType));
 
-        // Get device ID
         const deviceId = await biometricService.getDeviceId();
         setCurrentDeviceId(deviceId);
 
-        // Check if user has biometric enabled
         if (available) {
           const publicKey = await biometricService.createKeys();
           setHasBiometricEnabled(!!publicKey);
@@ -96,26 +88,6 @@ export default function LoginPage() {
     };
 
     initBiometric();
-  }, []);
-
-  // 🔥 SAVE POSITION WHEN KEYBOARD OPENS
-  useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", () => {
-      scrollRef.current?.scrollTo({
-        y: scrollPosition.current,
-        animated: true,
-      });
-    });
-
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      // 🔥 restore to top smoothly when keyboard closes
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-
-    return () => {
-      show.remove();
-      hide.remove();
-    };
   }, []);
 
   const showAlert = (title: string, message: string) => {
@@ -193,7 +165,6 @@ export default function LoginPage() {
     setLoadingState((prev) => ({ ...prev, biometric: true }));
 
     try {
-      // Prompt biometric authentication
       const authenticated = await biometricService.promptBiometrics(
         `Authenticate with ${biometryLabel} to login`,
       );
@@ -204,10 +175,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Get public key
       const publicKey = await biometricService.createKeys();
-
-      // Attempt biometric login
       const data = await authService.biometricLogin(currentDeviceId, publicKey);
       await setAuth(data.token, data.user);
 
@@ -242,19 +210,13 @@ export default function LoginPage() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
-        ref={scrollRef}
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bounces={false}
-        onScroll={(e) => {
-          scrollPosition.current = e.nativeEvent.contentOffset.y;
-        }}
-        scrollEventThrottle={16}
       >
         <View className="flex-1 bg-slate-50">
           <HeaderAuth title="Hello" subtitle="Welcome back!" />
@@ -323,7 +285,6 @@ export default function LoginPage() {
                       editable={!isDisabled}
                     />
 
-                    {/* 🔥 PASSED PROPS TO TRIGGER THE INTEGRATED FORGOT PASSWORD LINK */}
                     <AuthInput
                       label="Password"
                       placeholder="••••••••"
