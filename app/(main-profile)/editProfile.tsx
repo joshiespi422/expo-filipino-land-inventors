@@ -848,8 +848,8 @@ export default function EditProfileScreen() {
                     />
 
                     <Picker.Item
-                      label="Driver's License"
-                      value="Driver's License"
+                      label="Driver License"
+                      value="Driver License"
                       color="#1f2937"
                     />
 
@@ -886,7 +886,7 @@ export default function EditProfileScreen() {
                     />
 
                     <Picker.Item
-                      label="Voter's ID"
+                      label="Voter ID"
                       value="Voter ID"
                       color="#1f2937"
                     />

@@ -879,8 +879,8 @@ export default function SetupProfileScreen() {
               <Picker.Item label="Passport" value="Passport" color="#1f2937" />
 
               <Picker.Item
-                label="Driver's License"
-                value="Driver's License"
+                label="Driver License"
+                value="Driver License"
                 color="#1f2937"
               />
 
@@ -908,11 +908,7 @@ export default function SetupProfileScreen() {
 
               <Picker.Item label="PRC ID" value="PRC ID" color="#1f2937" />
 
-              <Picker.Item
-                label="Voter's ID"
-                value="Voter ID"
-                color="#1f2937"
-              />
+              <Picker.Item label="Voter ID" value="Voter ID" color="#1f2937" />
 
               {/* OTHER VALID IDs */}
 

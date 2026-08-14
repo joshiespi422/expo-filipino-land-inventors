@@ -530,8 +530,8 @@ export default function SetupProfileScreen() {
               />
               <Picker.Item label="Passport" value="Passport" color="#1f2937" />
               <Picker.Item
-                label="Driver's License"
-                value="Driver's License"
+                label="Driver License"
+                value="Driver License"
                 color="#1f2937"
               />
               <Picker.Item label="UMID" value="UMID" color="#1f2937" />
