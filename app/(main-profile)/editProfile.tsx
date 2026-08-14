@@ -887,7 +887,7 @@ export default function EditProfileScreen() {
 
                     <Picker.Item
                       label="Voter's ID"
-                      value="Voter's ID"
+                      value="Voter ID"
                       color="#1f2937"
                     />
 
