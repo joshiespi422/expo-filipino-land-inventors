@@ -910,7 +910,7 @@ export default function SetupProfileScreen() {
 
               <Picker.Item
                 label="Voter's ID"
-                value="Voter's ID"
+                value="Voter ID"
                 color="#1f2937"
               />
 
