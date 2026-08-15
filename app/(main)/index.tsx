@@ -227,19 +227,16 @@ export default function DashboardPage() {
       label: "Business Training",
       href: "/(business)/",
       source: Businessicon,
-      comingSoon: true,
     },
     {
       label: "Intellectual Property Assistant",
       href: "/(intellectual)/",
       source: Intellectual,
-      comingSoon: true,
     },
     {
       label: "Loan Assistance",
       href: "/(loan)/",
       source: Loan,
-      comingSoon: true,
     },
     // {
     //   label: "Funding & Invest Opportunities",
@@ -257,13 +254,12 @@ export default function DashboardPage() {
       label: "FISMPC Online Store",
       href: "/(store)/",
       source: FISMPC,
-      comingSoon: true,
     },
     // { label: "Product Validation Services", href: "/", source: Product },
     // { label: "Lost & Found", href: "/", source: Lost },
     // { label: "Suggest a Service", href: "/", source: Suggest },
     { label: "Coop Membership", href: "/(coop)/", source: Coop },
-    { label: "News & Event", href: "/news", source: News, comingSoon: true },
+    { label: "News & Event", href: "/news", source: News },
   ];
 
   const getPopupContent = () => {
@@ -426,8 +422,8 @@ export default function DashboardPage() {
               </View>
               <View className="flex-row gap-3">
                 <TouchableOpacity
-                  // onPress={() => router.push("/load")}
-                  onPress={handleComingSoon}
+                  onPress={() => router.push("/load")}
+                  // onPress={handleComingSoon}
                   className="bg-white h-10 w-10 flex justify-center items-center rounded-lg"
                 >
                   <FontAwesome name="plus" size={22} color="#034194" />

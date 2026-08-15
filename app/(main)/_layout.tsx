@@ -262,7 +262,24 @@ export default function MainLayout() {
 
     setSupportUnreadCount(0);
 
-    router.push("/(chat-support)/" as any);
+    router.push({
+      pathname: "/(chat-support)/" as any,
+      params: { from: pathname },
+    });
+  };
+
+  const handleHeaderSupportPress = async () => {
+    try {
+      await markConversationAsRead(supportConversationId || undefined);
+    } catch (err) {
+      console.error("Failed to mark support conversation as read:", err);
+    }
+
+    setSupportUnreadCount(0);
+    router.push({
+      pathname: "/(chat-support)/" as any,
+      params: { from: pathname },
+    });
   };
 
   // ============================================================
@@ -456,7 +473,7 @@ export default function MainLayout() {
                 className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full"
               >
                 <TouchableOpacity
-                  onPress={handleComingSoon}
+                  onPress={handleHeaderSupportPress}
                   className="relative"
                   activeOpacity={0.7}
                 >
@@ -614,7 +631,7 @@ export default function MainLayout() {
                 {/* History */}
                 <TouchableOpacity
                   className="items-center pe-2 flex-1 mt-1"
-                  onPress={handleComingSoon}
+                  onPress={() => router.push("/history")}
                 >
                   <Image
                     source={History}
@@ -637,7 +654,7 @@ export default function MainLayout() {
                   }}
                 >
                   <TouchableOpacity
-                    onPress={handleComingSoon}
+                    onPress={() => router.push("/camera")}
                     style={{
                       position: "absolute",
                       top: -43,

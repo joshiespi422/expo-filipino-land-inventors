@@ -1,10 +1,9 @@
-// app/(store)/chat-seller.tsx
+// app/(store)/index.tsx
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
-import * as NavigationBar from "expo-navigation-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -18,7 +17,6 @@ import {
   LayoutAnimation,
   Modal,
   Platform,
-  StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
@@ -105,12 +103,6 @@ function ChatSellerPageInner() {
   // ref.clear() (which can silently no-op under some component
   // wrappers) or React state-update timing races.
   const [inputResetKey, setInputResetKey] = useState(0);
-
-  useEffect(() => {
-    if (Platform.OS !== "android") return;
-    NavigationBar.setVisibilityAsync("hidden").catch(() => {});
-    NavigationBar.setBehaviorAsync("inset-touch").catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -738,8 +730,6 @@ function ChatSellerPageInner() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-      <StatusBar hidden={true} />
-
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}

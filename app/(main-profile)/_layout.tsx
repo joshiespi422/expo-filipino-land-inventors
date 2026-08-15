@@ -94,28 +94,17 @@ function CustomHeader() {
       const stack = historyRef.current;
 
       if (stack.length > 1) {
-        // Deeper than the entry screen -> step back inside this group
         stack.pop();
         const prevHref = stack[stack.length - 1];
-        console.log("↩️ [Intellectual Back] Popping to", prevHref);
         router.replace(prevHref as any);
         return;
       }
 
-      // Entry screen -> exit based on initial arrival parameter
-      if (params.from === "notification") {
-        console.log("↩️ [Intellectual Back] Returning to notification");
-        router.replace("/(main)/notification");
-        return;
-      }
       if (params.from === "home") {
-        console.log("↩️ [Intellectual Back] Returning to home");
         router.replace("/(main)");
         return;
       }
 
-      // Default exit route for main-profile stack
-      console.log("↩️ [Intellectual Back] Fallback to profile");
       router.replace("/(main)/profile");
     } catch (e) {
       console.error("❌ [Intellectual Back] Error:", e);
