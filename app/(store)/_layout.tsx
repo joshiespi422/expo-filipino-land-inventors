@@ -1,12 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as NavigationBar from "expo-navigation-bar";
-import { Stack, useFocusEffect, usePathname, useRouter } from "expo-router";
+import { Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
-  AppState,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HeartBlue from "../../assets/images/icon/heartblue.png";
 import HeartGrey from "../../assets/images/icon/heartgrey.png";
@@ -33,6 +33,38 @@ import "../../global.css";
 
 const queryClient = new QueryClient();
 
+// --- NAVIGATION BAR WRAPPER ---
+function NavigationBarWrapper({ children }: { children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    const setupNavigationBar = async () => {
+      try {
+        await NavigationBar.setVisibilityAsync("visible");
+        await NavigationBar.setButtonStyleAsync("dark");
+      } catch (error) {
+        console.log("NavigationBar setup error:", error);
+      }
+    };
+
+    setupNavigationBar();
+  }, []);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+      <View style={{ flex: 1 }}>{children}</View>
+
+      {/* Solid white bottom bar covering Android Navigation Bar */}
+      {Platform.OS === "android" && (
+        <View style={{ height: insets.bottom, backgroundColor: "#ffffff" }} />
+      )}
+    </View>
+  );
+}
+
+// --- MAIN LAYOUT ---
 export default function RootLayout() {
   const router = useRouter();
   const pathname = usePathname();
@@ -70,35 +102,6 @@ export default function RootLayout() {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [notification, setNotification] = useState<any>(null);
   const slideAnim = useRef(new Animated.Value(-100)).current;
-
-  const hideNavigationBar = async () => {
-    if (Platform.OS !== "android") return;
-
-    try {
-      await NavigationBar.setBehaviorAsync("sticky-immersive" as any);
-      await NavigationBar.setVisibilityAsync("hidden");
-    } catch (e) {
-      console.log("NavigationBar error:", e);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      hideNavigationBar();
-    }, []),
-  );
-
-  useEffect(() => {
-    hideNavigationBar();
-
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        hideNavigationBar();
-      }
-    });
-
-    return () => subscription.remove();
-  }, []);
 
   // ===== Fetch Current User ID & Initial Unread Count =====
   useEffect(() => {
@@ -219,249 +222,251 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar hidden={true} />
+      <NavigationBarWrapper>
+        <StatusBar hidden={true} />
 
-      <View className="flex-1 bg-white">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1"
-        >
-          {/* --- NOTIFICATION TOAST --- */}
-          {notification && (
-            <Animated.View
-              style={{
-                transform: [{ translateY: slideAnim }],
-                position: "absolute",
-                top: 0,
-                left: 16,
-                right: 16,
-                zIndex: 999,
-              }}
-            >
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={handleNotificationPress}
-                className="bg-white rounded-2xl p-4 shadow-lg flex-row items-center border border-slate-100"
+        <View className="flex-1 bg-white">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            className="flex-1"
+          >
+            {/* --- NOTIFICATION TOAST --- */}
+            {notification && (
+              <Animated.View
                 style={{
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 12,
-                  elevation: 5,
+                  transform: [{ translateY: slideAnim }],
+                  position: "absolute",
+                  top: 0,
+                  left: 16,
+                  right: 16,
+                  zIndex: 999,
                 }}
               >
-                <View className="bg-[#0084FF]/10 w-10 h-10 rounded-full items-center justify-center mr-3">
-                  <Ionicons
-                    name="chatbubble-ellipses"
-                    size={20}
-                    color="#034194"
-                  />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-slate-900 font-bold text-sm">
-                    {notification.shop_name || "New Message"}
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    className="text-slate-500 text-xs mt-0.5"
-                  >
-                    {notification.body || "You received a new message."}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={closeNotification} className="p-2">
-                  <Ionicons name="close" size={18} color="#94A3B8" />
-                </TouchableOpacity>
-              </TouchableOpacity>
-            </Animated.View>
-          )}
-
-          {/* HEADER */}
-          {!isProfile && !isProducts && (
-            <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
-              <View className="flex-row justify-between items-center w-full px-6">
-                <View className="w-[31px]">
-                  <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="chevron-back" size={28} color="white" />
-                  </TouchableOpacity>
-                </View>
-
-                <Text className="text-white text-2xl font-bold">
-                  {isCart
-                    ? "My Shopping Cart"
-                    : isCheckout
-                      ? "Checkout"
-                      : isOrrderList
-                        ? "My Purchases"
-                        : isChatList
-                          ? "Messages"
-                          : isChatSeller
-                            ? "Seller"
-                            : isShop
-                              ? "Store Shop"
-                              : "FISMPC Online Store"}
-                </Text>
-
-                {/* Right Side: Message Icon with Unread Badge (hidden on chat screens) */}
-                {!isChatList && !isChatSeller ? (
-                  <View className="w-[31px] items-end">
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      onPress={() => router.push("/chat-list")}
-                      className="relative p-1"
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={handleNotificationPress}
+                  className="bg-white rounded-2xl p-4 shadow-lg flex-row items-center border border-slate-100"
+                  style={{
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 12,
+                    elevation: 5,
+                  }}
+                >
+                  <View className="bg-[#0084FF]/10 w-10 h-10 rounded-full items-center justify-center mr-3">
+                    <Ionicons
+                      name="chatbubble-ellipses"
+                      size={20}
+                      color="#034194"
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-slate-900 font-bold text-sm">
+                      {notification.shop_name || "New Message"}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      className="text-slate-500 text-xs mt-0.5"
                     >
-                      <Ionicons
-                        name="chatbubbles-outline"
-                        size={24}
-                        color="white"
-                      />
-                      {unreadCount > 0 && (
-                        <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-primary">
-                          <Text className="text-white text-[10px] font-extrabold text-center">
-                            {unreadCount > 9 ? "9+" : unreadCount}
-                          </Text>
-                        </View>
-                      )}
+                      {notification.body || "You received a new message."}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={closeNotification} className="p-2">
+                    <Ionicons name="close" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+
+            {/* HEADER */}
+            {!isProfile && !isProducts && (
+              <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
+                <View className="flex-row justify-between items-center w-full px-6">
+                  <View className="w-[31px]">
+                    <TouchableOpacity onPress={() => router.back()}>
+                      <Ionicons name="chevron-back" size={28} color="white" />
                     </TouchableOpacity>
                   </View>
-                ) : (
-                  <View className="w-[31px]" />
-                )}
+
+                  <Text className="text-white text-2xl font-bold">
+                    {isCart
+                      ? "My Shopping Cart"
+                      : isCheckout
+                        ? "Checkout"
+                        : isOrrderList
+                          ? "My Purchases"
+                          : isChatList
+                            ? "Messages"
+                            : isChatSeller
+                              ? "Seller"
+                              : isShop
+                                ? "Store Shop"
+                                : "FISMPC Online Store"}
+                  </Text>
+
+                  {/* Right Side: Message Icon with Unread Badge (hidden on chat screens) */}
+                  {!isChatList && !isChatSeller ? (
+                    <View className="w-[31px] items-end">
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => router.push("/chat-list")}
+                        className="relative p-1"
+                      >
+                        <Ionicons
+                          name="chatbubbles-outline"
+                          size={24}
+                          color="white"
+                        />
+                        {unreadCount > 0 && (
+                          <View className="absolute -top-1 -right-1 bg-[#D70127] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border border-primary">
+                            <Text className="text-white text-[10px] font-extrabold text-center">
+                              {unreadCount > 9 ? "9+" : unreadCount}
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View className="w-[31px]" />
+                  )}
+                </View>
               </View>
+            )}
+
+            {/* CONTENT */}
+            <View className="flex-1">
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  animation: "fade",
+                  contentStyle: {
+                    backgroundColor: "transparent",
+                  },
+                }}
+              >
+                <Stack.Screen name="index" />
+                <Stack.Screen name="(store)/cart" />
+                <Stack.Screen name="/products/" />
+                <Stack.Screen name="(store)/profile" />
+              </Stack>
             </View>
-          )}
 
-          {/* CONTENT */}
-          <View className="flex-1">
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                animation: "fade",
-                contentStyle: {
-                  backgroundColor: "transparent",
-                },
-              }}
-            >
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(store)/cart" />
-              <Stack.Screen name="/products/" />
-              <Stack.Screen name="(store)/profile" />
-            </Stack>
-          </View>
-
-          {/* FOOTER */}
-          {showFooter && (
-            <View
-              style={{
-                width: "100%",
-                height: 80,
-              }}
-              className="bg-blue justify-center"
-            >
-              <View className="flex-row items-center justify-around w-full">
-                {/* FOR YOU */}
-                <TouchableOpacity
-                  className="items-center flex-1"
-                  onPress={() => router.push("/home")}
-                >
-                  <Image
-                    source={isHome ? LikeBlue : LikeGrey}
-                    style={{
-                      width: 26,
-                      height: 26,
-                    }}
-                    resizeMode="contain"
-                  />
-
-                  <Text
-                    className={
-                      isHome
-                        ? "text-primary text-xs mt-2 font-bold"
-                        : "text-gray-500 text-xs mt-2"
-                    }
+            {/* FOOTER */}
+            {showFooter && (
+              <View
+                style={{
+                  width: "100%",
+                  height: 80,
+                }}
+                className="bg-blue justify-center"
+              >
+                <View className="flex-row items-center justify-around w-full">
+                  {/* FOR YOU */}
+                  <TouchableOpacity
+                    className="items-center flex-1"
+                    onPress={() => router.push("/home")}
                   >
-                    For you
-                  </Text>
-                </TouchableOpacity>
+                    <Image
+                      source={isHome ? LikeBlue : LikeGrey}
+                      style={{
+                        width: 26,
+                        height: 26,
+                      }}
+                      resizeMode="contain"
+                    />
 
-                {/* COLLECTION */}
-                <TouchableOpacity
-                  className="items-center flex-1"
-                  onPress={() => router.push("/collection")}
-                >
-                  <Image
-                    source={isCollection ? HeartBlue : HeartGrey}
-                    style={{
-                      width: 26,
-                      height: 26,
-                    }}
-                    resizeMode="contain"
-                  />
+                    <Text
+                      className={
+                        isHome
+                          ? "text-primary text-xs mt-2 font-bold"
+                          : "text-gray-500 text-xs mt-2"
+                      }
+                    >
+                      For you
+                    </Text>
+                  </TouchableOpacity>
 
-                  <Text
-                    className={
-                      isCollection
-                        ? "text-primary text-xs mt-2 font-bold"
-                        : "text-gray-500 text-xs mt-2"
-                    }
+                  {/* COLLECTION */}
+                  <TouchableOpacity
+                    className="items-center flex-1"
+                    onPress={() => router.push("/collection")}
                   >
-                    Collection
-                  </Text>
-                </TouchableOpacity>
+                    <Image
+                      source={isCollection ? HeartBlue : HeartGrey}
+                      style={{
+                        width: 26,
+                        height: 26,
+                      }}
+                      resizeMode="contain"
+                    />
 
-                {/* NOTIFICATION */}
-                <TouchableOpacity
-                  className="items-center flex-1"
-                  onPress={() => router.push("/(store)/notification")}
-                >
-                  <Image
-                    source={isNotification ? NotifBlue : NotifGrey}
-                    style={{
-                      width: 26,
-                      height: 26,
-                    }}
-                    resizeMode="contain"
-                  />
+                    <Text
+                      className={
+                        isCollection
+                          ? "text-primary text-xs mt-2 font-bold"
+                          : "text-gray-500 text-xs mt-2"
+                      }
+                    >
+                      Collection
+                    </Text>
+                  </TouchableOpacity>
 
-                  <Text
-                    className={
-                      isNotification
-                        ? "text-primary text-xs mt-2 font-bold"
-                        : "text-gray-500 text-xs mt-2"
-                    }
+                  {/* NOTIFICATION */}
+                  <TouchableOpacity
+                    className="items-center flex-1"
+                    onPress={() => router.push("/(store)/notification")}
                   >
-                    Notification
-                  </Text>
-                </TouchableOpacity>
+                    <Image
+                      source={isNotification ? NotifBlue : NotifGrey}
+                      style={{
+                        width: 26,
+                        height: 26,
+                      }}
+                      resizeMode="contain"
+                    />
 
-                {/* PROFILE */}
-                <TouchableOpacity
-                  className="items-center flex-1"
-                  onPress={() => router.push("/(store)/profile")}
-                >
-                  <Image
-                    source={isProfile ? ProfileBlue : ProfileGrey}
-                    style={{
-                      width: 26,
-                      height: 26,
-                    }}
-                    resizeMode="contain"
-                  />
+                    <Text
+                      className={
+                        isNotification
+                          ? "text-primary text-xs mt-2 font-bold"
+                          : "text-gray-500 text-xs mt-2"
+                      }
+                    >
+                      Notification
+                    </Text>
+                  </TouchableOpacity>
 
-                  <Text
-                    className={
-                      isProfile
-                        ? "text-primary text-xs mt-2 font-bold"
-                        : "text-gray-500 text-xs mt-2"
-                    }
+                  {/* PROFILE */}
+                  <TouchableOpacity
+                    className="items-center flex-1"
+                    onPress={() => router.push("/(store)/profile")}
                   >
-                    Profile
-                  </Text>
-                </TouchableOpacity>
+                    <Image
+                      source={isProfile ? ProfileBlue : ProfileGrey}
+                      style={{
+                        width: 26,
+                        height: 26,
+                      }}
+                      resizeMode="contain"
+                    />
+
+                    <Text
+                      className={
+                        isProfile
+                          ? "text-primary text-xs mt-2 font-bold"
+                          : "text-gray-500 text-xs mt-2"
+                      }
+                    >
+                      Profile
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          )}
-        </KeyboardAvoidingView>
-      </View>
+            )}
+          </KeyboardAvoidingView>
+        </View>
+      </NavigationBarWrapper>
     </QueryClientProvider>
   );
 }

@@ -17,11 +17,44 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import "../../global.css";
 
 const queryClient = new QueryClient();
 
+// --- NAVIGATION BAR WRAPPER ---
+function NavigationBarWrapper({ children }: { children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    const setupNavigationBar = async () => {
+      try {
+        await NavigationBar.setVisibilityAsync("visible");
+        await NavigationBar.setButtonStyleAsync("dark");
+      } catch (error) {
+        console.log("NavigationBar setup error:", error);
+      }
+    };
+
+    setupNavigationBar();
+  }, []);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+      <View style={{ flex: 1 }}>{children}</View>
+
+      {/* Solid white bottom bar covering Android Navigation Bar */}
+      {Platform.OS === "android" && (
+        <View style={{ height: insets.bottom, backgroundColor: "#ffffff" }} />
+      )}
+    </View>
+  );
+}
+
+// --- MAIN LAYOUT ---
 export default function RootLayout() {
   const router = useRouter();
   const pathname = usePathname();
@@ -80,8 +113,7 @@ export default function RootLayout() {
       const stack = historyRef.current;
 
       if (stack.length > 1) {
-        // We're deeper than the entry screen — step back one screen
-        // within this group.
+        // We're deeper than the entry screen — step back one screen within this group.
         stack.pop();
         const prevHref = stack[stack.length - 1];
         console.log("↩️ [Loan Back] Popping to", prevHref);
@@ -89,8 +121,7 @@ export default function RootLayout() {
         return;
       }
 
-      // We're at the entry screen of this group — exit based on
-      // how we originally arrived.
+      // We're at the entry screen of this group — exit based on how we originally arrived.
       if (params.from === "notification") {
         console.log("↩️ [Loan Back] Entry screen, returning to notification");
         router.replace("/(main)/notification");
@@ -104,76 +135,55 @@ export default function RootLayout() {
     }
   };
 
-  // --- HIDE NAV BAR (Android) ---
-  useEffect(() => {
-    const hideNavBar = async () => {
-      if (Platform.OS === "android") {
-        try {
-          await NavigationBar.setBehaviorAsync("sticky-immersive" as any);
-          await NavigationBar.setVisibilityAsync("hidden");
-        } catch (e) {
-          console.log("NavigationBar error:", e);
-        }
-      }
-    };
-    hideNavBar();
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar hidden={true} />
+      <NavigationBarWrapper>
+        <StatusBar hidden={true} />
 
-      <View className="flex-1 bg-white">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1"
-        >
-          {/* --- GLOBAL HEADER --- */}
-          <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
-            <View className="flex-row justify-between w-full px-6 items-center">
-              {/* --- DYNAMIC BACK BUTTON --- */}
-              <View className="w-[31px]">
-                {/* Back button is strictly hidden on the congratulations page */}
-                {!isCongratulationsPage && (
-                  <TouchableOpacity onPress={handleBackPress}>
-                    <Ionicons name="chevron-back" size={28} color="white" />
-                  </TouchableOpacity>
-                )}
+        <View className="flex-1 bg-white">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            className="flex-1"
+          >
+            {/* --- GLOBAL HEADER --- */}
+            <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
+              <View className="flex-row justify-between w-full px-6 items-center">
+                {/* --- DYNAMIC BACK BUTTON --- */}
+                <View className="w-[31px]">
+                  {/* Back button is strictly hidden on the congratulations page */}
+                  {!isCongratulationsPage && (
+                    <TouchableOpacity onPress={handleBackPress}>
+                      <Ionicons name="chevron-back" size={28} color="white" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View>
+                  <Text className="text-white text-2xl font-bold">
+                    {isSharedCapital ? "Shared Capital" : "Loan Assistance"}
+                  </Text>
+                </View>
+
+                <View className="w-[31px]" />
               </View>
-
-              <View>
-                <Text className="text-white text-2xl font-bold">
-                  {isSharedCapital ? "Shared Capital" : "Loan Assistance"}
-                </Text>
-              </View>
-
-              <View className="w-[31px]"></View>
-
-              {/* <View className="w-[31px] items-end">
-                <Image
-                  style={{ width: 31, height: 31 }}
-                  source={loanNotif}
-                  resizeMode="contain"
-                />
-              </View> */}
             </View>
-          </View>
 
-          {/* --- MAIN CONTENT AREA --- */}
-          <View className="flex-1">
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                animation: "fade",
-                contentStyle: { backgroundColor: "transparent" },
-              }}
-            >
-              <Stack.Screen name="index" />
-              <Stack.Screen name="congratulations" />
-            </Stack>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
+            {/* --- MAIN CONTENT AREA --- */}
+            <View className="flex-1">
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  animation: "fade",
+                  contentStyle: { backgroundColor: "transparent" },
+                }}
+              >
+                <Stack.Screen name="index" />
+                <Stack.Screen name="congratulations" />
+              </Stack>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </NavigationBarWrapper>
     </QueryClientProvider>
   );
 }
