@@ -48,6 +48,7 @@ export default function CongratulationsPage() {
         const userData = typeof user === "string" ? JSON.parse(user) : user;
         await setAuth(token, userData);
         setTimeout(() => {
+          router.dismissAll();
           router.replace("/(main)/welcomePage");
         }, 500);
       } else {

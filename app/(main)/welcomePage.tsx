@@ -152,7 +152,12 @@ export default function CongratulationPage() {
     setNavigating(true);
 
     setTimeout(() => {
-      router.replace("../(main)/");
+      // Clear everything below (welcomePage, congratulations, etc.)
+      // so back/swipe from chat-support can never resurface this screen.
+      if (router.canDismiss()) {
+        router.dismissAll();
+      }
+      router.replace("/(main)/"); // absolute path, not "../(main)/"
     }, 700);
   };
 
