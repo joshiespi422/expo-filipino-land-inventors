@@ -4,7 +4,6 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
-import * as NavigationBar from "expo-navigation-bar";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -18,7 +17,6 @@ import {
   LayoutAnimation,
   Modal,
   Platform,
-  StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
@@ -50,11 +48,6 @@ if (
 
 type Phase = "checking" | "prompt" | "starting" | "chat";
 
-/**
- * Resolve the logged-in user's ID regardless of which response
- * shape /profile returns (plain object, { user: {...} }, or a
- * JSON:API envelope like { data: { id, attributes } }).
- */
 function resolveUserId(payload: any): string | number | null {
   return (
     payload?.id ??
@@ -93,17 +86,7 @@ function ChatSupportPageInner() {
 
   const flatListRef = useRef<FlatList>(null);
   const channelRef = useRef<any>(null);
-  // Forces the composer TextInput to fully remount after every send.
-  // This guarantees a genuinely empty native input, independent of
-  // ref.clear() (which can silently no-op under some component
-  // wrappers) or React state-update timing races.
   const [inputResetKey, setInputResetKey] = useState(0);
-
-  useEffect(() => {
-    if (Platform.OS !== "android") return;
-    NavigationBar.setVisibilityAsync("hidden").catch(() => {});
-    NavigationBar.setBehaviorAsync("inset-touch").catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -381,19 +364,10 @@ function ChatSupportPageInner() {
         };
 
         setMessages((prev) => {
-          // Already present — either arrived via our own send response
-          // already, or this is a duplicate broadcast. Skip either way.
           if (prev.some((m) => String(m.id) === String(messageData.id)))
             return prev;
 
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-
-          // NOTE: we intentionally do NOT touch any "temp-*" placeholders
-          // here. Each temp message is resolved deterministically by its
-          // own sendMessage() response in processMessagePayload — doing
-          // it here too (by prefix match) would replace EVERY pending
-          // temp with this one message when multiple sends are in
-          // flight, producing duplicate keys.
           return [processedMessage, ...prev];
         });
       });
@@ -418,10 +392,6 @@ function ChatSupportPageInner() {
     try {
       const savedMessage = await sendMessage(conversationId, payload);
 
-      // Replace ONLY this specific temp entry with the real message.
-      // If the Echo broadcast for this same message already arrived
-      // and got appended in the meantime, drop this temp instead of
-      // creating a duplicate.
       setMessages((prev) => {
         const alreadyArrivedViaEcho = prev.some(
           (m) => String(m.id) === String(savedMessage.id),
@@ -448,12 +418,6 @@ function ChatSupportPageInner() {
     if (!draft.trim() || sending || !conversationId) return;
     const textToSend = draft.trim();
 
-    // Clear the React state AND force the TextInput to remount with a
-    // fresh key. setDraft alone is async/batched — if you keep typing
-    // immediately after tapping send, fast keystrokes can land on the
-    // native buffer before React re-renders it as empty, merging with
-    // the old text. Bumping the key unmounts the old native input and
-    // mounts a brand new, guaranteed-empty one instead.
     setDraft("");
     setInputResetKey((k) => k + 1);
 
@@ -690,8 +654,7 @@ function ChatSupportPageInner() {
         ? true
         : userId !== null
           ? String(item.sender_id) === String(userId)
-          : // userId not resolved yet — don't misclassify as "them"
-            false;
+          : false;
 
       let showDateHeader = false;
       let dateString = "";
@@ -823,7 +786,6 @@ function ChatSupportPageInner() {
           paddingBottom: insets.bottom,
         }}
       >
-        <StatusBar hidden={true} />
         <View style={[styles.header, { paddingTop: 8 }]}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -947,8 +909,6 @@ function ChatSupportPageInner() {
   // ===== CHAT PHASE =====
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-      <StatusBar hidden={true} />
-
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
