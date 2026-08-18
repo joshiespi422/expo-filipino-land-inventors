@@ -1020,8 +1020,11 @@ function ChatSupportPageInner() {
 
       <Modal
         visible={viewerVisible}
-        transparent={true}
+        transparent
         animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        // onRequestClose={() => handleCloseViewer(false)}
         onRequestClose={handleCloseViewer}
       >
         <View
