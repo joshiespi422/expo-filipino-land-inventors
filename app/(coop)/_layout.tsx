@@ -110,7 +110,7 @@ function CustomHeader() {
       }
       if (params.from === "home") {
         console.log("↩️ [Coop Back] Returning to home");
-        router.replace("/(main)/home");
+        router.replace("/(main)/");
         return;
       }
 
@@ -118,36 +118,38 @@ function CustomHeader() {
       if (router.canGoBack()) {
         router.back();
       } else {
-        router.replace("/(main)/home");
+        router.replace("/(main)/");
       }
     } catch (e) {
       console.log("Back navigation error:", e);
-      router.replace("/(main)/home");
+      router.replace("/(main)/");
     }
   };
 
   return (
-    <View
-      className="bg-primary w-full items-center rounded-b-2xl pb-4"
-      style={{ paddingTop: Math.max(insets.top + 8, 16) }}
-    >
-      <StatusBar
-        barStyle="light-content"
-        translucent
-        backgroundColor="transparent"
-      />
-      <View className="flex-row justify-between w-full px-6 items-center">
-        <View className="w-[31px]">
-          <TouchableOpacity onPress={handleBackPress} activeOpacity={0.7}>
+    <View>
+      <StatusBar hidden={true} />
+
+      {/* --- GLOBAL HEADER --- */}
+      <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
+        <View className="flex-row justify-between items-center w-full px-6">
+          <TouchableOpacity
+            onPress={handleBackPress}
+            style={{ width: 31 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons name="chevron-back" size={28} color="white" />
           </TouchableOpacity>
-        </View>
 
-        <View>
-          <Text className="text-white text-2xl font-bold">Coop Membership</Text>
-        </View>
+          <Text
+            className="text-white text-2xl font-bold text-center flex-1"
+            numberOfLines={1}
+          >
+            Coop Membership
+          </Text>
 
-        <View className="w-[31px]" />
+          <View style={{ width: 31 }} />
+        </View>
       </View>
     </View>
   );
