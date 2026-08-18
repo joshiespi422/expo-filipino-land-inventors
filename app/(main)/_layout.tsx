@@ -322,6 +322,7 @@ export default function MainLayout() {
         transparent
         animationType="fade"
         statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setComingSoonVisible(false)}
       >
         <View
@@ -523,19 +524,13 @@ export default function MainLayout() {
                                   ? "Transaction History"
                                   : isChangePassword
                                     ? "Security & Password"
-                                    : isNewsIndex
-                                      ? "News & Events"
-                                      : isNewsDetails
-                                        ? "News Details"
-                                        : isNotification
-                                          ? "Notification"
-                                          : isNewsSearch
-                                            ? "Search News"
-                                            : isLoadWallet
-                                              ? "Load Wallet"
-                                              : isBiometric
-                                                ? "Quick & Secure Login"
-                                                : ""}
+                                    : isNotification
+                                      ? "Notification"
+                                      : isLoadWallet
+                                        ? "Load Wallet"
+                                        : isBiometric
+                                          ? "Quick & Secure Login"
+                                          : ""}
                 </Text>
 
                 <View style={{ width: 31 }} />
