@@ -117,7 +117,7 @@ function CustomHeader() {
   const isProfileSetup = pathname.includes("setupProfile");
   const isCongratulations = pathname.includes("congratulations");
   const isChangePassword = pathname.includes("changePassword");
-
+  const isBiometric = pathname.includes("biometricSettings");
   const title = isProfileEdit
     ? "Edit Profile"
     : isProfileSetup
@@ -126,7 +126,9 @@ function CustomHeader() {
         ? "Profile"
         : isChangePassword
           ? "Security & Password"
-          : "";
+          : isBiometric
+            ? "Quick & Secure Login"
+            : "";
 
   if (!title) return null;
 
