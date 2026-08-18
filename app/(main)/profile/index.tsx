@@ -2,12 +2,14 @@ import { CustomAlert } from "@/components/CustomAlert";
 import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import * as DocumentPicker from "expo-document-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   Modal,
   RefreshControl,
@@ -16,9 +18,25 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
-const MAX_AVATAR_MB = 5;
-const MAX_AVATAR_BYTES = MAX_AVATAR_MB * 1024 * 1024;
+const MAX_RAW_MB = 20;
+const MAX_RAW_BYTES = MAX_RAW_MB * 1024 * 1024;
+
+// Fixed circular crop frame (Facebook-style)
+const FRAME_SIZE = Math.min(Dimensions.get("window").width - 80, 300);
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 4;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -26,19 +44,28 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const [showOptions, setShowOptions] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
 
-  // State for logout CustomAlert
+  const [rawImage, setRawImage] = useState<{
+    uri: string;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [showCropModal, setShowCropModal] = useState(false);
+
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
     message: "",
   });
 
-  // Separate state for avatar upload alerts (no onConfirm needed)
   const [avatarAlert, setAvatarAlert] = useState({
     visible: false,
     title: "",
@@ -72,41 +99,102 @@ export default function ProfileScreen() {
     fetchProfile();
   }, []);
 
+  useEffect(() => {
+    if (rawImage) {
+      setShowCropModal(true);
+    }
+  }, [rawImage]);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchProfile(true);
   }, []);
 
-  const pickAndUploadImage = async () => {
+  const openImageSource = async (source: "library" | "camera") => {
+    setShowOptions(false);
+
+    const permission =
+      source === "library"
+        ? await ImagePicker.requestMediaLibraryPermissionsAsync()
+        : await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!permission.granted) {
+      setAvatarAlert({
+        visible: true,
+        title: "Permission Needed",
+        message:
+          source === "library"
+            ? "Please allow photo library access to change your avatar."
+            : "Please allow camera access to take a photo.",
+      });
+      return;
+    }
+
+    const pickerOptions: ImagePicker.ImagePickerOptions = {
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false, // we crop ourselves — do NOT set this to true
+      quality: 1,
+    };
+
+    const result =
+      source === "library"
+        ? await ImagePicker.launchImageLibraryAsync(pickerOptions)
+        : await ImagePicker.launchCameraAsync(pickerOptions);
+
+    if (result.canceled) return;
+    const asset = result.assets?.[0];
+    if (!asset) return;
+
+    if (asset.fileSize && asset.fileSize > MAX_RAW_BYTES) {
+      setAvatarAlert({
+        visible: true,
+        title: "File Too Large",
+        message: `Please choose an image under ${MAX_RAW_MB}MB.`,
+      });
+      return;
+    }
+
+    setRawImage({
+      uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
+    });
+  };
+
+  const handleCropped = (croppedUri: string) => {
+    setShowCropModal(false);
+    setRawImage(null);
+    setPreviewUri(croppedUri);
+    setShowReviewModal(true);
+  };
+
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    setRawImage(null);
+  };
+
+  const confirmAndUpload = async () => {
+    if (!previewUri) return;
+
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "image/*",
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) return;
-      const file = result.assets?.[0];
-      if (!file) return;
-
-      // Client-side size check — instant feedback, no wasted round trip
-      if (file.size && file.size > MAX_AVATAR_BYTES) {
-        setShowOptions(false);
-        setAvatarAlert({
-          visible: true,
-          title: "File Too Large",
-          message: `Please choose an image under ${MAX_AVATAR_MB}MB.`,
-        });
-        return;
-      }
-
+      setShowReviewModal(false);
       setUploading(true);
-      setShowOptions(false);
+      setUploadProgress(0);
 
-      const response = await profileService.updateAvatar({
-        uri: file.uri,
-        name: file.name ?? "avatar.jpg",
-        type: file.mimeType ?? "image/jpeg",
-      });
+      const compressed = await ImageManipulator.manipulateAsync(
+        previewUri,
+        [{ resize: { width: 1024, height: 1024 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+      );
+
+      const response = await profileService.updateAvatar(
+        {
+          uri: compressed.uri,
+          name: "avatar.jpg",
+          type: "image/jpeg",
+        },
+        (percent) => setUploadProgress(percent),
+      );
 
       if (response.success) {
         setUser({ ...(user || {}), avatar: response.data.avatar });
@@ -117,9 +205,6 @@ export default function ProfileScreen() {
         });
       }
     } catch (error: any) {
-      // Surface the real backend message when we have one, instead of a
-      // generic "Network Error" for every failure type (validation, auth,
-      // actual connectivity issues, etc.)
       const serverMessage =
         error?.response?.data?.message ||
         error?.response?.data?.errors?.avatar?.[0];
@@ -131,11 +216,13 @@ export default function ProfileScreen() {
       });
     } finally {
       setUploading(false);
+      setUploadProgress(0);
+      setPreviewUri(null);
     }
   };
 
   const handleAvatarPress = () => {
-    if (!user?.avatar) pickAndUploadImage();
+    if (!user?.avatar) openImageSource("library");
     else setShowOptions(true);
   };
 
@@ -187,7 +274,6 @@ export default function ProfileScreen() {
         />
       }
     >
-      {/* Logout Confirm Alert */}
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
@@ -196,7 +282,6 @@ export default function ProfileScreen() {
         onConfirm={confirmLogout}
       />
 
-      {/* Avatar Upload Alert (no onConfirm -> renders single "Okay" button) */}
       <CustomAlert
         visible={avatarAlert.visible}
         title={avatarAlert.title}
@@ -213,7 +298,12 @@ export default function ProfileScreen() {
         >
           <View className="w-24 h-24 rounded-full bg-blue items-center justify-center border-4 border-[#03419420] overflow-hidden">
             {uploading ? (
-              <ActivityIndicator color="#034194" />
+              <View className="items-center">
+                <ActivityIndicator color="#034194" />
+                <Text className="text-[10px] text-[#034194] font-bold mt-1">
+                  {uploadProgress}%
+                </Text>
+              </View>
             ) : user?.avatar ? (
               <Image source={{ uri: user.avatar }} className="w-full h-full" />
             ) : (
@@ -240,7 +330,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* --- WARNING SECTION: BASIC & ACTIVE (Needs setup) --- */}
       {isBasic && isActive && (
         <View className="mt-6 px-4">
           <View className="bg-orange-50 border border-orange-200 p-5 rounded-[30px]">
@@ -273,7 +362,6 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      {/* --- PENDING NOTIFICATION --- */}
       {isBasic && isForApproval && (
         <View className="mt-6 px-4">
           <View className="bg-blue border border-primary p-5 rounded-[30px]">
@@ -296,7 +384,6 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      {/* --- CAPITAL CONTRIBUTION SECTION --- */}
       {isBasic && isApproved && (
         <View className="mt-6 px-4">
           <View className="bg-green-50 border border-green-200 p-5 rounded-[30px]">
@@ -410,7 +497,7 @@ export default function ProfileScreen() {
               <ProfileMenuItem
                 icon="finger-print-outline"
                 title="Quick & Secure Login"
-                onPress={() => router.push("/profile/biometricSettings")}
+                onPress={() => router.push("/(main-profile)/biometricSettings")}
                 isLast
               />
             </View>
@@ -436,7 +523,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* --- MODALS --- */}
+      {/* --- OPTIONS MODAL --- */}
       <Modal
         visible={showOptions}
         transparent
@@ -465,7 +552,14 @@ export default function ProfileScreen() {
                 <Text className="ml-3 font-bold text-gray-700">View Photo</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={pickAndUploadImage}
+                onPress={() => openImageSource("camera")}
+                className="w-full flex-row items-center p-4 bg-gray-50 rounded-2xl border border-gray-100"
+              >
+                <Ionicons name="camera-outline" size={20} color="#034194" />
+                <Text className="ml-3 font-bold text-gray-700">Take Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => openImageSource("library")}
                 className="w-full flex-row items-center p-4 bg-blue rounded-2xl border border-[#DBEAFE]"
               >
                 <Ionicons
@@ -488,13 +582,91 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      {/* --- CUSTOM CROP MODAL --- */}
+      <Modal
+        visible={showCropModal && !!rawImage}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={handleCropCancel}
+      >
+        {rawImage && (
+          <CropScreen
+            uri={rawImage.uri}
+            naturalWidth={rawImage.width}
+            naturalHeight={rawImage.height}
+            onCancel={handleCropCancel}
+            onDone={handleCropped}
+          />
+        )}
+      </Modal>
+
+      {/* --- REVIEW MODAL --- */}
+      <Modal
+        visible={showReviewModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => {
+          setShowReviewModal(false);
+          setPreviewUri(null);
+        }}
+      >
+        <View className="flex-1 bg-black/60 justify-center items-center px-5">
+          <View className="bg-white p-6 rounded-[32px] items-center w-full max-w-[380px] shadow-2xl">
+            <Text className="text-lg font-bold text-[#333] mb-4">
+              Review Photo
+            </Text>
+
+            {previewUri && (
+              <View className="w-56 h-56 rounded-full overflow-hidden border-4 border-[#03419420] mb-6">
+                <Image
+                  source={{ uri: previewUri }}
+                  className="w-full h-full"
+                  resizeMode="cover"
+                />
+              </View>
+            )}
+
+            <View className="w-full gap-y-3">
+              <TouchableOpacity
+                onPress={confirmAndUpload}
+                className="w-full py-3.5 bg-[#034194] rounded-2xl items-center flex-row justify-center"
+              >
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={20}
+                  color="white"
+                />
+                <Text className="text-white font-bold text-base ml-2">
+                  Use Photo
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowReviewModal(false);
+                  setPreviewUri(null);
+                  setShowOptions(true);
+                }}
+                className="w-full py-3.5 bg-gray-50 rounded-2xl items-center border border-gray-100"
+              >
+                <Text className="text-gray-600 font-bold text-base">
+                  Choose Again
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={showFullImage}
         transparent
         animationType="fade"
         statusBarTranslucent
         navigationBarTranslucent
-        // onRequestClose={() => setShowOptions(false)}
       >
         <View className="flex-1 bg-black items-center justify-center">
           <TouchableOpacity
@@ -513,6 +685,267 @@ export default function ProfileScreen() {
         </View>
       </Modal>
     </ScrollView>
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| CROP SCREEN — Facebook-style: fixed circular frame, image pans/zooms
+| behind it. One finger drags, two fingers pinch-zoom.
+|
+| FIX (accuracy bug): the crop math in handleCropConfirm / getMaxPan
+| assumes the image is CENTERED inside the FRAME_SIZE box before any
+| translate/scale is applied — that's what the "(FRAME_SIZE -
+| displayedWidth) / 2" terms mean. But the frame <View> that wraps the
+| Animated.Image had no alignItems/justifyContent, so RN was laying the
+| image out at the box's top-left corner instead of centering it. That
+| mismatch between "where the math thinks the image starts" and "where
+| RN actually draws it" is what made the exported crop not match the
+| circle preview. Adding justifyContent:"center", alignItems:"center"
+| to the frame container makes the on-screen layout match the math's
+| assumption, so pan/zoom now maps 1:1 to the cropped result.
+|--------------------------------------------------------------------------
+*/
+function CropScreen({
+  uri,
+  naturalWidth,
+  naturalHeight,
+  onCancel,
+  onDone,
+}: {
+  uri: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  onCancel: () => void;
+  onDone: (croppedUri: string) => void;
+}) {
+  const [cropping, setCropping] = useState(false);
+  const [zoomDisplay, setZoomDisplay] = useState(MIN_ZOOM);
+
+  // Base scale so the image's SHORTER side always fully covers the circular
+  // frame with no gaps, before any user zoom is applied. OVERSCAN gives a
+  // bit of extra scale on both dimensions so panning always has room to
+  // move, even before the user zooms in further.
+  const OVERSCAN = 1.15;
+  const baseScale =
+    (FRAME_SIZE / Math.min(naturalWidth, naturalHeight)) * OVERSCAN;
+  const baseWidth = naturalWidth * baseScale;
+  const baseHeight = naturalHeight * baseScale;
+
+  // Shared values driving the gesture — read/written on the UI thread for
+  // smooth 60fps response, and readable from JS (handleCropConfirm) too.
+  const scale = useSharedValue(MIN_ZOOM);
+  const savedScale = useSharedValue(MIN_ZOOM);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const clamp = (val: number, min: number, max: number) => {
+    "worklet";
+    return Math.min(Math.max(val, min), max);
+  };
+
+  const getMaxPan = (currentZoom: number) => {
+    "worklet";
+    const totalScale = baseScale * currentZoom;
+    const displayedWidth = naturalWidth * totalScale;
+    const displayedHeight = naturalHeight * totalScale;
+    return {
+      maxX: Math.max(0, (displayedWidth - FRAME_SIZE) / 2),
+      maxY: Math.max(0, (displayedHeight - FRAME_SIZE) / 2),
+    };
+  };
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    })
+    .onUpdate((e) => {
+      const { maxX, maxY } = getMaxPan(scale.value);
+      translateX.value = clamp(
+        savedTranslateX.value + e.translationX,
+        -maxX,
+        maxX,
+      );
+      translateY.value = clamp(
+        savedTranslateY.value + e.translationY,
+        -maxY,
+        maxY,
+      );
+    });
+
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      savedScale.value = scale.value;
+    })
+    .onUpdate((e) => {
+      const newScale = clamp(savedScale.value * e.scale, MIN_ZOOM, MAX_ZOOM);
+      scale.value = newScale;
+
+      // Re-clamp pan so we never end up showing empty space around the
+      // frame after zooming out.
+      const { maxX, maxY } = getMaxPan(newScale);
+      translateX.value = clamp(translateX.value, -maxX, maxX);
+      translateY.value = clamp(translateY.value, -maxY, maxY);
+
+      runOnJS(setZoomDisplay)(newScale);
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  // Simultaneous (not exclusive) so one finger can be dragging while a
+  // second finger joins to pinch, without either gesture cancelling out.
+  const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+
+  const animatedImageStyle = useAnimatedStyle(() => ({
+    width: baseWidth,
+    height: baseHeight,
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const handleReset = () => {
+    scale.value = withTiming(MIN_ZOOM);
+    savedScale.value = MIN_ZOOM;
+    translateX.value = withTiming(0);
+    translateY.value = withTiming(0);
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+    setZoomDisplay(MIN_ZOOM);
+  };
+
+  const handleCropConfirm = async () => {
+    try {
+      setCropping(true);
+
+      const currentZoom = scale.value;
+      const pan = { x: translateX.value, y: translateY.value };
+
+      const totalScale = baseScale * currentZoom;
+      const displayedWidth = naturalWidth * totalScale;
+      const displayedHeight = naturalHeight * totalScale;
+
+      // Top-left of the displayed image relative to the frame's top-left.
+      // Valid now that the frame container actually centers the image
+      // (see the justifyContent/alignItems fix on the frame View below).
+      const offsetX = (FRAME_SIZE - displayedWidth) / 2 + pan.x;
+      const offsetY = (FRAME_SIZE - displayedHeight) / 2 + pan.y;
+
+      const origSize = FRAME_SIZE / totalScale;
+      let origX = -offsetX / totalScale;
+      let origY = -offsetY / totalScale;
+
+      origX = Math.min(Math.max(origX, 0), naturalWidth - origSize);
+      origY = Math.min(Math.max(origY, 0), naturalHeight - origSize);
+
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [
+          {
+            crop: {
+              originX: origX,
+              originY: origY,
+              width: origSize,
+              height: origSize,
+            },
+          },
+        ],
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
+      );
+
+      onDone(result.uri);
+    } catch (error) {
+      console.error("Crop error:", error);
+      Alert.alert("Error", "Could not crop the image. Please try again.");
+    } finally {
+      setCropping(false);
+    }
+  };
+
+  return (
+    // GestureHandlerRootView must be an ancestor of GestureDetector. Scoped
+    // here (rather than in app/_layout.tsx) on purpose — this crop UI is
+    // the only place in the app using gesture-handler right now, and this
+    // avoids touching the shared root layout.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View className="flex-1 bg-black items-center justify-center px-5">
+        <TouchableOpacity
+          onPress={onCancel}
+          className="absolute top-12 left-6 p-2 bg-white/20 rounded-full z-10"
+        >
+          <Ionicons name="close" size={24} color="white" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleReset}
+          className="absolute top-12 right-6 p-2 bg-white/20 rounded-full z-10"
+        >
+          <Ionicons name="refresh" size={22} color="white" />
+        </TouchableOpacity>
+
+        <Text className="text-white font-bold text-lg mb-6">
+          Drag with 1 finger to move • Pinch with 2 fingers to zoom
+        </Text>
+
+        <GestureDetector gesture={composedGesture}>
+          <View
+            style={{
+              width: FRAME_SIZE,
+              height: FRAME_SIZE,
+              borderRadius: FRAME_SIZE / 2,
+              overflow: "hidden",
+              backgroundColor: "#111",
+              borderWidth: 2,
+              borderColor: "rgba(255,255,255,0.9)",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Animated.Image source={{ uri }} style={animatedImageStyle} />
+          </View>
+        </GestureDetector>
+
+        <Text className="text-white/70 font-bold mt-6">
+          {zoomDisplay.toFixed(2)}x
+        </Text>
+
+        <View className="w-full mt-8 gap-y-3 max-w-[320px]">
+          <TouchableOpacity
+            onPress={handleCropConfirm}
+            disabled={cropping}
+            className="w-full py-3.5 bg-[#034194] rounded-2xl items-center flex-row justify-center"
+          >
+            {cropping ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={20}
+                  color="white"
+                />
+                <Text className="text-white font-bold text-base ml-2">
+                  Done
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onCancel}
+            disabled={cropping}
+            className="w-full py-3.5 items-center"
+          >
+            <Text className="text-white/70 font-bold text-base">Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </GestureHandlerRootView>
   );
 }
 
