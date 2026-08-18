@@ -26,23 +26,17 @@ export default function NewsIndex() {
 
   const [news, setNews] = useState<NewsItem[]>([]);
   const [latestNews, setLatestNews] = useState<NewsItem[]>([]);
-  const [categories, setCategories] = useState<string[]>(["All"]);
 
   const [page, setPage] = useState(1);
 
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const [category, setCategory] = useState("All");
   const [activeSlide, setActiveSlide] = useState(0);
 
   const sliderRef = useRef<FlatList>(null);
 
-  const loadNews = async (
-    pageNumber = 1,
-    append = false,
-    customCategory = category,
-  ) => {
+  const loadNews = async (pageNumber = 1, append = false) => {
     try {
       if (append) setLoadingMore(true);
       else setLoading(true);
@@ -50,21 +44,6 @@ export default function NewsIndex() {
       const data = await getNews({
         page: pageNumber,
         limit: 20,
-        category: customCategory === "All" ? "" : customCategory,
-      });
-
-      // ================= DYNAMIC CATEGORIES =================
-
-      const fetchedCategories = data
-        .map((item) => item.CategoryName)
-        .filter(Boolean);
-
-      const uniqueCategories = [...new Set(fetchedCategories)];
-
-      setCategories((prev) => {
-        const merged = [...prev, ...uniqueCategories];
-
-        return [...new Set(merged)];
       });
 
       // ================= LATEST NEWS =================
@@ -99,14 +78,6 @@ export default function NewsIndex() {
   useEffect(() => {
     loadNews(1, false);
   }, []);
-
-  const handleCategory = (selectedCategory: string) => {
-    setCategory(selectedCategory);
-
-    setPage(1);
-
-    loadNews(1, false, selectedCategory);
-  };
 
   const loadMore = () => {
     if (loadingMore || loading || news.length === 0) return;
@@ -280,35 +251,6 @@ export default function NewsIndex() {
                 }`}
               />
             ))}
-          </View>
-
-          {/* ================= CATEGORY FILTER ================= */}
-
-          <View className="px-4 mb-4">
-            <FlatList
-              horizontal
-              data={categories}
-              keyExtractor={(item) => item}
-              showsHorizontalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => handleCategory(item)}
-                  className={`px-4 py-2 mr-2 rounded-full border ${
-                    category === item
-                      ? "bg-primary border-primary"
-                      : "border-slate-200 bg-slate-50"
-                  }`}
-                >
-                  <Text
-                    className={`font-medium text-xs ${
-                      category === item ? "text-white" : "text-slate-600"
-                    }`}
-                  >
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
           </View>
         </>
       }
