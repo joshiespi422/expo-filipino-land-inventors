@@ -420,6 +420,19 @@ export default function EditProfileScreen() {
     }
   };
 
+  const formatBirthdate = (dateString: string) => {
+    if (!dateString) return "";
+
+    const [year, month, day] = dateString.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
+  };
+
   const handleIdCropCancel = () => {
     setShowIdCropModal(false);
     setRawIdImage(null);
@@ -677,11 +690,15 @@ export default function EditProfileScreen() {
                 className={inputStyle}
               >
                 <Text className="text-gray-800 font-medium">
-                  {form.birthdate || "YYYY-MM-DD"}
+                  {form.birthdate
+                    ? formatBirthdate(form.birthdate)
+                    : "Select Birthdate"}
                 </Text>
               </TouchableOpacity>
             ) : (
-              <Text className={valueStyle}>{form.birthdate || "---"}</Text>
+              <Text className={valueStyle}>
+                {form.birthdate ? formatBirthdate(form.birthdate) : "---"}
+              </Text>
             )}
           </View>
         )}
@@ -1177,6 +1194,7 @@ export default function EditProfileScreen() {
         <DateTimePicker
           value={getBirthdateValue()}
           mode="date"
+          display="spinner"
           maximumDate={new Date()}
           onChange={handleDateChange}
         />

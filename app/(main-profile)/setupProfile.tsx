@@ -507,6 +507,20 @@ export default function SetupProfileScreen() {
     }
   };
 
+  const formatBirthdate = (dateString: string) => {
+    if (!dateString) return "";
+
+    const [year, month, day] = dateString.split("-").map(Number);
+
+    const date = new Date(year, month - 1, day);
+
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
+  };
+
   const handleIdCropCancel = () => {
     setShowIdCropModal(false);
     setRawIdImage(null);
@@ -736,7 +750,7 @@ export default function SetupProfileScreen() {
             <Text
               className={form.birthdate ? "text-gray-800" : "text-gray-400"}
             >
-              {form.birthdate || "YYYY-MM-DD"}
+              {form.birthdate ? formatBirthdate(form.birthdate) : ""}
             </Text>
           </TouchableOpacity>
 
@@ -746,7 +760,7 @@ export default function SetupProfileScreen() {
                 form.birthdate ? new Date(form.birthdate) : new Date(2000, 0, 1)
               }
               mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
+              display="spinner"
               maximumDate={new Date()}
               onChange={handleDateChange}
             />
@@ -1341,22 +1355,6 @@ export default function SetupProfileScreen() {
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| ID CROP SCREEN — same crop system as the avatar's CropScreen in
-| ProfileScreen and the ID cropper in EditProfileScreen: a rectangular
-| ID-card frame. One finger drags, two fingers pinch-zoom.
-|
-| ACCURACY FIX (ported from the avatar cropper): the crop math in
-| handleCropConfirm / getMaxPan assumes the image is CENTERED inside the
-| FRAME_WIDTH x FRAME_HEIGHT box before any translate/scale is applied —
-| that's what the "(FRAME_WIDTH - displayedWidth) / 2" terms mean. The
-| frame <View> that wraps the Animated.Image has
-| justifyContent/alignItems: "center" so React Native actually lays the
-| image out centered, matching what the math assumes. Without that, the
-| exported crop drifts from what's shown in the frame.
-|--------------------------------------------------------------------------
-*/
 function IdCropScreen({
   uri,
   naturalWidth,
@@ -1550,17 +1548,6 @@ function IdCropScreen({
           Drag with 1 finger to move • Pinch with 2 fingers to zoom
         </Text>
 
-        {/*
-          The rounded-rectangle border lives directly on the clipping
-          view itself (overflow: hidden + borderRadius), so it can never
-          drift out of alignment with the actual crop area.
-
-          justifyContent/alignItems: "center" is the fix — it centers the
-          (oversized) image inside this box at rest, which is exactly
-          what handleCropConfirm's offset math assumes. Without it, RN
-          lays the image out top-left and the crop no longer matches
-          what's shown in the frame.
-        */}
         <GestureDetector gesture={composedGesture}>
           <View
             style={{
