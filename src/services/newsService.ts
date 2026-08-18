@@ -20,10 +20,13 @@ export const getNews = async (params?: {
   category?: string;
 }): Promise<NewsItem[]> => {
   const res = await api.get("/news", { params });
-  return res.data.data;
+  // Handle both array response and wrapped res.data.data response
+  if (Array.isArray(res.data)) return res.data;
+  if (Array.isArray(res.data?.data)) return res.data.data;
+  return [];
 };
 
 export const getNewsById = async (id: number): Promise<NewsDetail> => {
   const res = await api.get(`/news/${id}`);
-  return res.data.data;
+  return res.data?.data ?? res.data;
 };
