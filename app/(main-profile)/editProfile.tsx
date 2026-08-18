@@ -3,12 +3,15 @@ import { profileService } from "@/services/profileService";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
-import * as DocumentPicker from "expo-document-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   Image,
+  Modal,
   Platform,
   ScrollView,
   Text,
@@ -16,6 +19,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 const MAX_ID_IMAGE_MB = 10;
 const MAX_ID_IMAGE_BYTES = MAX_ID_IMAGE_MB * 1024 * 1024;
@@ -24,6 +38,20 @@ const MAX_ID_IMAGE_BYTES = MAX_ID_IMAGE_MB * 1024 * 1024;
 const pickerTextStyle = {
   color: "#1f2937",
 };
+
+// ---------------------------------------------------------------------
+// ID CROP FRAME — same accurate crop system as the avatar cropper, but
+// rectangular (standard ID-card ratio) instead of circular. See the
+// CropScreen component further down for the centering fix that makes
+// the exported crop match what's shown on screen 1:1.
+// ---------------------------------------------------------------------
+const ID_ASPECT_RATIO = 1.586; // standard ID card ratio (85.6mm x 53.98mm)
+const FRAME_WIDTH = Math.min(Dimensions.get("window").width - 60, 340);
+const FRAME_HEIGHT = FRAME_WIDTH / ID_ASPECT_RATIO;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 4;
+
+type IdField = "front_valid_id_picture" | "back_valid_id_picture";
 
 export default function EditProfileScreen() {
   const params = useLocalSearchParams();
@@ -67,6 +95,34 @@ export default function EditProfileScreen() {
     front_valid_id_picture: null,
     back_valid_id_picture: null,
   });
+
+  // ---------------------------------------------------------
+  // ID IMAGE PICK + CROP STATE
+  // ---------------------------------------------------------
+
+  // Which ID slot ("front" / "back") the option sheet / cropper is
+  // currently acting on.
+  const [idOptionsField, setIdOptionsField] = useState<IdField | null>(null);
+
+  const [rawIdImage, setRawIdImage] = useState<{
+    field: IdField;
+    uri: string;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  const [showIdCropModal, setShowIdCropModal] = useState(false);
+  const [processingId, setProcessingId] = useState<IdField | null>(null);
+
+  // Full-screen "View Photo" state — same pattern as the avatar's
+  // showFullImage modal in ProfileScreen.
+  const [showFullIdImage, setShowFullIdImage] = useState<IdField | null>(null);
+
+  useEffect(() => {
+    if (rawIdImage) {
+      setShowIdCropModal(true);
+    }
+  }, [rawIdImage]);
 
   // ---------------------------------------------------------
   // GET NAME FROM PSGC CODE
@@ -261,57 +317,112 @@ export default function EditProfileScreen() {
   };
 
   // ---------------------------------------------------------
-  // IMAGE PICKER
+  // ID IMAGE PICKER — mirrors the avatar flow in ProfileScreen:
+  // pick from camera/library -> open the accurate crop screen ->
+  // compress -> store the cropped result on the form field.
   // ---------------------------------------------------------
 
-  const pickImage = async (field: string) => {
-    if (!isEditing) {
+  const openIdOptions = (field: IdField) => {
+    const hasImage = !!form[field]?.uri;
+
+    // Nothing to view and nothing editable yet — tapping does nothing.
+    if (!isEditing && !hasImage) return;
+
+    setIdOptionsField(field);
+  };
+
+  const openIdImageSource = async (
+    field: IdField,
+    source: "library" | "camera",
+  ) => {
+    setIdOptionsField(null);
+
+    const permission =
+      source === "library"
+        ? await ImagePicker.requestMediaLibraryPermissionsAsync()
+        : await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!permission.granted) {
+      setAlert({
+        visible: true,
+        title: "Permission Needed",
+        message:
+          source === "library"
+            ? "Please allow photo library access to upload your ID."
+            : "Please allow camera access to take a photo.",
+      });
       return;
     }
 
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "image/*",
-        copyToCacheDirectory: true,
+    const pickerOptions: ImagePicker.ImagePickerOptions = {
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false, // we crop ourselves — do NOT set this to true
+      quality: 1,
+    };
+
+    const result =
+      source === "library"
+        ? await ImagePicker.launchImageLibraryAsync(pickerOptions)
+        : await ImagePicker.launchCameraAsync(pickerOptions);
+
+    if (result.canceled) return;
+    const asset = result.assets?.[0];
+    if (!asset) return;
+
+    if (asset.fileSize && asset.fileSize > MAX_ID_IMAGE_BYTES) {
+      setAlert({
+        visible: true,
+        title: "File Too Large",
+        message: `Please choose an image under ${MAX_ID_IMAGE_MB}MB.`,
       });
+      return;
+    }
 
-      if (result.canceled) {
-        return;
-      }
+    setRawIdImage({
+      field,
+      uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
+    });
+  };
 
-      const file = result.assets?.[0];
+  const handleIdCropped = async (field: IdField, croppedUri: string) => {
+    try {
+      setProcessingId(field);
 
-      if (!file) {
-        return;
-      }
-
-      if (file.size && file.size > MAX_ID_IMAGE_BYTES) {
-        setAlert({
-          visible: true,
-          title: "File Too Large",
-          message: `Please select an image smaller than ${MAX_ID_IMAGE_MB}MB.`,
-        });
-
-        return;
-      }
+      // Downscale/compress so uploads stay reasonably sized, same idea
+      // as the avatar's post-crop compression step.
+      const compressed = await ImageManipulator.manipulateAsync(
+        croppedUri,
+        [{ resize: { width: 1600 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+      );
 
       setForm((prev: any) => ({
         ...prev,
         [field]: {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType || "image/jpeg",
+          uri: compressed.uri,
+          name: `${field}.jpg`,
+          type: "image/jpeg",
         },
       }));
     } catch (err) {
-      console.error("Image Pick Error:", err);
-
+      console.error("ID Compress Error:", err);
       setAlert({
         visible: true,
-        title: "Selection Failed",
-        message: "Could not select that image. Please try another one.",
+        title: "Error",
+        message: "Could not process that image. Please try again.",
       });
+    } finally {
+      setShowIdCropModal(false);
+      setRawIdImage(null);
+      setProcessingId(null);
     }
+  };
+
+  const handleIdCropCancel = () => {
+    setShowIdCropModal(false);
+    setRawIdImage(null);
   };
 
   // ---------------------------------------------------------
@@ -423,6 +534,9 @@ export default function EditProfileScreen() {
 
   const pickerContainer =
     "border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden";
+
+  const idFieldLabel = (field: IdField) =>
+    field === "front_valid_id_picture" ? "Front ID" : "Back ID";
 
   // ---------------------------------------------------------
   // UI
@@ -964,11 +1078,12 @@ export default function EditProfileScreen() {
             <View className="flex-row justify-between mt-2">
               {/* FRONT */}
               <TouchableOpacity
-                onPress={() => pickImage("front_valid_id_picture")}
-                disabled={!isEditing}
+                onPress={() => openIdOptions("front_valid_id_picture")}
                 className="w-[48%] bg-gray-50 h-32 rounded-3xl items-center justify-center overflow-hidden border border-gray-100"
               >
-                {form.front_valid_id_picture?.uri ? (
+                {processingId === "front_valid_id_picture" ? (
+                  <ActivityIndicator color="#034194" />
+                ) : form.front_valid_id_picture?.uri ? (
                   <Image
                     source={{
                       uri: form.front_valid_id_picture.uri,
@@ -993,11 +1108,12 @@ export default function EditProfileScreen() {
 
               {/* BACK */}
               <TouchableOpacity
-                onPress={() => pickImage("back_valid_id_picture")}
-                disabled={!isEditing}
+                onPress={() => openIdOptions("back_valid_id_picture")}
                 className="w-[48%] bg-gray-50 h-32 rounded-3xl items-center justify-center overflow-hidden border border-gray-100"
               >
-                {form.back_valid_id_picture?.uri ? (
+                {processingId === "back_valid_id_picture" ? (
+                  <ActivityIndicator color="#034194" />
+                ) : form.back_valid_id_picture?.uri ? (
                   <Image
                     source={{
                       uri: form.back_valid_id_picture.uri,
@@ -1067,6 +1183,150 @@ export default function EditProfileScreen() {
       )}
 
       {/* ================================================= */}
+      {/* ID IMAGE SOURCE OPTIONS MODAL */}
+      {/* ================================================= */}
+
+      <Modal
+        visible={!!idOptionsField}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => setIdOptionsField(null)}
+      >
+        <View className="flex-1 bg-black/40 justify-center items-center px-5">
+          <View className="bg-white p-8 rounded-[40px] items-center w-full max-w-[380px] shadow-2xl">
+            <View className="w-16 h-16 bg-blue rounded-full items-center justify-center mb-4">
+              <Ionicons name="card" size={32} color="#034194" />
+            </View>
+            <Text className="text-xl font-bold text-[#333] mb-2 text-center">
+              {idOptionsField ? idFieldLabel(idOptionsField) : ""} Photo
+            </Text>
+            <View className="w-full gap-y-3 mt-4">
+              {idOptionsField && form[idOptionsField]?.uri && (
+                <TouchableOpacity
+                  onPress={() => {
+                    const field = idOptionsField;
+                    setIdOptionsField(null);
+                    setShowFullIdImage(field);
+                  }}
+                  className="w-full flex-row items-center p-4 bg-gray-50 rounded-2xl border border-gray-100"
+                >
+                  <Ionicons name="eye-outline" size={20} color="#034194" />
+                  <Text className="ml-3 font-bold text-gray-700">
+                    View Photo
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {isEditing && (
+                <>
+                  <TouchableOpacity
+                    onPress={() =>
+                      idOptionsField &&
+                      openIdImageSource(idOptionsField, "camera")
+                    }
+                    className="w-full flex-row items-center p-4 bg-gray-50 rounded-2xl border border-gray-100"
+                  >
+                    <Ionicons name="camera-outline" size={20} color="#034194" />
+                    <Text className="ml-3 font-bold text-gray-700">
+                      Take Photo
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() =>
+                      idOptionsField &&
+                      openIdImageSource(idOptionsField, "library")
+                    }
+                    className="w-full flex-row items-center p-4 bg-blue rounded-2xl border border-[#DBEAFE]"
+                  >
+                    <Ionicons
+                      name="cloud-upload-outline"
+                      size={20}
+                      color="#034194"
+                    />
+                    <Text className="ml-3 font-bold text-[#034194]">
+                      Upload New
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              <TouchableOpacity
+                onPress={() => setIdOptionsField(null)}
+                className="w-full mt-2 p-4 items-center"
+              >
+                <Text className="text-gray-400 font-bold">Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================= */}
+      {/* ID CROP MODAL */}
+      {/* ================================================= */}
+
+      <Modal
+        visible={showIdCropModal && !!rawIdImage}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={handleIdCropCancel}
+      >
+        {rawIdImage && (
+          <IdCropScreen
+            uri={rawIdImage.uri}
+            naturalWidth={rawIdImage.width}
+            naturalHeight={rawIdImage.height}
+            title={`Position your ${idFieldLabel(rawIdImage.field)}`}
+            onCancel={handleIdCropCancel}
+            onDone={(croppedUri) =>
+              handleIdCropped(rawIdImage.field, croppedUri)
+            }
+          />
+        )}
+      </Modal>
+
+      {/* ================================================= */}
+      {/* FULL ID IMAGE VIEW — same pattern as the avatar's full-image */}
+      {/* modal in ProfileScreen. */}
+      {/* ================================================= */}
+
+      <Modal
+        visible={!!showFullIdImage}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => setShowFullIdImage(null)}
+      >
+        <View className="flex-1 bg-black items-center justify-center">
+          <TouchableOpacity
+            onPress={() => setShowFullIdImage(null)}
+            className="absolute top-12 right-6 p-2 bg-white/20 rounded-full z-10"
+          >
+            <Ionicons name="close" size={28} color="white" />
+          </TouchableOpacity>
+
+          {showFullIdImage && (
+            <Text className="absolute top-14 left-6 text-white font-bold text-base z-10">
+              {idFieldLabel(showFullIdImage)}
+            </Text>
+          )}
+
+          {showFullIdImage && form[showFullIdImage]?.uri && (
+            <Image
+              source={{ uri: form[showFullIdImage].uri }}
+              style={{ width: "100%", aspectRatio: ID_ASPECT_RATIO }}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* ================================================= */}
       {/* ALERT */}
       {/* ================================================= */}
 
@@ -1082,5 +1342,271 @@ export default function EditProfileScreen() {
         }
       />
     </View>
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| ID CROP SCREEN — same crop system as the avatar's CropScreen in
+| ProfileScreen, generalized to a rectangular ID-card frame instead of a
+| circle. One finger drags, two fingers pinch-zoom.
+|
+| ACCURACY FIX (ported from the avatar cropper): the crop math in
+| handleCropConfirm / getMaxPan assumes the image is CENTERED inside the
+| FRAME_WIDTH x FRAME_HEIGHT box before any translate/scale is applied —
+| that's what the "(FRAME_WIDTH - displayedWidth) / 2" terms mean. The
+| frame <View> that wraps the Animated.Image has
+| justifyContent/alignItems: "center" so React Native actually lays the
+| image out centered, matching what the math assumes. Without that, the
+| exported crop drifts from what's shown in the frame — exactly the bug
+| that was fixed on the avatar screen.
+|--------------------------------------------------------------------------
+*/
+function IdCropScreen({
+  uri,
+  naturalWidth,
+  naturalHeight,
+  title,
+  onCancel,
+  onDone,
+}: {
+  uri: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  title: string;
+  onCancel: () => void;
+  onDone: (croppedUri: string) => void;
+}) {
+  const [cropping, setCropping] = useState(false);
+  const [zoomDisplay, setZoomDisplay] = useState(MIN_ZOOM);
+
+  // Base scale so the image fully COVERS the rectangular frame (both
+  // dimensions) with no gaps, before any user zoom is applied. OVERSCAN
+  // gives a bit of extra scale so panning always has room to move, even
+  // before the user zooms in further.
+  const OVERSCAN = 1.15;
+  const baseScale =
+    Math.max(FRAME_WIDTH / naturalWidth, FRAME_HEIGHT / naturalHeight) *
+    OVERSCAN;
+  const baseWidth = naturalWidth * baseScale;
+  const baseHeight = naturalHeight * baseScale;
+
+  // Shared values driving the gesture — read/written on the UI thread for
+  // smooth 60fps response, and readable from JS (handleCropConfirm) too.
+  const scale = useSharedValue(MIN_ZOOM);
+  const savedScale = useSharedValue(MIN_ZOOM);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const clamp = (val: number, min: number, max: number) => {
+    "worklet";
+    return Math.min(Math.max(val, min), max);
+  };
+
+  const getMaxPan = (currentZoom: number) => {
+    "worklet";
+    const totalScale = baseScale * currentZoom;
+    const displayedWidth = naturalWidth * totalScale;
+    const displayedHeight = naturalHeight * totalScale;
+    return {
+      maxX: Math.max(0, (displayedWidth - FRAME_WIDTH) / 2),
+      maxY: Math.max(0, (displayedHeight - FRAME_HEIGHT) / 2),
+    };
+  };
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    })
+    .onUpdate((e) => {
+      const { maxX, maxY } = getMaxPan(scale.value);
+      translateX.value = clamp(
+        savedTranslateX.value + e.translationX,
+        -maxX,
+        maxX,
+      );
+      translateY.value = clamp(
+        savedTranslateY.value + e.translationY,
+        -maxY,
+        maxY,
+      );
+    });
+
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      savedScale.value = scale.value;
+    })
+    .onUpdate((e) => {
+      const newScale = clamp(savedScale.value * e.scale, MIN_ZOOM, MAX_ZOOM);
+      scale.value = newScale;
+
+      // Re-clamp pan so we never end up showing empty space around the
+      // frame after zooming out.
+      const { maxX, maxY } = getMaxPan(newScale);
+      translateX.value = clamp(translateX.value, -maxX, maxX);
+      translateY.value = clamp(translateY.value, -maxY, maxY);
+
+      runOnJS(setZoomDisplay)(newScale);
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  // Simultaneous (not exclusive) so one finger can be dragging while a
+  // second finger joins to pinch, without either gesture cancelling out.
+  const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+
+  const animatedImageStyle = useAnimatedStyle(() => ({
+    width: baseWidth,
+    height: baseHeight,
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const handleReset = () => {
+    scale.value = withTiming(MIN_ZOOM);
+    savedScale.value = MIN_ZOOM;
+    translateX.value = withTiming(0);
+    translateY.value = withTiming(0);
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+    setZoomDisplay(MIN_ZOOM);
+  };
+
+  const handleCropConfirm = async () => {
+    try {
+      setCropping(true);
+
+      const currentZoom = scale.value;
+      const pan = { x: translateX.value, y: translateY.value };
+
+      const totalScale = baseScale * currentZoom;
+      const displayedWidth = naturalWidth * totalScale;
+      const displayedHeight = naturalHeight * totalScale;
+
+      // Top-left of the displayed image relative to the frame's top-left.
+      // Valid because the frame container actually centers the image
+      // (see the justifyContent/alignItems fix on the frame View below).
+      const offsetX = (FRAME_WIDTH - displayedWidth) / 2 + pan.x;
+      const offsetY = (FRAME_HEIGHT - displayedHeight) / 2 + pan.y;
+
+      const origWidth = FRAME_WIDTH / totalScale;
+      const origHeight = FRAME_HEIGHT / totalScale;
+
+      let origX = -offsetX / totalScale;
+      let origY = -offsetY / totalScale;
+
+      origX = Math.min(Math.max(origX, 0), naturalWidth - origWidth);
+      origY = Math.min(Math.max(origY, 0), naturalHeight - origHeight);
+
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [
+          {
+            crop: {
+              originX: origX,
+              originY: origY,
+              width: origWidth,
+              height: origHeight,
+            },
+          },
+        ],
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
+      );
+
+      onDone(result.uri);
+    } catch (error) {
+      console.error("ID Crop error:", error);
+    } finally {
+      setCropping(false);
+    }
+  };
+
+  return (
+    // GestureHandlerRootView must be an ancestor of GestureDetector.
+    // Scoped here on purpose, same as the avatar cropper — this is the
+    // only place on this screen using gesture-handler.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View className="flex-1 bg-black items-center justify-center px-5">
+        <TouchableOpacity
+          onPress={onCancel}
+          className="absolute top-12 left-6 p-2 bg-white/20 rounded-full z-10"
+        >
+          <Ionicons name="close" size={24} color="white" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleReset}
+          className="absolute top-12 right-6 p-2 bg-white/20 rounded-full z-10"
+        >
+          <Ionicons name="refresh" size={22} color="white" />
+        </TouchableOpacity>
+
+        <Text className="text-white font-bold text-lg mb-2 text-center">
+          {title}
+        </Text>
+        <Text className="text-white/70 text-xs mb-6 text-center">
+          Drag with 1 finger to move • Pinch with 2 fingers to zoom
+        </Text>
+
+        <GestureDetector gesture={composedGesture}>
+          <View
+            style={{
+              width: FRAME_WIDTH,
+              height: FRAME_HEIGHT,
+              borderRadius: 16,
+              overflow: "hidden",
+              backgroundColor: "#111",
+              borderWidth: 2,
+              borderColor: "rgba(255,255,255,0.9)",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Animated.Image source={{ uri }} style={animatedImageStyle} />
+          </View>
+        </GestureDetector>
+
+        <Text className="text-white/70 font-bold mt-6">
+          {zoomDisplay.toFixed(2)}x
+        </Text>
+
+        <View className="w-full mt-8 gap-y-3 max-w-[320px]">
+          <TouchableOpacity
+            onPress={handleCropConfirm}
+            disabled={cropping}
+            className="w-full py-3.5 bg-[#034194] rounded-2xl items-center flex-row justify-center"
+          >
+            {cropping ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={20}
+                  color="white"
+                />
+                <Text className="text-white font-bold text-base ml-2">
+                  Done
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onCancel}
+            disabled={cropping}
+            className="w-full py-3.5 items-center"
+          >
+            <Text className="text-white/70 font-bold text-base">Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </GestureHandlerRootView>
   );
 }
