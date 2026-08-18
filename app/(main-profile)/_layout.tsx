@@ -6,7 +6,7 @@ import {
   usePathname,
   useRouter,
 } from "expo-router";
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Platform,
   StatusBar,
@@ -16,12 +16,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// --- NAVIGATION BAR WRAPPER ---
+// --------------------------------------------------
+// NAVIGATION BAR WRAPPER
+// --------------------------------------------------
+
 function NavigationBarWrapper({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    if (Platform.OS !== "android") return;
+    if (Platform.OS !== "android") {
+      return;
+    }
 
     const setupNavigationBar = async () => {
       try {
@@ -36,68 +41,78 @@ function NavigationBarWrapper({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "#f8fafc",
+      }}
+    >
       <View style={{ flex: 1 }}>{children}</View>
 
-      {/* Solid white bottom bar covering Android Navigation Bar */}
       {Platform.OS === "android" && (
-        <View style={{ height: insets.bottom, backgroundColor: "#ffffff" }} />
+        <View
+          style={{
+            height: insets.bottom,
+            backgroundColor: "#ffffff",
+          }}
+        />
       )}
     </View>
   );
 }
 
-// --- CUSTOM HEADER COMPONENT ---
+// --------------------------------------------------
+// CUSTOM HEADER
+// --------------------------------------------------
+
 function CustomHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useLocalSearchParams();
-  const insets = useSafeAreaInsets();
-
-  // --- ROUTE & HISTORY TRACKING ---
-  const currentHref = useMemo(() => {
-    const qs = new URLSearchParams(
-      Object.entries(params).reduce(
-        (acc, [k, v]) => {
-          if (v !== undefined) acc[k] = String(v);
-          return acc;
-        },
-        {} as Record<string, string>,
-      ),
-    ).toString();
-    return qs ? `${pathname}?${qs}` : pathname;
-  }, [pathname, params]);
 
   const historyRef = useRef<string[]>([]);
 
+  // --------------------------------------------------
+  // ROUTE HISTORY
+  // --------------------------------------------------
+
   useEffect(() => {
+    const currentHref = pathname;
+
     const stack = historyRef.current;
+
     const top = stack[stack.length - 1];
     const belowTop = stack[stack.length - 2];
 
     if (top === currentHref) {
-      // same screen re-render, ignore
       return;
     }
+
     if (belowTop === currentHref) {
-      // moved BACK via swipe/hardware — sync stack by popping
       stack.pop();
       return;
     }
-    // forward navigation — track it
-    stack.push(currentHref);
-  }, [currentHref]);
 
-  // --- SMART BACK PRESS HANDLER ---
+    stack.push(currentHref);
+  }, [pathname]);
+
+  // --------------------------------------------------
+  // BACK BUTTON
+  // --------------------------------------------------
+
   const handleBackPress = () => {
     try {
       const stack = historyRef.current;
 
       if (stack.length > 1) {
         stack.pop();
-        const prevHref = stack[stack.length - 1];
-        router.replace(prevHref as any);
-        return;
+
+        const previousRoute = stack[stack.length - 1];
+
+        if (previousRoute) {
+          router.replace(previousRoute as any);
+          return;
+        }
       }
 
       if (params.from === "home") {
@@ -106,18 +121,27 @@ function CustomHeader() {
       }
 
       router.replace("/(main)/profile");
-    } catch (e) {
-      console.error("❌ [Intellectual Back] Error:", e);
+    } catch (error) {
+      console.error("Profile back navigation error:", error);
+
       router.replace("/(main)/profile");
     }
   };
 
-  // --- ROUTE DISPLAY TITLE ---
+  // --------------------------------------------------
+  // HEADER TITLE
+  // --------------------------------------------------
+
   const isProfileEdit = pathname.includes("editProfile");
+
   const isProfileSetup = pathname.includes("setupProfile");
+
   const isCongratulations = pathname.includes("congratulations");
+
   const isChangePassword = pathname.includes("changePassword");
+
   const isBiometric = pathname.includes("biometricSettings");
+
   const title = isProfileEdit
     ? "Edit Profile"
     : isProfileSetup
@@ -130,17 +154,31 @@ function CustomHeader() {
             ? "Quick & Secure Login"
             : "";
 
-  if (!title) return null;
+  if (!title) {
+    return null;
+  }
 
   return (
-    <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
+    <View
+      className="bg-primary w-full items-center rounded-b-2xl"
+      style={{
+        paddingTop: 56,
+        paddingBottom: 16,
+      }}
+    >
       <View className="flex-row justify-between items-center w-full px-6">
-        {/* Render back button ONLY if not on congratulations screen */}
         {!isCongratulations ? (
           <TouchableOpacity
             onPress={handleBackPress}
-            style={{ width: 31 }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{
+              width: 31,
+            }}
+            hitSlop={{
+              top: 10,
+              bottom: 10,
+              left: 10,
+              right: 10,
+            }}
           >
             <Ionicons name="chevron-back" size={28} color="white" />
           </TouchableOpacity>
@@ -161,12 +199,17 @@ function CustomHeader() {
   );
 }
 
-// --- MAIN LAYOUT ---
+// --------------------------------------------------
+// MAIN PROFILE LAYOUT
+// --------------------------------------------------
+
 export default function MainProfileLayout() {
   return (
     <NavigationBarWrapper>
       <StatusBar hidden={true} />
+
       <CustomHeader />
+
       <Slot />
     </NavigationBarWrapper>
   );

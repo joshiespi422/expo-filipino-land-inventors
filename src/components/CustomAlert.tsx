@@ -17,7 +17,19 @@ interface CustomAlertProps {
   onConfirm?: () => void;
   confirmText?: string;
 }
+
 const SCREEN = Dimensions.get("screen");
+
+const MODAL_SHADOW = {
+  shadowColor: "#000",
+  shadowOffset: {
+    width: 0,
+    height: 4,
+  },
+  shadowOpacity: 0.15,
+  shadowRadius: 10,
+  elevation: 10,
+};
 
 export const CustomAlert = ({
   visible,
@@ -25,7 +37,7 @@ export const CustomAlert = ({
   message,
   onClose,
   onConfirm,
-  confirmText = "Logout",
+  confirmText = "Confirm",
 }: CustomAlertProps) => {
   useEffect(() => {
     if (Platform.OS === "android") {
@@ -36,7 +48,6 @@ export const CustomAlert = ({
       }
     }
 
-    // Cleanup in case component unmounts while visible
     return () => {
       if (Platform.OS === "android") {
         NavigationBar.setVisibilityAsync("visible");
@@ -62,11 +73,15 @@ export const CustomAlert = ({
           width: SCREEN.width,
           height: SCREEN.height,
           backgroundColor: "rgba(0,0,0,0.4)",
+          justifyContent: "center",
+          padding: 24,
         }}
-        className="justify-center p-6"
       >
         {/* MODAL BOX */}
-        <View className="bg-white w-full max-w-[400px] rounded-[35px] p-6 shadow-2xl elevation-10">
+        <View
+          className="bg-white w-full max-w-[400px] rounded-[35px] p-6"
+          style={MODAL_SHADOW}
+        >
           <Text className="text-primary text-2xl font-bold text-center mb-3">
             {title}
           </Text>
@@ -80,6 +95,7 @@ export const CustomAlert = ({
               <TouchableOpacity
                 onPress={onClose}
                 className="flex-1 bg-gray-100 p-4 rounded-2xl"
+                activeOpacity={0.8}
               >
                 <Text className="text-gray-600 text-center font-bold text-base">
                   Cancel
@@ -89,6 +105,7 @@ export const CustomAlert = ({
               <TouchableOpacity
                 onPress={onConfirm}
                 className="flex-1 p-4 bg-primary rounded-2xl"
+                activeOpacity={0.8}
               >
                 <Text className="text-white text-center font-bold text-base">
                   {confirmText}
