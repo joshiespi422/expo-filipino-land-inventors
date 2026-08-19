@@ -176,7 +176,11 @@ export default function OtpVerificationPage() {
   const isBusy =
     verifyMutation.isPending || resendMutation.isPending || navigating;
 
-  const formatTime = (seconds: number) => `${seconds}s`;
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+  };
 
   return (
     <KeyboardAvoidingView
