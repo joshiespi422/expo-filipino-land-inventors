@@ -11,7 +11,7 @@ import axios from "axios";
 export const devIP = "fismulticoop.org";
 export const BASE_URL = `https://${devIP}`;
 
-export const ICON_PATH = `${BASE_URL}/storage/businessIcon`;
+export const ICON_PATH = `${BASE_URL}/storage/`;
 
 const api = axios.create({
   baseURL: `${BASE_URL}/api`,

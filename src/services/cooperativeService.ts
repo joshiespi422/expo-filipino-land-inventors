@@ -4,8 +4,10 @@ export interface AllocationBreakdown {
   id: number;
   name: string;
   slug: string;
-  description: string | null;
-  configured_percentage: number;
+  description?: string;
+  type?: "PERCENTAGE" | "PHP";
+  configured_value?: number;
+  configured_percentage?: number;
   amount: number;
   actual_percentage: number;
   transaction_count: number;

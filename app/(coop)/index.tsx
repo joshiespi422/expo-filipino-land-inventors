@@ -24,7 +24,7 @@ import {
 import "../../global.css";
 
 const peso = (value: number) =>
-  `₱${value.toLocaleString("en-PH", {
+  `₱${(value ?? 0).toLocaleString("en-PH", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -37,11 +37,11 @@ const ALL_SERVICES_OPTION: CooperativeServiceOption = {
   icon: null,
 };
 
-// Use the full "screen" (not "window") so the modal backdrop dimensions
+// Use the full "screen" (not "window") so the modal backdrop dimensions match
 const SCREEN = Dimensions.get("screen");
 
 /* ------------------------------------------------------------------ */
-/* SKELETON PRIMITIVES                                                 */
+/* SKELETON PRIMITIVES                                               */
 /* ------------------------------------------------------------------ */
 
 function SkeletonBlock({
@@ -153,7 +153,34 @@ function SummarySkeleton() {
 }
 
 /* ------------------------------------------------------------------ */
-/* PAGE                                                                 */
+/* HELPER FUNCTION FOR ALLOCATION BADGES & TARGETS                   */
+/* ------------------------------------------------------------------ */
+
+function renderAllocationBadge(allocation: AllocationBreakdown) {
+  const isFixed =
+    (allocation as any).type === "PHP" ||
+    (allocation as any).type === "FIXED" ||
+    (allocation as any).is_fixed === true;
+
+  if (isFixed) {
+    const val =
+      (allocation as any).configured_value ??
+      allocation.configured_percentage ??
+      0;
+    return {
+      badge: "Fixed",
+      targetText: `Target ${peso(val)}/txn`,
+    };
+  }
+
+  return {
+    badge: `${allocation.actual_percentage ?? 0}%`,
+    targetText: `Target ${allocation.configured_percentage ?? 0}%`,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* PAGE                                                               */
 /* ------------------------------------------------------------------ */
 
 export default function CooperativeMembershipPage() {
@@ -180,7 +207,7 @@ export default function CooperativeMembershipPage() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
-  // --- MEMBERSHIP / STATUS FLAGS (same pattern as ProfileScreen) ---
+  // --- MEMBERSHIP / STATUS FLAGS ---
   const userTypeName = user?.user_type?.name?.toUpperCase() || "";
   const statusName = user?.status?.name?.toLowerCase() || "";
 
@@ -193,10 +220,6 @@ export default function CooperativeMembershipPage() {
   // Only fully active Members can view cooperative transparency
   const hasAccess = isMember && isActive;
 
-  // Helper — checks access directly off a freshly-fetched profile object
-  // instead of the (possibly stale) `user` in the store. Needed because
-  // fetchProfile()/setUser() is async and the component won't re-render
-  // with the new `user` in time for the same effect tick.
   const canAccessCooperative = (profile: any) => {
     const type = profile?.user_type?.name?.toUpperCase() || "";
     const status = profile?.status?.name?.toLowerCase() || "";
@@ -253,9 +276,6 @@ export default function CooperativeMembershipPage() {
     [],
   );
 
-  // Only ever call the cooperative endpoints (years/services/summary) once
-  // we've confirmed the user is an active Member — the API middleware
-  // rejects everyone else with a 403, so gate on the client too.
   useEffect(() => {
     (async () => {
       const profile = await fetchProfile();
@@ -316,7 +336,7 @@ export default function CooperativeMembershipPage() {
             allocation.
           </Text>
 
-          {/* --- GATE: BASIC & ACTIVE (profile not yet completed) --- */}
+          {/* --- GATE: BASIC & ACTIVE --- */}
           {isBasic && isActive && (
             <View className="bg-orange-50 border border-orange-200 p-5 rounded-[30px] mb-8">
               <View className="flex-row items-center">
@@ -348,7 +368,7 @@ export default function CooperativeMembershipPage() {
             </View>
           )}
 
-          {/* --- GATE: BASIC & FOR APPROVAL (pending review) --- */}
+          {/* --- GATE: BASIC & FOR APPROVAL --- */}
           {isBasic && isForApproval && (
             <View className="bg-blue border border-primary p-5 rounded-[30px] mb-8">
               <View className="flex-row items-center">
@@ -369,7 +389,7 @@ export default function CooperativeMembershipPage() {
             </View>
           )}
 
-          {/* --- GATE: BASIC & APPROVED (needs capital contribution) --- */}
+          {/* --- GATE: BASIC & APPROVED --- */}
           {isBasic && isApproved && (
             <View className="bg-green-50 border border-green-200 p-5 rounded-[30px] mb-8">
               <View className="flex-row items-center">
@@ -480,8 +500,7 @@ export default function CooperativeMembershipPage() {
                     </Text>
                   </View>
 
-                  {/* PER-SERVICE BREAKDOWN — percentage kept here, it's
-                      correctly scoped to each service's own total */}
+                  {/* PER-SERVICE BREAKDOWN */}
                   <Text className="text-xl font-bold mb-4">
                     {selectedService.slug === "all"
                       ? "Services"
@@ -525,36 +544,41 @@ export default function CooperativeMembershipPage() {
 
                           <View className="gap-y-3">
                             {service.allocations.map(
-                              (allocation: AllocationBreakdown) => (
-                                <View
-                                  key={allocation.id}
-                                  className="bg-slate-50 rounded-xl p-4"
-                                >
-                                  <View className="flex-row justify-between">
-                                    <Text className="font-bold text-slate-700">
-                                      {allocation.name}
+                              (allocation: AllocationBreakdown) => {
+                                const { badge, targetText } =
+                                  renderAllocationBadge(allocation);
+
+                                return (
+                                  <View
+                                    key={allocation.id}
+                                    className="bg-slate-50 rounded-xl p-4"
+                                  >
+                                    <View className="flex-row justify-between items-center">
+                                      <Text className="font-bold text-slate-700 flex-1 mr-2">
+                                        {allocation.name}
+                                      </Text>
+                                      {/* <Text className="font-black text-primary">
+                                        {badge}
+                                      </Text> */}
+                                    </View>
+                                    <Text className="text-slate-500 text-sm mt-1">
+                                      {allocation.description}
                                     </Text>
-                                    <Text className="font-black text-primary">
-                                      {allocation.actual_percentage}%
-                                    </Text>
+                                    <View className="flex-row justify-between items-center mt-3">
+                                      <Text className="font-bold">
+                                        {peso(allocation.amount)}
+                                      </Text>
+                                      <Text className="text-xs text-slate-400">
+                                        {targetText} ·{" "}
+                                        {allocation.transaction_count} txn
+                                        {allocation.transaction_count === 1
+                                          ? ""
+                                          : "s"}
+                                      </Text>
+                                    </View>
                                   </View>
-                                  <Text className="text-slate-500 text-sm mt-1">
-                                    {allocation.description}
-                                  </Text>
-                                  <View className="flex-row justify-between items-center mt-3">
-                                    <Text className="font-bold">
-                                      {peso(allocation.amount)}
-                                    </Text>
-                                    <Text className="text-xs text-slate-400">
-                                      Target {allocation.configured_percentage}%
-                                      · {allocation.transaction_count} txn
-                                      {allocation.transaction_count === 1
-                                        ? ""
-                                        : "s"}
-                                    </Text>
-                                  </View>
-                                </View>
-                              ),
+                                );
+                              },
                             )}
                           </View>
                         </View>
@@ -562,11 +586,7 @@ export default function CooperativeMembershipPage() {
                     </View>
                   )}
 
-                  {/* GRAND ALLOCATION SUMMARY — amount only, no percentage:
-                      not every service uses every allocation, so a "% of
-                      total fund" here would misrepresent allocations that
-                      only apply to a subset of services. These amounts
-                      still add up to total_fund below. */}
+                  {/* GRAND ALLOCATION SUMMARY */}
                   <Text className="text-xl font-bold mb-4">
                     Fund Allocation Summary
                   </Text>

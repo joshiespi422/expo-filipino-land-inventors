@@ -34,25 +34,20 @@ export default function CategoryPage() {
           <Text className="text-2xl text-center font-extrabold pt-4 pb-1 text-primary tracking-tight">
             Choose Specific Business
           </Text>
-          <Text className="text-2xl text-center font-extrabold py-4 text-primary tracking-tight">
+          <Text className="text-2xl text-center font-extrabold py-2 text-primary tracking-tight">
             {typeName || "Business"}
           </Text>
 
           {/* DYNAMIC ICON DISPLAY */}
-          <View className="w-36 h-36 my-5">
+          <View className="w-36 h-36 my-5 bg-slate-50 rounded-2xl items-center justify-center p-4 overflow-hidden">
             {iconUrl ? (
               <Image
                 source={{ uri: iconUrl }}
                 className="w-full h-full"
-                resizeMode="cover"
+                resizeMode="contain"
               />
             ) : (
-              <Ionicons
-                name="business"
-                size={100}
-                className="mx-auto"
-                color="#034194"
-              />
+              <Ionicons name="business" size={72} color="#034194" />
             )}
           </View>
         </View>

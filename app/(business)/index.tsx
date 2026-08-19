@@ -62,15 +62,15 @@ export default function BusinessTypesPage() {
                     className="bg-white p-5 rounded-3xl mb-4 flex-row items-center shadow-sm border border-slate-100"
                   >
                     {/* DYNAMIC ICON CONTAINER */}
-                    <View className="w-12 h-12 items-center justify-center mr-4 overflow-hidden">
+                    <View className="w-12 h-12 rounded-2xl bg-slate-50 items-center justify-center mr-4 p-2 overflow-hidden">
                       {iconUrl ? (
                         <Image
                           source={{ uri: iconUrl }}
                           className="w-full h-full"
-                          resizeMode="cover"
+                          resizeMode="contain"
                         />
                       ) : (
-                        <Ionicons name="business" size={28} color="#034194" />
+                        <Ionicons name="business" size={24} color="#034194" />
                       )}
                     </View>
 
