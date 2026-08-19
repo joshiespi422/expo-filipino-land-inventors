@@ -73,11 +73,9 @@ export default function MainLayout() {
   const isMembershipPay = pathname === "/profile/membership-checkout";
   const isMembershipQr = pathname === "/profile/membership-qrph";
   const isChangePassword = pathname === "/profile/changePassword";
-  const isNewsIndex = pathname === "/news";
-  const isNewsDetails = pathname === "/news/details";
-  const isNewsSearch = pathname === "/news/search";
   const isLoadWallet = pathname === "/load";
   const isInfo = pathname === "/info";
+  const isPaymentSuccess = pathname === "/profile/payment-success";
   const isNotification = pathname === "/notification";
   const isBiometric = pathname === "/profile/biometricSettings";
 
@@ -312,7 +310,7 @@ export default function MainLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Keep status bar dark because the app uses a light background */}
-      <StatusBar style="dark" hidden={true} />
+      <StatusBar hidden={true} />
 
       {/* ============================================================
           COMING SOON MODAL
@@ -497,7 +495,7 @@ export default function MainLayout() {
                 </TouchableOpacity>
               </View>
             </View>
-          ) : isCameraQr || isInfo ? null : (
+          ) : isCameraQr || isInfo || isPaymentSuccess ? null : (
             <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
               <View className="flex-row justify-between items-center w-full px-6">
                 <TouchableOpacity
