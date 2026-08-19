@@ -322,11 +322,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="transparent"
-        translucent={true}
-      />
+      <StatusBar hidden={true} />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

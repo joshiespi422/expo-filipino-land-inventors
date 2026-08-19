@@ -67,7 +67,7 @@ export default function AuthLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="dark" hidden={true} />
+      <StatusBar hidden={true} />
 
       <NavigationBarWrapper>
         <Stack

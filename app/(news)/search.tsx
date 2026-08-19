@@ -170,7 +170,7 @@ export default function SearchScreen() {
   return (
     <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
       <View className="flex-1 bg-white">
-        <StatusBar style="dark" />
+        <StatusBar hidden={true} />
 
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
