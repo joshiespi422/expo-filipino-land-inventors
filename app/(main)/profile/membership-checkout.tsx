@@ -269,7 +269,7 @@ export default function MembershipCheckoutPage() {
         startInLoadingState
         onNavigationStateChange={(nav) => {
           if (nav.url.includes("payment/success")) {
-            router.replace("/payment-success");
+            router.replace("/(main)/profile/payment-success");
           }
         }}
       />
