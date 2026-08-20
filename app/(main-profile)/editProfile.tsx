@@ -40,18 +40,18 @@ const pickerTextStyle = {
 };
 
 // ---------------------------------------------------------------------
-// ID CROP FRAME — same accurate crop system as the avatar cropper, but
-// rectangular (standard ID-card ratio) instead of circular. See the
-// CropScreen component further down for the centering fix that makes
-// the exported crop match what's shown on screen 1:1.
+// ID CROP FRAME — supports both landscape and portrait orientations
+// Landscape: standard ID card ratio (85.6mm x 53.98mm) = 1.586
+// Portrait: school ID ratio (85.6mm x 53.98mm rotated) = 0.631
 // ---------------------------------------------------------------------
-const ID_ASPECT_RATIO = 1.586; // standard ID card ratio (85.6mm x 53.98mm)
+const ID_ASPECT_RATIO_LANDSCAPE = 1.586; // landscape ID card ratio
+const ID_ASPECT_RATIO_PORTRAIT = 0.631; // portrait ID card ratio (1 / 1.586)
 const FRAME_WIDTH = Math.min(Dimensions.get("window").width - 60, 340);
-const FRAME_HEIGHT = FRAME_WIDTH / ID_ASPECT_RATIO;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 
 type IdField = "front_valid_id_picture" | "back_valid_id_picture";
+type IdOrientation = "landscape" | "portrait";
 
 export default function EditProfileScreen() {
   const params = useLocalSearchParams();
@@ -1337,7 +1337,10 @@ export default function EditProfileScreen() {
           {showFullIdImage && form[showFullIdImage]?.uri && (
             <Image
               source={{ uri: form[showFullIdImage].uri }}
-              style={{ width: "100%", aspectRatio: ID_ASPECT_RATIO }}
+              style={{
+                width: "100%",
+                aspectRatio: ID_ASPECT_RATIO_PORTRAIT,
+              }}
               resizeMode="contain"
             />
           )}
@@ -1366,18 +1369,16 @@ export default function EditProfileScreen() {
 /*
 |--------------------------------------------------------------------------
 | ID CROP SCREEN — same crop system as the avatar's CropScreen in
-| ProfileScreen, generalized to a rectangular ID-card frame instead of a
-| circle. One finger drags, two fingers pinch-zoom.
+| ProfileScreen, generalized to a rectangular ID-card frame with
+| orientation selector. Now supports both landscape and portrait
+| orientations. User can switch between them while cropping.
+| One finger drags, two fingers pinch-zoom.
 |
 | ACCURACY FIX (ported from the avatar cropper): the crop math in
 | handleCropConfirm / getMaxPan assumes the image is CENTERED inside the
-| FRAME_WIDTH x FRAME_HEIGHT box before any translate/scale is applied —
-| that's what the "(FRAME_WIDTH - displayedWidth) / 2" terms mean. The
-| frame <View> that wraps the Animated.Image has
-| justifyContent/alignItems: "center" so React Native actually lays the
-| image out centered, matching what the math assumes. Without that, the
-| exported crop drifts from what's shown in the frame — exactly the bug
-| that was fixed on the avatar screen.
+| frame box before any translate/scale is applied. The frame <View> has
+| justifyContent/alignItems: "center" so React Native lays the image
+| centered, matching what the math assumes.
 |--------------------------------------------------------------------------
 */
 function IdCropScreen({
@@ -1397,6 +1398,16 @@ function IdCropScreen({
 }) {
   const [cropping, setCropping] = useState(false);
   const [zoomDisplay, setZoomDisplay] = useState(MIN_ZOOM);
+  const [orientation, setOrientation] = useState<IdOrientation>("landscape");
+
+  // Calculate frame dimensions based on current orientation
+  const aspectRatio =
+    orientation === "landscape"
+      ? ID_ASPECT_RATIO_LANDSCAPE
+      : ID_ASPECT_RATIO_PORTRAIT;
+
+  const frameWidth = FRAME_WIDTH;
+  const frameHeight = frameWidth / aspectRatio;
 
   // Base scale so the image fully COVERS the rectangular frame (both
   // dimensions) with no gaps, before any user zoom is applied. OVERSCAN
@@ -1404,8 +1415,7 @@ function IdCropScreen({
   // before the user zooms in further.
   const OVERSCAN = 1.15;
   const baseScale =
-    Math.max(FRAME_WIDTH / naturalWidth, FRAME_HEIGHT / naturalHeight) *
-    OVERSCAN;
+    Math.max(frameWidth / naturalWidth, frameHeight / naturalHeight) * OVERSCAN;
   const baseWidth = naturalWidth * baseScale;
   const baseHeight = naturalHeight * baseScale;
 
@@ -1429,8 +1439,8 @@ function IdCropScreen({
     const displayedWidth = naturalWidth * totalScale;
     const displayedHeight = naturalHeight * totalScale;
     return {
-      maxX: Math.max(0, (displayedWidth - FRAME_WIDTH) / 2),
-      maxY: Math.max(0, (displayedHeight - FRAME_HEIGHT) / 2),
+      maxX: Math.max(0, (displayedWidth - frameWidth) / 2),
+      maxY: Math.max(0, (displayedHeight - frameHeight) / 2),
     };
   };
 
@@ -1511,11 +1521,11 @@ function IdCropScreen({
       // Top-left of the displayed image relative to the frame's top-left.
       // Valid because the frame container actually centers the image
       // (see the justifyContent/alignItems fix on the frame View below).
-      const offsetX = (FRAME_WIDTH - displayedWidth) / 2 + pan.x;
-      const offsetY = (FRAME_HEIGHT - displayedHeight) / 2 + pan.y;
+      const offsetX = (frameWidth - displayedWidth) / 2 + pan.x;
+      const offsetY = (frameHeight - displayedHeight) / 2 + pan.y;
 
-      const origWidth = FRAME_WIDTH / totalScale;
-      const origHeight = FRAME_HEIGHT / totalScale;
+      const origWidth = frameWidth / totalScale;
+      const origHeight = frameHeight / totalScale;
 
       let origX = -offsetX / totalScale;
       let origY = -offsetY / totalScale;
@@ -1569,15 +1579,15 @@ function IdCropScreen({
         <Text className="text-white font-bold text-lg mb-2 text-center">
           {title}
         </Text>
-        <Text className="text-white/70 text-xs mb-6 text-center">
+        {/* <Text className="text-white/70 text-xs mb-6 text-center">
           Drag with 1 finger to move • Pinch with 2 fingers to zoom
-        </Text>
+        </Text> */}
 
         <GestureDetector gesture={composedGesture}>
           <View
             style={{
-              width: FRAME_WIDTH,
-              height: FRAME_HEIGHT,
+              width: frameWidth,
+              height: frameHeight,
               borderRadius: 16,
               overflow: "hidden",
               backgroundColor: "#111",
@@ -1591,9 +1601,56 @@ function IdCropScreen({
           </View>
         </GestureDetector>
 
-        <Text className="text-white/70 font-bold mt-6">
+        {/* ORIENTATION SELECTOR */}
+        <View className="flex-row gap-x-2 mt-6 justify-center">
+          <TouchableOpacity
+            onPress={() => setOrientation("landscape")}
+            className={`px-5 py-2 rounded-full border-2 flex-row items-center gap-x-2 ${
+              orientation === "landscape"
+                ? "bg-[#034194] border-[#034194]"
+                : "bg-transparent border-white/30"
+            }`}
+          >
+            <Ionicons
+              name="phone-landscape-outline"
+              size={18}
+              color={orientation === "landscape" ? "#fff" : "#fff"}
+            />
+            <Text
+              className={`font-bold text-sm ${
+                orientation === "landscape" ? "text-white" : "text-white/70"
+              }`}
+            >
+              Landscape
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setOrientation("portrait")}
+            className={`px-5 py-2 rounded-full border-2 flex-row items-center gap-x-2 ${
+              orientation === "portrait"
+                ? "bg-[#034194] border-[#034194]"
+                : "bg-transparent border-white/30"
+            }`}
+          >
+            <Ionicons
+              name="phone-portrait-outline"
+              size={18}
+              color={orientation === "portrait" ? "#fff" : "#fff"}
+            />
+            <Text
+              className={`font-bold text-sm ${
+                orientation === "portrait" ? "text-white" : "text-white/70"
+              }`}
+            >
+              Portrait
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* <Text className="text-white/70 font-bold mt-4">
           {zoomDisplay.toFixed(2)}x
-        </Text>
+        </Text> */}
 
         <View className="w-full mt-8 gap-y-3 max-w-[320px]">
           <TouchableOpacity
@@ -1605,24 +1662,19 @@ function IdCropScreen({
               <ActivityIndicator color="white" />
             ) : (
               <>
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={20}
-                  color="white"
-                />
                 <Text className="text-white font-bold text-base ml-2">
                   Done
                 </Text>
               </>
             )}
           </TouchableOpacity>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             onPress={onCancel}
             disabled={cropping}
             className="w-full py-3.5 items-center"
           >
             <Text className="text-white/70 font-bold text-base">Cancel</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </View>
     </GestureHandlerRootView>
