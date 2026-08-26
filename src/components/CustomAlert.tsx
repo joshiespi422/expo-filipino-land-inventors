@@ -79,7 +79,7 @@ export const CustomAlert = ({
       >
         {/* MODAL BOX */}
         <View
-          className="bg-white w-full max-w-[400px] rounded-[35px] p-6"
+          className="bg-white w-full max-w-[400px] mx-auto rounded-[35px] p-6"
           style={MODAL_SHADOW}
         >
           <Text className="text-primary text-2xl font-bold text-center mb-3">
