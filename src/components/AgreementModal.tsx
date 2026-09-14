@@ -8,8 +8,11 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
+import RenderHTML from "react-native-render-html";
+import { useSafeAreaInsets } from "react-native-safe-area-context"; // 1. Import safe area insets
 
 interface AgreementModalProps {
   visible: boolean;
@@ -29,6 +32,10 @@ export function AgreementModal({
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [containerHeight, setContainerHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
+
+  const insets = useSafeAreaInsets(); // 2. Get safe area inset values
+  const { width: windowWidth } = useWindowDimensions();
+  const responsiveWidth = windowWidth - 72;
 
   useEffect(() => {
     if (visible) {
@@ -59,10 +66,11 @@ export function AgreementModal({
 
   return (
     <Modal
-      transparent
       visible={visible}
-      animationType="slide"
+      transparent
+      animationType="fade"
       statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={onCancel}
     >
       <View className="flex-1 justify-end bg-black/30">
@@ -74,7 +82,7 @@ export function AgreementModal({
 
         {/* MODAL CONTENT */}
         <View
-          className="bg-white rounded-t-[32px] px-5 pt-3 pb-8"
+          className="bg-white rounded-t-[32px] px-5 pt-3"
           style={{
             shadowColor: "#000",
             shadowOffset: {
@@ -85,6 +93,8 @@ export function AgreementModal({
             shadowRadius: 20,
             elevation: 20,
             maxHeight: "85%",
+            // 3. Dynamically add the navigation bar height + base padding
+            paddingBottom: Math.max(insets.bottom, 16) + 16,
           }}
         >
           {/* HANDLE */}
@@ -106,7 +116,7 @@ export function AgreementModal({
             </View>
           )}
 
-          {/* DOCUMENT */}
+          {/* DOCUMENT CONTAINER */}
           <View
             className="bg-slate-50 border border-slate-100 rounded-3xl overflow-hidden mb-4"
             style={{
@@ -130,15 +140,52 @@ export function AgreementModal({
                 paddingVertical: 16,
               }}
             >
-              <Text className="text-[15px] leading-7 text-slate-600">
-                {description}
-              </Text>
+              <RenderHTML
+                contentWidth={responsiveWidth}
+                source={{ html: description || "<p>No content available.</p>" }}
+                enableExperimentalBRCollapsing={true}
+                ignoredDomTags={["o:p", "font"]}
+                classesStyles={{
+                  bold: {
+                    fontWeight: "700",
+                    color: "#0f172a",
+                  },
+                }}
+                tagsStyles={{
+                  h4: {
+                    marginTop: 12,
+                    marginBottom: 12,
+                    fontSize: 15,
+                    lineHeight: 22,
+                    fontWeight: "400",
+                    color: "#475569",
+                  },
+                  b: {
+                    fontWeight: "700",
+                    color: "#0f172a",
+                  },
+                  strong: {
+                    fontWeight: "700",
+                    color: "#0f172a",
+                  },
+                  span: {
+                    fontSize: 15,
+                    color: "#475569",
+                  },
+                  p: {
+                    fontSize: 15,
+                    lineHeight: 22,
+                    color: "#475569",
+                    marginBottom: 8,
+                  },
+                }}
+              />
 
               {!hasScrolledToBottom && <View style={{ height: 50 }} />}
             </ScrollView>
           </View>
 
-          {/* BUTTONS */}
+          {/* ACTION BUTTONS */}
           <View className="flex-row gap-3">
             <TouchableOpacity
               activeOpacity={0.8}
