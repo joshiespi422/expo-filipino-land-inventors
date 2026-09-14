@@ -213,11 +213,11 @@ export default function NewsIndex() {
                     className="absolute bottom-0 left-0 right-0 h-44"
                   />
 
-                  <View className="absolute top-4 right-4 bg-white px-3 py-1 rounded-2xl">
+                  {/* <View className="absolute top-4 right-4 bg-white px-3 py-1 rounded-2xl">
                     <Text className="text-primary text-[10px] font-bold">
                       {item.CategoryName}
                     </Text>
-                  </View>
+                  </View> */}
 
                   <View className="absolute bottom-4 left-0 right-0 px-4">
                     <Text
