@@ -627,18 +627,18 @@ export default function ProfileScreen() {
           </View>
         </View>
       )}
-
       {/* MENU ITEMS */}
       <View className="mt-6 px-4">
         {((isBasic && isForApproval) ||
           (isBasic && isApproved) ||
           (isMember && isActive)) && (
           <View>
+            {/* ACCOUNT SETTINGS SECTION */}
             <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
               Account Settings
             </Text>
 
-            <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+            <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 mb-6">
               <ProfileMenuItem
                 icon="person-outline"
                 title="Information"
@@ -657,7 +657,7 @@ export default function ProfileScreen() {
                 icon="id-card-outline"
                 title="Valid ID"
                 onPress={() =>
-                  router.push("/(main-profile)/editProfile?vakidID")
+                  router.push("/(main-profile)/editProfile?validID")
                 }
               />
 
@@ -674,29 +674,46 @@ export default function ProfileScreen() {
                 isLast
               />
             </View>
+
+            {/* ACCOUNT OPTIONS SECTION */}
+            <Text className="text-gray-400 font-bold mb-3 ml-2 uppercase text-[11px] tracking-wider">
+              Account Options
+            </Text>
+
+            <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 mb-6">
+              <TouchableOpacity
+                onPress={() => router.push("/(main-profile)/deleteAccount")}
+                className="flex-row items-center justify-between p-4"
+              >
+                <View className="flex-row items-center">
+                  <Ionicons name="settings-outline" size={22} color="#034194" />
+                  <Text className="text-gray-800 font-bold ml-3 text-base">
+                    Account Management
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
-        {/* LOGOUT */}
-        <View>
-          <TouchableOpacity
-            onPress={handleLogout}
-            disabled={loggingOut}
-            className="mt-4 mb-12 flex-row items-center p-4 bg-[#D7012710] rounded-2xl border border-[#D7012730]"
-          >
-            {loggingOut ? (
-              <ActivityIndicator color="#D70127" className="mx-auto" />
-            ) : (
-              <>
-                <MaterialIcons name="logout" size={22} color="#D70127" />
-
-                <Text className="text-[#D70127] font-bold ml-3 text-base">
-                  Logout Account
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
+        {/* LOGOUT BUTTON */}
+        <TouchableOpacity
+          onPress={handleLogout}
+          disabled={loggingOut}
+          className="mb-12 flex-row items-center p-4 bg-[#D7012710] rounded-2xl border border-[#D7012730]"
+        >
+          {loggingOut ? (
+            <ActivityIndicator color="#D70127" className="mx-auto" />
+          ) : (
+            <>
+              <MaterialIcons name="logout" size={22} color="#D70127" />
+              <Text className="text-[#D70127] font-bold ml-3 text-base">
+                Logout Account
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* PROFILE PHOTO OPTIONS */}
