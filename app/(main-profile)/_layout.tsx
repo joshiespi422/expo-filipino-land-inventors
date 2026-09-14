@@ -142,6 +142,10 @@ function CustomHeader() {
 
   const isBiometric = pathname.includes("biometricSettings");
 
+  const isDeleteAccount = pathname.includes("deleteAccount");
+
+  const isDeleteVerification = pathname.includes("deleteVerification");
+
   const title = isProfileEdit
     ? "Edit Profile"
     : isProfileSetup
@@ -152,7 +156,11 @@ function CustomHeader() {
           ? "Security & Password"
           : isBiometric
             ? "Quick & Secure Login"
-            : "";
+            : isDeleteAccount
+              ? "Account Deletion"
+              : isDeleteVerification
+                ? "Deletion Verification"
+                : "";
 
   if (!title) {
     return null;

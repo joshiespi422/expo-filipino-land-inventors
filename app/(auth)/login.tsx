@@ -1,5 +1,6 @@
 import { authService } from "@/services/authService";
 import { biometricService } from "@/services/biometricService";
+import { reactivationService } from "@/services/reactivationService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -31,16 +32,27 @@ export default function LoginPage() {
   const [form, setForm] = useState({ number: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
 
+  // Standard alert state
   const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    onCloseOverride: null as (() => void) | null,
+  });
+
+  // Biometric alert state
+  const [biometricAlert, setBiometricAlert] = useState({
     visible: false,
     title: "",
     message: "",
   });
 
-  const [biometricAlert, setBiometricAlert] = useState({
+  // Reactivation / Deletion trigger custom alert state
+  const [reactivationAlert, setReactivationAlert] = useState({
     visible: false,
     title: "",
     message: "",
+    phone: "",
   });
 
   const [loadingState, setLoadingState] = useState({
@@ -90,12 +102,57 @@ export default function LoginPage() {
     initBiometric();
   }, []);
 
-  const showAlert = (title: string, message: string) => {
-    setAlert({ visible: true, title, message });
+  const showAlert = (
+    title: string,
+    message: string,
+    onCloseOverride?: () => void,
+  ) => {
+    setAlert({
+      visible: true,
+      title,
+      message,
+      onCloseOverride: onCloseOverride || null,
+    });
   };
 
   const showBiometricAlert = (title: string, message: string) => {
     setBiometricAlert({ visible: true, title, message });
+  };
+
+  /**
+   * Called only when the user taps "Okay" on the reactivation
+   * confirmation custom alert.
+   */
+  const sendReactivationOtp = async (phone: string) => {
+    if (isProcessing.current) return;
+
+    isProcessing.current = true;
+    setLoadingState((prev) => ({ ...prev, action: true }));
+
+    try {
+      const data = await reactivationService.send({
+        phone,
+        password: form.password,
+      });
+
+      isProcessing.current = false;
+      setLoadingState((prev) => ({ ...prev, action: false, nav: true }));
+
+      router.push({
+        pathname: "/reactivateOtp",
+        params: {
+          phone,
+          retryAfter: String(data.retry_after ?? 300),
+        },
+      });
+    } catch (error: any) {
+      isProcessing.current = false;
+      setLoadingState((prev) => ({ ...prev, action: false, nav: false }));
+
+      const msg =
+        error?.message || "Failed to send verification code. Please try again.";
+      showAlert("Error", msg);
+    }
   };
 
   const handleLogin = async () => {
@@ -118,6 +175,22 @@ export default function LoginPage() {
       setLoadingState((prev) => ({ ...prev, nav: true }));
       router.replace("/(main)");
     } catch (error: any) {
+      isProcessing.current = false;
+      setLoadingState((prev) => ({ ...prev, action: false }));
+
+      // --- ACCOUNT SCHEDULED FOR DELETION: trigger custom reactivation modal ---
+      if (error?.status === "pending_reactivation") {
+        setReactivationAlert({
+          visible: true,
+          title: "Account Scheduled for Deletion",
+          message:
+            error.message ||
+            "Your account is scheduled for deletion. Would you like to reactivate it? We'll send a verification code to your phone.",
+          phone: error.phone || form.number,
+        });
+        return;
+      }
+
       let msg = "An unexpected error occurred. Please try again.";
 
       if (error?.errors) {
@@ -130,9 +203,6 @@ export default function LoginPage() {
       }
 
       showAlert("Login Failed", msg);
-
-      isProcessing.current = false;
-      setLoadingState((prev) => ({ ...prev, action: false }));
     }
   };
 
@@ -182,6 +252,18 @@ export default function LoginPage() {
       setLoadingState((prev) => ({ ...prev, nav: true }));
       router.replace("/(main)");
     } catch (error: any) {
+      isProcessing.current = false;
+      setLoadingState((prev) => ({ ...prev, biometric: false }));
+
+      if (error?.status === "pending_reactivation") {
+        showBiometricAlert(
+          "Account Scheduled for Deletion",
+          error.message ||
+            "Your account is scheduled for deletion. Please log in with your phone number and password to reactivate it.",
+        );
+        return;
+      }
+
       let msg = "Biometric login failed. Please try again.";
 
       if (error?.errors) {
@@ -194,9 +276,6 @@ export default function LoginPage() {
       }
 
       showBiometricAlert("Login Failed", msg);
-
-      isProcessing.current = false;
-      setLoadingState((prev) => ({ ...prev, biometric: false }));
     }
   };
 
@@ -339,7 +418,11 @@ export default function LoginPage() {
         visible={alert.visible}
         title={alert.title}
         message={alert.message}
-        onClose={() => setAlert({ ...alert, visible: false })}
+        onClose={() => {
+          const callback = alert.onCloseOverride;
+          setAlert((prev) => ({ ...prev, visible: false }));
+          if (callback) callback();
+        }}
       />
 
       {/* --- BIOMETRIC LOGIN ALERT --- */}
@@ -348,6 +431,22 @@ export default function LoginPage() {
         title={biometricAlert.title}
         message={biometricAlert.message}
         onClose={() => setBiometricAlert({ ...biometricAlert, visible: false })}
+      />
+
+      {/* --- ACCOUNT DELETION / REACTIVATION ALERT --- */}
+      <CustomAlert
+        visible={reactivationAlert.visible}
+        title={reactivationAlert.title}
+        message={reactivationAlert.message}
+        confirmText="Okay"
+        onClose={() =>
+          setReactivationAlert((prev) => ({ ...prev, visible: false }))
+        }
+        onConfirm={() => {
+          const targetPhone = reactivationAlert.phone;
+          setReactivationAlert((prev) => ({ ...prev, visible: false }));
+          sendReactivationOtp(targetPhone);
+        }}
       />
     </KeyboardAvoidingView>
   );
