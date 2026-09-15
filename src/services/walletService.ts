@@ -87,3 +87,47 @@ export interface PaymentMethod {
   name: string;
   gateway_type: string;
 }
+
+/////////////// Wallet ///////////////////
+export interface TransferPayload {
+  channel_id: string;
+  amount: number;
+  account_name: string;
+  account_number: string;
+  purpose?: string;
+  remarks?: string;
+}
+
+export interface TransferResource {
+  id: number;
+  reference_number: string;
+  status: string;
+  channel: string;
+  destination_account_name: string;
+  destination_account_number: string;
+  amount: string;
+  fee: string;
+  total_deducted: string;
+  created_at: string;
+}
+
+export interface TransferResponse {
+  success: boolean;
+  message: string;
+  data: TransferResource;
+  wallet: WalletResponse;
+}
+
+export const createTransfer = async (
+  payload: TransferPayload,
+): Promise<TransferResponse> => {
+  const res = await api.post("/wallet/transfer", payload);
+  return res.data;
+};
+
+export const getTransferStatus = async (
+  reference: string,
+): Promise<{ data: TransferResource }> => {
+  const res = await api.get(`/wallet/transfer/${reference}`);
+  return res.data;
+};
