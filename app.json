@@ -23,7 +23,7 @@
 
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jospay.fismpc",
+      "bundleIdentifier": "com.BB88ADVERTISINGANDDIGITALSOLUTIONS.fismpc",
       "statusBarHidden": false,
       "statusBarStyle": "dark",
       "infoPlist": {
@@ -33,7 +33,7 @@
     },
 
     "android": {
-      "package": "com.jospay.fismpc",
+      "package": "com.BB88ADVERTISINGANDDIGITALSOLUTIONS.fismpc",
       "userInterfaceStyle": "light",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/applogoicon.jpg",
