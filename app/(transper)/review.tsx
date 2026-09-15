@@ -1,0 +1,251 @@
+import { CustomAlert } from "@/components/CustomAlert";
+import { createTransfer } from "@/services/walletService";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import "../../global.css";
+
+const TRANSFER_FEE: number = 0.0;
+
+const formatCurrency = (value: number): string => {
+  return `₱${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+export default function ReviewTransferPage() {
+  const router = useRouter();
+
+  const params = useLocalSearchParams<{
+    amount?: string;
+    channelId?: string;
+    channelName?: string;
+    recipientName?: string;
+    recipientNumber?: string;
+    transferMode?: string;
+    purpose?: string;
+    remarks?: string;
+  }>();
+
+  const amount = parseFloat(params.amount || "0");
+  const total = amount + TRANSFER_FEE;
+
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  const handleConfirm = async () => {
+    if (!isConfirmed || isProcessing) return;
+
+    if (!params.channelId) {
+      setAlert({
+        visible: true,
+        title: "Missing Destination",
+        message: "Please go back and select a destination channel.",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const response = await createTransfer({
+        channel_id: params.channelId,
+        amount,
+        account_name: params.recipientName || "",
+        account_number: params.recipientNumber || "",
+        purpose: params.purpose,
+        remarks: params.remarks,
+      });
+
+      router.push({
+        pathname: "/success",
+        params: {
+          amount,
+          channelName: params.channelName,
+          recipientName: params.recipientName,
+          recipientNumber: params.recipientNumber,
+          purpose: params.purpose,
+          remarks: params.remarks,
+          reference: response.data.reference_number,
+          status: response.data.status,
+        },
+      });
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Transfer could not be processed. Please try again.";
+
+      setAlert({
+        visible: true,
+        title: "Transfer Failed",
+        message,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const Row = ({
+    label,
+    value,
+    bold,
+  }: {
+    label: string;
+    value: string;
+    bold?: boolean;
+  }) => (
+    <View className="flex-row justify-between mb-3">
+      <Text className="text-slate-500 text-sm">{label}</Text>
+
+      <Text
+        className={`text-sm ${
+          bold ? "font-bold text-primary" : "font-bold text-slate-800"
+        }`}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+
+  return (
+    <View className="flex-1 bg-white">
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <View className="items-center py-8 px-6 w-full max-w-[600px] mx-auto">
+          <View className="mx-5 pb-10 max-w-[500px] w-full self-center">
+            <Text className="text-slate-700 font-bold text-base mb-3">
+              Review Transfer
+            </Text>
+
+            {/* TRANSFER DETAILS */}
+            <View className="border border-slate-200 rounded-xl p-4 bg-slate-50 mb-4">
+              <Row
+                label="Method"
+                value={
+                  params.transferMode === "qr"
+                    ? "Transfer via QR"
+                    : "Account Number"
+                }
+              />
+
+              <Row label="Destination" value={params.channelName || "—"} />
+
+              <Row label="Recipient Name" value={params.recipientName || "—"} />
+
+              <Row
+                label="Account / Number"
+                value={params.recipientNumber || "—"}
+              />
+
+              {params.purpose ? (
+                <Row label="Purpose" value={params.purpose} />
+              ) : null}
+
+              {params.remarks ? (
+                <Row label="Remarks" value={params.remarks} />
+              ) : null}
+            </View>
+
+            {/* TRANSFER AMOUNT SUMMARY */}
+            <View className="border border-slate-200 rounded-xl p-4 bg-white mb-5">
+              <Row label="Amount" value={formatCurrency(amount)} />
+
+              <Row
+                label="Transfer Fee"
+                value={
+                  TRANSFER_FEE === 0 ? "Free" : formatCurrency(TRANSFER_FEE)
+                }
+              />
+
+              <View className="h-[1px] bg-slate-100 my-2" />
+
+              <View className="flex-row justify-between">
+                <Text className="text-slate-700 font-bold">Total Deducted</Text>
+
+                <Text className="text-primary font-bold text-lg">
+                  {formatCurrency(total)}
+                </Text>
+              </View>
+            </View>
+
+            {/* NON-REFUNDABLE NOTICE */}
+            <View className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+              <Text className="text-amber-800 text-xs leading-5">
+                <Text className="font-bold">Important Notice: </Text>
+                Please verify that the{" "}
+                <Text className="font-bold">account details</Text> and{" "}
+                <Text className="font-bold">amount</Text> entered are correct.
+                Transfers sent to an incorrect account or with an incorrect
+                amount are final and{" "}
+                <Text className="font-bold">non-refundable.</Text>
+              </Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* FOOTER */}
+      <View className="w-full p-5 bg-white border-t border-slate-200">
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setIsConfirmed((prev) => !prev)}
+          className="flex-row items-center pb-4"
+        >
+          <View
+            className={`w-6 h-6 rounded-sm border items-center justify-center mr-3 ${
+              isConfirmed
+                ? "bg-primary border-primary"
+                : "border-primary border-2 bg-white"
+            }`}
+          >
+            {isConfirmed && (
+              <Ionicons name="checkmark" size={16} color="white" />
+            )}
+          </View>
+
+          <Text className="text-slate-700 text-sm flex-1">
+            Yes, I confirm that all transfer details above are correct.
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleConfirm}
+          disabled={!isConfirmed || isProcessing}
+          className={`h-14 rounded-xl justify-center items-center ${
+            !isConfirmed || isProcessing ? "bg-slate-300" : "bg-primary"
+          }`}
+        >
+          {isProcessing ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text className="text-white font-bold text-lg">
+              Confirm Transfer
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        confirmText="Okay"
+        onClose={() => setAlert((prev) => ({ ...prev, visible: false }))}
+      />
+    </View>
+  );
+}
