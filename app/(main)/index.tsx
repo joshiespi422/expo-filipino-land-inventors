@@ -422,14 +422,15 @@ export default function DashboardPage() {
               </View>
               <View className="flex-row gap-3">
                 <TouchableOpacity
-                  onPress={() => router.push("/(load)")}
-                  // onPress={handleComingSoon}
+                  // onPress={() => router.push("/(load)")}
+                  onPress={handleComingSoon}
                   className="bg-white h-10 w-10 flex justify-center items-center rounded-lg"
                 >
                   <FontAwesome name="plus" size={22} color="#034194" />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => router.push("/(transper)/")}
+                  // onPress={() => router.push("/(transper)/")}
+                  onPress={handleComingSoon}
                   className="bg-white h-10 w-10 flex justify-center items-center rounded-lg"
                 >
                   <FontAwesome name="send" size={20} color="#034194" />
