@@ -657,7 +657,7 @@ export default function ProfileScreen() {
                 icon="id-card-outline"
                 title="Valid ID"
                 onPress={() =>
-                  router.push("/(main-profile)/editProfile?validID")
+                  router.push("/(main-profile)/editProfile?vakidID")
                 }
               />
 
