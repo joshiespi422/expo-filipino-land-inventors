@@ -15,6 +15,7 @@ import {
 import "../../global.css";
 
 // Hooks & Services
+import { AdItem, getAds } from "@/services/adService";
 import echo from "@/services/echo";
 import { profileService } from "@/services/profileService";
 import {
@@ -39,7 +40,8 @@ import News from "../../assets/images/icon/News.png";
 // import Product from "../../assets/images/icon/Product.png";
 // import RD from "../../assets/images/icon/RD.png";
 // import Suggest from "../../assets/images/icon/Suggest.png";
-import image from "../../assets/images/HomeImage.png";
+// import image from "../../assets/images/HomeImage.png";
+import { BannerSlider } from "@/components/BannerSlider";
 
 const SCREEN = Dimensions.get("screen");
 
@@ -55,6 +57,7 @@ export default function DashboardPage() {
   const [showBalance, setShowBalance] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
   const [pendingFeature, setPendingFeature] = useState("");
+  const [ads, setAds] = useState<AdItem[]>([]);
 
   const userTypeName = user?.user_type?.name?.toUpperCase() || "";
   const statusName = user?.status?.name?.toLowerCase() || "";
@@ -72,15 +75,19 @@ export default function DashboardPage() {
     if (showLoading) setPageLoading(true);
 
     try {
-      // First, fetch the latest profile to see if status changed from Basic to Member
       const userData = await profileService.getProfile();
-      setUser(userData); // Update global store
+      setUser(userData);
 
-      // If they are now a member (or were already), fetch the wallet
       if (userData?.user_type_id === 3) {
         const walletData = await getWalletBalance();
         setBalance(walletData.data.balance);
         setShowBalance(walletData.data.show);
+      }
+
+      // Fetch dynamic banner ads
+      const adsResponse = await getAds();
+      if (adsResponse.success) {
+        setAds(adsResponse.data);
       }
     } catch (error) {
       console.error("Dashboard Load Error:", error);
@@ -339,8 +346,8 @@ export default function DashboardPage() {
           <>
             Your profile submission was not approved, so{" "}
             <Text className="font-bold text-slate-800">{pendingFeature}</Text>{" "}
-            isn't available yet. Please chat with our support team to find out
-            why and how to proceed.
+            isn{"'"}t available yet. Please chat with our support team to find
+            out why and how to proceed.
           </>
         ),
         buttonText: "Chat with Support",
@@ -401,7 +408,7 @@ export default function DashboardPage() {
 
         {/* 2. WALLET SECTION */}
         {isMember && !pageLoading && (
-          <View className="bg-primary p-3 rounded-2xl shadow-lg mb-4">
+          <View className="bg-primary p-3 rounded-2xl shadow-lg mb-3">
             <View className="flex-row justify-between items-center">
               <View className="flex-row items-center gap-3">
                 <Text className="text-white text-2xl font-bold">
@@ -441,20 +448,10 @@ export default function DashboardPage() {
         )}
 
         {/* 3. BANNER */}
-        <View className="mb-6">
-          {pageLoading ? (
-            <Skeleton className="!w-full !h-36 rounded-2xl" />
-          ) : (
-            <Image
-              source={image}
-              className="!w-full !h-36 rounded-2xl"
-              resizeMode="cover"
-            />
-          )}
-        </View>
+        <BannerSlider ads={ads} loading={pageLoading} />
 
         {/* 4. RESPONSIVE GRID MENU (3 Per Row) */}
-        <View className="flex-row flex-wrap justify-between pb-5">
+        <View className="flex-row flex-wrap justify-between pb-5 pt-4">
           {pageLoading
             ? Array.from({ length: 9 }).map((_, i) => (
                 <View key={i} className="w-[30%] items-center mb-8">
