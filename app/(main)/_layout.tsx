@@ -266,19 +266,19 @@ export default function MainLayout() {
     });
   };
 
-  // const handleHeaderSupportPress = async () => {
-  //   try {
-  //     await markConversationAsRead(supportConversationId || undefined);
-  //   } catch (err) {
-  //     console.error("Failed to mark support conversation as read:", err);
-  //   }
+  const handleHeaderSupportPress = async () => {
+    try {
+      await markConversationAsRead(supportConversationId || undefined);
+    } catch (err) {
+      console.error("Failed to mark support conversation as read:", err);
+    }
 
-  //   setSupportUnreadCount(0);
-  //   router.push({
-  //     pathname: "/(chat-support)/" as any,
-  //     params: { from: pathname },
-  //   });
-  // };
+    setSupportUnreadCount(0);
+    router.push({
+      pathname: "/(chat-support)/" as any,
+      params: { from: pathname },
+    });
+  };
 
   // ============================================================
   // LOADING
@@ -441,8 +441,8 @@ export default function MainLayout() {
                 className="absolute start-0 bottom-[-34px] pe-2 py-2 ps-7 bg-white rounded-r-full"
               >
                 <TouchableOpacity
-                  onPress={handleComingSoon}
-                  // onPress={() => router.push("/info" as any)}
+                  // onPress={handleComingSoon}
+                  onPress={() => router.push("/info" as any)}
                 >
                   <View className="bg-white rounded-full border border-primary/20 p-2">
                     <Ionicons
@@ -475,8 +475,8 @@ export default function MainLayout() {
                 className="absolute end-0 bottom-[-34px] ps-2 py-2 pe-7 bg-white rounded-l-full"
               >
                 <TouchableOpacity
-                  // onPress={handleHeaderSupportPress}
-                  onPress={handleComingSoon}
+                  onPress={handleHeaderSupportPress}
+                  // onPress={handleComingSoon}
                   className="relative"
                   activeOpacity={0.7}
                 >
@@ -628,8 +628,8 @@ export default function MainLayout() {
                 {/* History */}
                 <TouchableOpacity
                   className="items-center pe-2 flex-1 mt-1"
-                  onPress={() => router.push("/history")}
-                  // onPress={handleComingSoon}
+                  // onPress={() => router.push("/history")}
+                  onPress={handleComingSoon}
                 >
                   <Image
                     source={History}
@@ -652,8 +652,8 @@ export default function MainLayout() {
                   }}
                 >
                   <TouchableOpacity
-                    onPress={() => router.push("/camera")}
-                    // onPress={handleComingSoon}
+                    // onPress={() => router.push("/camera")}
+                    onPress={handleComingSoon}
                     style={{
                       position: "absolute",
                       top: -43,
