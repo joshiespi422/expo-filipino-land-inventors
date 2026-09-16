@@ -46,11 +46,14 @@ export default function CongratulationsPage() {
 
       if (token && user) {
         const userData = typeof user === "string" ? JSON.parse(user) : user;
+
         await setAuth(token, userData);
-        setTimeout(() => {
-          router.dismissAll();
+
+        router.dismissAll();
+
+        requestAnimationFrame(() => {
           router.replace("/(main)/welcomePage");
-        }, 500);
+        });
       } else {
         console.error("Missing credentials in params.");
         router.replace("/login");

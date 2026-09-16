@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -48,6 +49,8 @@ const slides = [
   },
 ];
 
+const WELCOME_COMPLETED_KEY = "welcome_page_completed";
+
 export default function CongratulationPage() {
   const router = useRouter();
 
@@ -63,7 +66,39 @@ export default function CongratulationPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [navigating, setNavigating] = useState(false);
 
-  // Splash animation
+  // ============================================================
+  // CHECK IF WELCOME PAGE WAS ALREADY COMPLETED
+  // ============================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const checkWelcomeStatus = async () => {
+      try {
+        const completed = await SecureStore.getItemAsync(WELCOME_COMPLETED_KEY);
+
+        if (completed === "true" && mounted) {
+          // This screen has already been completed.
+          // Never allow it to remain in navigation history.
+          router.replace("/(main)/");
+          return;
+        }
+      } catch (error) {
+        console.error("Welcome status check error:", error);
+      }
+    };
+
+    checkWelcomeStatus();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // ============================================================
+  // SPLASH ANIMATION
+  // ============================================================
+
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -130,6 +165,10 @@ export default function CongratulationPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  // ============================================================
+  // SLIDER
+  // ============================================================
+
   const handleScroll = (event: any) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / width);
 
@@ -145,23 +184,33 @@ export default function CongratulationPage() {
     }
   };
 
-  const handleGetStarted = () => {
+  // ============================================================
+  // COMPLETE WELCOME PAGE
+  // ============================================================
+
+  const handleGetStarted = async () => {
     if (isProcessing.current || navigating) return;
 
     isProcessing.current = true;
     setNavigating(true);
 
-    setTimeout(() => {
-      // Clear everything below (welcomePage, congratulations, etc.)
-      // so back/swipe from chat-support can never resurface this screen.
-      if (router.canDismiss()) {
-        router.dismissAll();
-      }
-      router.replace("/(main)/"); // absolute path, not "../(main)/"
-    }, 700);
+    try {
+      await SecureStore.setItemAsync(WELCOME_COMPLETED_KEY, "true");
+
+      console.log("✅ Welcome page completed.");
+      router.replace("/(main)/");
+    } catch (error) {
+      console.error("Welcome navigation error:", error);
+
+      setNavigating(false);
+      isProcessing.current = false;
+    }
   };
 
+  // ============================================================
   // SPLASH SCREEN
+  // ============================================================
+
   if (showSplash) {
     return (
       <View className="flex-1 bg-primary items-center justify-center">
@@ -174,7 +223,6 @@ export default function CongratulationPage() {
           }}
         />
 
-        {/* Smooth loading dots */}
         <View className="flex-row mt-8">
           <Animated.View
             style={{ opacity: dot1 }}
@@ -195,9 +243,12 @@ export default function CongratulationPage() {
     );
   }
 
+  // ============================================================
+  // WELCOME PAGE
+  // ============================================================
+
   return (
     <View className="flex-1 bg-white py-10">
-      {/* Slides */}
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -221,13 +272,11 @@ export default function CongratulationPage() {
             />
 
             <View className="mt-8 items-center">
-              {/* FIRST LINE */}
               <Text className="text-[28px] font-bold text-center leading-[42px]">
                 {item.normal}{" "}
                 <Text className="text-primary">{item.highlight}</Text>
               </Text>
 
-              {/* SECOND LINE */}
               <Text className="text-[28px] font-bold text-center leading-[42px]">
                 <Text className="text-primary">{item.second}</Text>{" "}
                 {item.second_normal}
