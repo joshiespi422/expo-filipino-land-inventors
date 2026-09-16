@@ -1,8 +1,8 @@
 import { CustomAlert } from "@/components/CustomAlert";
+import { CustomDatePicker } from "@/components/CustomDatePicker";
+import { CustomPicker } from "@/components/CustomPicker";
 import { profileService } from "@/services/profileService";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { Picker } from "@react-native-picker/picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -13,7 +13,6 @@ import {
   Dimensions,
   Image,
   Modal,
-  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -37,10 +36,6 @@ const MAX_ID_IMAGE_BYTES = MAX_ID_IMAGE_MB * 1024 * 1024;
 
 const NCR_REGION_CODE = "130000000";
 
-const PICKER_TEXT_STYLE = {
-  color: "#1f2937",
-};
-
 // ---------------------------------------------------------------------
 // ID CROP FRAME — supports both landscape and portrait orientations
 // Landscape: standard ID card ratio (85.6mm x 53.98mm) = 1.586
@@ -59,12 +54,37 @@ const MAX_ZOOM = 4;
 type IdField = "front_valid_id_picture" | "back_valid_id_picture";
 type IdOrientation = "landscape" | "portrait";
 
+const GENDER_OPTIONS = [
+  { label: "Male", value: "Male" },
+  { label: "Female", value: "Female" },
+  { label: "Other", value: "Other" },
+  { label: "Prefer not to say", value: "Prefer not to say" },
+];
+
+const VALID_ID_TYPE_OPTIONS = [
+  { label: "Philippine National ID (PhilSys)", value: "National ID" },
+  { label: "Passport", value: "Passport" },
+  { label: "Driver License", value: "Driver License" },
+  { label: "UMID", value: "UMID" },
+  { label: "SSS ID", value: "SSS ID" },
+  { label: "PhilHealth ID", value: "PhilHealth ID" },
+  { label: "Pag-IBIG Loyalty Card", value: "Pag-IBIG Loyalty Card" },
+  { label: "Postal ID", value: "Postal ID" },
+  { label: "PRC ID", value: "PRC ID" },
+  { label: "Voter ID", value: "Voter ID" },
+  { label: "Senior Citizen ID", value: "Senior Citizen ID" },
+  { label: "PWD ID", value: "PWD ID" },
+  { label: "School ID", value: "School ID" },
+  { label: "Company ID", value: "Company ID" },
+  { label: "Barangay ID", value: "Barangay ID" },
+  { label: "National Police Clearance", value: "National Police Clearance" },
+];
+
 export default function SetupProfileScreen() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [alert, setAlert] = useState({
     visible: false,
@@ -145,7 +165,12 @@ export default function SetupProfileScreen() {
       "postal_code",
     ];
 
-    const baseFieldsComplete = requiredFields.every((field) => !!form[field]);
+    const baseFieldsComplete = requiredFields.every(
+      (field) =>
+        form[field] !== null &&
+        form[field] !== undefined &&
+        String(form[field]).trim() !== "",
+    );
 
     const imagesUploaded =
       !!form.front_valid_id_picture?.uri && !!form.back_valid_id_picture?.uri;
@@ -385,10 +410,12 @@ export default function SetupProfileScreen() {
   |--------------------------------------------------------------------------
   */
 
-  const handleRegionChange = (value: string) => {
+  const handleRegionChange = (value: string | number) => {
+    const regionValue = String(value);
+
     setForm((prev: any) => ({
       ...prev,
-      region: value,
+      region: regionValue,
       province: "",
       city: "",
       barangay: "",
@@ -398,14 +425,14 @@ export default function SetupProfileScreen() {
     setCities([]);
     setBarangays([]);
 
-    if (!value) {
+    if (!regionValue) {
       return;
     }
 
-    if (value === NCR_REGION_CODE) {
-      fetchCitiesForNCR(value);
+    if (regionValue === NCR_REGION_CODE) {
+      fetchCitiesForNCR(regionValue);
     } else {
-      fetchProvinces(value);
+      fetchProvinces(regionValue);
     }
   };
 
@@ -511,20 +538,6 @@ export default function SetupProfileScreen() {
     }
   };
 
-  const formatBirthdate = (dateString: string) => {
-    if (!dateString) return "";
-
-    const [year, month, day] = dateString.split("-").map(Number);
-
-    const date = new Date(year, month - 1, day);
-
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-    });
-  };
-
   const handleIdCropCancel = () => {
     setShowIdCropModal(false);
     setRawIdImage(null);
@@ -583,36 +596,6 @@ export default function SetupProfileScreen() {
 
   /*
   |--------------------------------------------------------------------------
-  | DATE
-  |--------------------------------------------------------------------------
-  */
-
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    if (event.type === "dismissed") {
-      setShowDatePicker(false);
-      return;
-    }
-
-    setShowDatePicker(Platform.OS === "ios");
-
-    if (!selectedDate) {
-      return;
-    }
-
-    const year = selectedDate.getFullYear();
-
-    const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
-
-    const day = String(selectedDate.getDate()).padStart(2, "0");
-
-    setForm((prev: any) => ({
-      ...prev,
-      birthdate: `${year}-${month}-${day}`,
-    }));
-  };
-
-  /*
-  |--------------------------------------------------------------------------
   | LOADING
   |--------------------------------------------------------------------------
   */
@@ -639,11 +622,31 @@ export default function SetupProfileScreen() {
   const INPUT_STYLE =
     "border border-gray-200 bg-white p-4 rounded-2xl mb-4 text-gray-800 font-medium overflow-hidden";
 
-  const PICKER_CONTAINER_STYLE =
-    "border border-gray-200 rounded-2xl bg-white mb-4 overflow-hidden";
-
   const idFieldLabel = (field: IdField) =>
     field === "front_valid_id_picture" ? "Front ID" : "Back ID";
+
+  // Build picker options from fetched PSGC data
+  const regionOptions = regions.map((region) => ({
+    label: region.name,
+    value: region.code,
+  }));
+
+  const provinceOptions = provinces.map((province) => ({
+    label: province.name,
+    value: province.code,
+  }));
+
+  const cityOptions = cities.map((city) => ({
+    label: city.name,
+    value: city.code,
+  }));
+
+  const barangayOptions = barangays.map((barangay) => ({
+    label: barangay.name,
+    value: barangay.code,
+  }));
+
+  const isNCRSelected = form.region === NCR_REGION_CODE;
 
   /*
   |--------------------------------------------------------------------------
@@ -713,62 +716,33 @@ export default function SetupProfileScreen() {
 
           {/* GENDER */}
 
-          <Text className={LABEL_STYLE}>Gender</Text>
-
-          <View className={PICKER_CONTAINER_STYLE}>
-            <Picker
-              selectedValue={form.gender}
-              onValueChange={(value) =>
-                setForm((prev: any) => ({
-                  ...prev,
-                  gender: value,
-                }))
-              }
-              style={PICKER_TEXT_STYLE}
-              dropdownIconColor="#034194"
-            >
-              <Picker.Item label="Select Gender" value="" color="#9CA3AF" />
-
-              <Picker.Item label="Male" value="Male" color="#1f2937" />
-
-              <Picker.Item label="Female" value="Female" color="#1f2937" />
-
-              <Picker.Item label="Other" value="Other" color="#1f2937" />
-
-              <Picker.Item
-                label="Prefer not to say"
-                value="Prefer not to say"
-                color="#1f2937"
-              />
-            </Picker>
-          </View>
+          <CustomPicker
+            label="Gender"
+            placeholder="Select Gender"
+            options={GENDER_OPTIONS}
+            selectedValue={form.gender}
+            onValueChange={(value: string | number) =>
+              setForm((prev: any) => ({
+                ...prev,
+                gender: String(value),
+              }))
+            }
+          />
 
           {/* BIRTHDATE */}
 
-          <Text className={LABEL_STYLE}>Birthdate</Text>
-
-          <TouchableOpacity
-            onPress={() => setShowDatePicker(true)}
-            className={INPUT_STYLE}
-          >
-            <Text
-              className={form.birthdate ? "text-gray-800" : "text-gray-400"}
-            >
-              {form.birthdate ? formatBirthdate(form.birthdate) : ""}
-            </Text>
-          </TouchableOpacity>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={
-                form.birthdate ? new Date(form.birthdate) : new Date(2000, 0, 1)
-              }
-              mode="date"
-              display="spinner"
-              maximumDate={new Date()}
-              onChange={handleDateChange}
-            />
-          )}
+          <CustomDatePicker
+            label="Birthdate"
+            placeholder="Select Birthdate"
+            value={form.birthdate}
+            maximumDate={new Date()}
+            onChange={(dateString: string | number) =>
+              setForm((prev: any) => ({
+                ...prev,
+                birthdate: dateString,
+              }))
+            }
+          />
         </View>
 
         {/* =====================================================
@@ -786,143 +760,81 @@ export default function SetupProfileScreen() {
 
           {/* REGION */}
 
-          <Text className={LABEL_STYLE}>Region</Text>
-
-          <View className={PICKER_CONTAINER_STYLE}>
-            <Picker
-              selectedValue={form.region}
-              onValueChange={handleRegionChange}
-              style={PICKER_TEXT_STYLE}
-              dropdownIconColor="#034194"
-            >
-              <Picker.Item label="Select Region" value="" color="#9CA3AF" />
-
-              {regions.map((region) => (
-                <Picker.Item
-                  key={region.code}
-                  label={region.name}
-                  value={region.code}
-                  color="#1f2937"
-                />
-              ))}
-            </Picker>
-          </View>
+          <CustomPicker
+            label="Region"
+            placeholder="Select Region"
+            options={regionOptions}
+            selectedValue={form.region}
+            onValueChange={handleRegionChange}
+          />
 
           {/* PROVINCE */}
 
-          <Text className={LABEL_STYLE}>Province</Text>
+          <CustomPicker
+            label="Province"
+            placeholder={
+              isNCRSelected ? "N/A (NCR Selected)" : "Select Province"
+            }
+            options={provinceOptions}
+            selectedValue={form.province}
+            disabled={isNCRSelected}
+            onValueChange={(value: string | number) => {
+              const provinceValue = String(value);
 
-          <View className={PICKER_CONTAINER_STYLE}>
-            <Picker
-              selectedValue={form.province}
-              enabled={form.region !== NCR_REGION_CODE}
-              onValueChange={(value) => {
-                setForm((prev: any) => ({
-                  ...prev,
-                  province: value,
-                  city: "",
-                  barangay: "",
-                }));
+              setForm((prev: any) => ({
+                ...prev,
+                province: provinceValue,
+                city: "",
+                barangay: "",
+              }));
 
-                setCities([]);
-                setBarangays([]);
+              setCities([]);
+              setBarangays([]);
 
-                if (value) {
-                  fetchCities(value);
-                }
-              }}
-              style={PICKER_TEXT_STYLE}
-              dropdownIconColor="#034194"
-            >
-              <Picker.Item
-                label={
-                  form.region === NCR_REGION_CODE
-                    ? "N/A (NCR Selected)"
-                    : "Select Province"
-                }
-                value=""
-                color="#9CA3AF"
-              />
-
-              {provinces.map((province) => (
-                <Picker.Item
-                  key={province.code}
-                  label={province.name}
-                  value={province.code}
-                  color="#1f2937"
-                />
-              ))}
-            </Picker>
-          </View>
+              if (provinceValue) {
+                fetchCities(provinceValue);
+              }
+            }}
+          />
 
           {/* CITY */}
 
-          <Text className={LABEL_STYLE}>City / Municipality</Text>
+          <CustomPicker
+            label="City / Municipality"
+            placeholder="Select City / Municipality"
+            options={cityOptions}
+            selectedValue={form.city}
+            onValueChange={(value: string | number) => {
+              const cityValue = String(value);
 
-          <View className={PICKER_CONTAINER_STYLE}>
-            <Picker
-              selectedValue={form.city}
-              onValueChange={(value) => {
-                setForm((prev: any) => ({
-                  ...prev,
-                  city: value,
-                  barangay: "",
-                }));
+              setForm((prev: any) => ({
+                ...prev,
+                city: cityValue,
+                barangay: "",
+              }));
 
-                setBarangays([]);
+              setBarangays([]);
 
-                if (value) {
-                  fetchBarangays(value);
-                }
-              }}
-              style={PICKER_TEXT_STYLE}
-              dropdownIconColor="#034194"
-            >
-              <Picker.Item
-                label="Select City / Municipality"
-                value=""
-                color="#9CA3AF"
-              />
-
-              {cities.map((city) => (
-                <Picker.Item
-                  key={city.code}
-                  label={city.name}
-                  value={city.code}
-                  color="#1f2937"
-                />
-              ))}
-            </Picker>
-          </View>
+              if (cityValue) {
+                fetchBarangays(cityValue);
+              }
+            }}
+          />
 
           {/* BARANGAY */}
 
-          <Text className={LABEL_STYLE}>Barangay</Text>
-
-          <View className={PICKER_CONTAINER_STYLE}>
-            <Picker
-              selectedValue={form.barangay}
-              onValueChange={(value) =>
-                setForm((prev: any) => ({
-                  ...prev,
-                  barangay: value,
-                }))
-              }
-              style={PICKER_TEXT_STYLE}
-              dropdownIconColor="#034194"
-            >
-              <Picker.Item label="Select Barangay" value="" color="#9CA3AF" />
-
-              {barangays.map((barangay) => (
-                <Picker.Item
-                  key={barangay.code}
-                  label={barangay.name}
-                  value={barangay.code}
-                  color="#1f2937"
-                />
-              ))}
-            </Picker>
-          </View>
+          <CustomPicker
+            label="Barangay"
+            placeholder="Select Barangay"
+            options={barangayOptions}
+            selectedValue={form.barangay}
+            onValueChange={(value: string | number) =>
+              setForm((prev: any) => ({
+                ...prev,
+                barangay: String(value),
+              }))
+            }
+          />
 
           {/* STREET */}
 
@@ -986,99 +898,18 @@ export default function SetupProfileScreen() {
 
           {/* ID TYPE */}
 
-          <Text className={LABEL_STYLE}>Valid ID Type</Text>
-
-          <View className={PICKER_CONTAINER_STYLE}>
-            <Picker
-              selectedValue={form.valid_id_type}
-              onValueChange={(value) =>
-                setForm((prev: any) => ({
-                  ...prev,
-                  valid_id_type: value,
-                }))
-              }
-              style={PICKER_TEXT_STYLE}
-              dropdownIconColor="#034194"
-            >
-              <Picker.Item label="Select ID Type" value="" color="#9CA3AF" />
-
-              {/* GOVERNMENT IDs */}
-
-              <Picker.Item
-                label="Philippine National ID (PhilSys)"
-                value="National ID"
-                color="#1f2937"
-              />
-
-              <Picker.Item label="Passport" value="Passport" color="#1f2937" />
-
-              <Picker.Item
-                label="Driver License"
-                value="Driver License"
-                color="#1f2937"
-              />
-
-              <Picker.Item label="UMID" value="UMID" color="#1f2937" />
-
-              <Picker.Item label="SSS ID" value="SSS ID" color="#1f2937" />
-
-              <Picker.Item
-                label="PhilHealth ID"
-                value="PhilHealth ID"
-                color="#1f2937"
-              />
-
-              <Picker.Item
-                label="Pag-IBIG Loyalty Card"
-                value="Pag-IBIG Loyalty Card"
-                color="#1f2937"
-              />
-
-              <Picker.Item
-                label="Postal ID"
-                value="Postal ID"
-                color="#1f2937"
-              />
-
-              <Picker.Item label="PRC ID" value="PRC ID" color="#1f2937" />
-
-              <Picker.Item label="Voter ID" value="Voter ID" color="#1f2937" />
-
-              {/* OTHER VALID IDs */}
-
-              <Picker.Item
-                label="Senior Citizen ID"
-                value="Senior Citizen ID"
-                color="#1f2937"
-              />
-
-              <Picker.Item label="PWD ID" value="PWD ID" color="#1f2937" />
-
-              <Picker.Item
-                label="School ID"
-                value="School ID"
-                color="#1f2937"
-              />
-
-              <Picker.Item
-                label="Company ID"
-                value="Company ID"
-                color="#1f2937"
-              />
-
-              <Picker.Item
-                label="Barangay ID"
-                value="Barangay ID"
-                color="#1f2937"
-              />
-
-              <Picker.Item
-                label="National Police Clearance"
-                value="National Police Clearance"
-                color="#1f2937"
-              />
-            </Picker>
-          </View>
+          <CustomPicker
+            label="Valid ID Type"
+            placeholder="Select ID Type"
+            options={VALID_ID_TYPE_OPTIONS}
+            selectedValue={form.valid_id_type}
+            onValueChange={(value: string | number) =>
+              setForm((prev: any) => ({
+                ...prev,
+                valid_id_type: String(value),
+              }))
+            }
+          />
 
           {/* ID NUMBER */}
 
@@ -1575,9 +1406,6 @@ function IdCropScreen({
         <Text className="text-white font-bold text-lg mb-2 text-center">
           {title}
         </Text>
-        {/* <Text className="text-white/70 text-xs mb-6 text-center">
-          Drag with 1 finger to move • Pinch with 2 fingers to zoom
-        </Text> */}
 
         <GestureDetector gesture={composedGesture}>
           <View
@@ -1601,17 +1429,17 @@ function IdCropScreen({
         <View className="flex-row gap-x-2 mt-6 justify-center">
           <TouchableOpacity
             onPress={() => setOrientation("landscape")}
-            className={`px-5 py-2 rounded-full border-2 flex-row items-center gap-x-2 ${
-              orientation === "landscape"
-                ? "bg-[#034194] border-[#034194]"
-                : "bg-transparent border-white/30"
-            }`}
+            style={{
+              backgroundColor:
+                orientation === "landscape" ? "#034194" : "transparent",
+              borderColor:
+                orientation === "landscape"
+                  ? "#034194"
+                  : "rgba(255,255,255,0.3)",
+            }}
+            className="px-5 py-2 rounded-full border-2 flex-row items-center gap-x-2"
           >
-            <Ionicons
-              name="phone-landscape-outline"
-              size={18}
-              color={orientation === "landscape" ? "#fff" : "#fff"}
-            />
+            <Ionicons name="phone-landscape-outline" size={18} color="#fff" />
             <Text
               className={`font-bold text-sm ${
                 orientation === "landscape" ? "text-white" : "text-white/70"
@@ -1623,17 +1451,17 @@ function IdCropScreen({
 
           <TouchableOpacity
             onPress={() => setOrientation("portrait")}
-            className={`px-5 py-2 rounded-full border-2 flex-row items-center gap-x-2 ${
-              orientation === "portrait"
-                ? "bg-[#034194] border-[#034194]"
-                : "bg-transparent border-white/30"
-            }`}
+            style={{
+              backgroundColor:
+                orientation === "portrait" ? "#034194" : "transparent",
+              borderColor:
+                orientation === "portrait"
+                  ? "#034194"
+                  : "rgba(255,255,255,0.3)",
+            }}
+            className="px-5 py-2 rounded-full border-2 flex-row items-center gap-x-2"
           >
-            <Ionicons
-              name="phone-portrait-outline"
-              size={18}
-              color={orientation === "portrait" ? "#fff" : "#fff"}
-            />
+            <Ionicons name="phone-portrait-outline" size={18} color="#fff" />
             <Text
               className={`font-bold text-sm ${
                 orientation === "portrait" ? "text-white" : "text-white/70"
@@ -1644,10 +1472,6 @@ function IdCropScreen({
           </TouchableOpacity>
         </View>
 
-        {/* <Text className="text-white/70 font-bold mt-4">
-          {zoomDisplay.toFixed(2)}x
-        </Text> */}
-
         <View className="w-full mt-8 gap-y-3 max-w-[320px]">
           <TouchableOpacity
             onPress={handleCropConfirm}
@@ -1657,20 +1481,9 @@ function IdCropScreen({
             {cropping ? (
               <ActivityIndicator color="white" />
             ) : (
-              <>
-                <Text className="text-white font-bold text-base ml-2">
-                  Done
-                </Text>
-              </>
+              <Text className="text-white font-bold text-base ml-2">Done</Text>
             )}
           </TouchableOpacity>
-          {/* <TouchableOpacity
-            onPress={onCancel}
-            disabled={cropping}
-            className="w-full py-3.5 items-center"
-          >
-            <Text className="text-white/70 font-bold text-base">Cancel</Text>
-          </TouchableOpacity> */}
         </View>
       </View>
     </GestureHandlerRootView>
