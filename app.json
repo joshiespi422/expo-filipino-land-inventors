@@ -46,7 +46,7 @@
         "USE_BIOMETRIC",
         "USE_FINGERPRINT"
       ],
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "resize"
     },
 
     "plugins": [
