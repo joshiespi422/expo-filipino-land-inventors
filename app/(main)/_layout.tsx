@@ -558,32 +558,13 @@ export default function MainLayout() {
                 options={{ animation: "fade" }}
               />
 
-              <Stack.Screen name="news/index" options={{ animation: "fade" }} />
-
-              <Stack.Screen
-                name="news/search"
-                options={{ animation: "fade" }}
-              />
-
               <Stack.Screen
                 name="history/index"
                 options={{ animation: "fade" }}
               />
 
               <Stack.Screen
-                name="news/details"
-                options={{ animation: "fade" }}
-              />
-
-              <Stack.Screen name="load/index" options={{ animation: "fade" }} />
-
-              <Stack.Screen
                 name="notification/index"
-                options={{ animation: "fade" }}
-              />
-
-              <Stack.Screen
-                name="intellectual/index"
                 options={{ animation: "fade" }}
               />
             </Stack>
