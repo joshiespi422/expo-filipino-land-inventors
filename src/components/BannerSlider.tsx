@@ -22,73 +22,154 @@ interface BannerSliderProps {
 
 export const BannerSlider: React.FC<BannerSliderProps> = ({ ads, loading }) => {
   const scrollViewRef = useRef<ScrollView>(null);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAd, setSelectedAd] = useState<AdItem | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // 1. Get real-time screen width
+  // Get real-time screen width
   const { width: windowWidth } = useWindowDimensions();
 
-  // 2. Cap maximum width (380px for phones, max 450px for tablets)
+  // Cap maximum width
   const bannerWidth = Math.min(windowWidth - 48, 450);
 
-  // 3. Set fixed aspect ratio height (2:1 ratio -> height is half the width)
+  // Fixed 2:1 aspect ratio
   const bannerHeight = bannerWidth / 2;
 
-  // Auto-slide effect
+  /**
+   * Keep current index valid when the ads list changes.
+   *
+   * This prevents the slider from pointing to an index
+   * that no longer exists after ads are refreshed.
+   */
   useEffect(() => {
-    if (loading || ads.length <= 1) return;
+    if (ads.length === 0) {
+      setCurrentIndex(0);
+      return;
+    }
+
+    setCurrentIndex((prevIndex) => Math.min(prevIndex, ads.length - 1));
+  }, [ads.length]);
+
+  /**
+   * Auto-slide timer.
+   *
+   * The timer only updates the current index.
+   * The actual ScrollView movement is handled separately
+   * in the effect below.
+   */
+  useEffect(() => {
+    if (loading || ads.length <= 1) {
+      return;
+    }
 
     const interval = setInterval(() => {
       setCurrentIndex((prevIndex) => {
-        const nextIndex = (prevIndex + 1) % ads.length;
-        scrollViewRef.current?.scrollTo({
-          x: nextIndex * bannerWidth,
-          animated: true,
-        });
-        return nextIndex;
+        return (prevIndex + 1) % ads.length;
       });
     }, 5000);
 
-    return () => clearInterval(interval);
-  }, [ads, loading, bannerWidth]);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [ads.length, loading]);
 
+  /**
+   * Scroll to the current banner whenever the index changes.
+   *
+   * Keeping scrollTo() outside the state updater avoids
+   * performing side effects while React is calculating state.
+   */
+  useEffect(() => {
+    if (loading || ads.length <= 1 || bannerWidth <= 0) {
+      return;
+    }
+
+    scrollViewRef.current?.scrollTo({
+      x: currentIndex * bannerWidth,
+      animated: true,
+    });
+  }, [currentIndex, bannerWidth, loading, ads.length]);
+
+  /**
+   * Update the indicator when the user manually swipes.
+   */
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (bannerWidth <= 0 || ads.length === 0) {
+      return;
+    }
+
     const contentOffsetX = event.nativeEvent.contentOffset.x;
-    if (bannerWidth > 0) {
-      const index = Math.round(contentOffsetX / bannerWidth);
-      setCurrentIndex(index);
-    }
-  };
 
-  const handleAdPress = (ad: AdItem) => {
-    if (ad.link) {
-      setSelectedAd(ad);
-      setModalVisible(true);
-    }
-  };
+    const index = Math.round(contentOffsetX / bannerWidth);
 
-  const handleConfirmLink = async () => {
-    if (selectedAd?.link) {
-      setModalVisible(false);
-      const canOpen = await Linking.canOpenURL(selectedAd.link);
-      if (canOpen) {
-        await Linking.openURL(selectedAd.link);
+    const safeIndex = Math.max(0, Math.min(index, ads.length - 1));
+
+    setCurrentIndex((prevIndex) => {
+      if (prevIndex === safeIndex) {
+        return prevIndex;
       }
+
+      return safeIndex;
+    });
+  };
+
+  /**
+   * Open external-link confirmation modal.
+   */
+  const handleAdPress = (ad: AdItem) => {
+    if (!ad.link) {
+      return;
+    }
+
+    setSelectedAd(ad);
+    setModalVisible(true);
+  };
+
+  /**
+   * Open the selected external link.
+   */
+  const handleConfirmLink = async () => {
+    if (!selectedAd?.link) {
+      return;
+    }
+
+    const link = selectedAd.link;
+
+    setModalVisible(false);
+
+    try {
+      const canOpen = await Linking.canOpenURL(link);
+
+      if (canOpen) {
+        await Linking.openURL(link);
+      }
+    } catch (error) {
+      console.error("Failed to open external link:", error);
     }
   };
 
+  /**
+   * Loading state
+   */
   if (loading) {
     return (
       <View style={styles.centerWrapper}>
         <Skeleton
           className="my-2"
-          style={{ width: bannerWidth, height: 140, borderRadius: 16 }}
+          style={{
+            width: bannerWidth,
+            height: 140,
+            borderRadius: 16,
+          }}
         />
       </View>
     );
   }
 
+  /**
+   * No advertisements
+   */
   if (!ads || ads.length === 0) {
     return null;
   }
@@ -100,7 +181,10 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({ ads, loading }) => {
         <View
           style={[
             styles.bannerContainer,
-            { width: bannerWidth, height: bannerHeight },
+            {
+              width: bannerWidth,
+              height: bannerHeight,
+            },
           ]}
         >
           <ScrollView
@@ -118,7 +202,10 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({ ads, loading }) => {
                 key={ad.id}
                 activeOpacity={0.9}
                 onPress={() => handleAdPress(ad)}
-                style={{ width: bannerWidth, height: bannerHeight }}
+                style={{
+                  width: bannerWidth,
+                  height: bannerHeight,
+                }}
               >
                 <Image
                   source={{ uri: ad.image }}
@@ -141,7 +228,7 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({ ads, loading }) => {
                 backgroundColor: currentIndex === index ? "#034194" : "#cbd5e1",
                 width: currentIndex === index ? 16 : 6,
               }}
-              className="h-1.5 rounded-full transition-all"
+              className="h-1.5 rounded-full"
             />
           ))}
         </View>
@@ -157,13 +244,16 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({ ads, loading }) => {
         onRequestClose={() => setModalVisible(false)}
       >
         <View
-          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          style={{
+            backgroundColor: "rgba(0,0,0,0.5)",
+          }}
           className="flex-1 justify-center items-center px-6"
         >
           <View className="bg-white p-6 rounded-3xl w-full max-w-[360px] items-center shadow-xl">
             <Text className="text-xl font-bold text-slate-800 text-center mb-2">
               Visit External Link?
             </Text>
+
             <Text className="text-slate-500 text-center mb-6 leading-5">
               You are about to leave the app and open:{"\n"}
               <Text className="font-semibold text-slate-700">
@@ -202,13 +292,16 @@ const styles = StyleSheet.create({
     width: "100%",
     marginBottom: 20,
   },
+
   centerWrapper: {
     width: "100%",
     alignItems: "center",
   },
+
   bannerContainer: {
     overflow: "hidden",
   },
+
   image: {
     width: "100%",
     height: "100%",
