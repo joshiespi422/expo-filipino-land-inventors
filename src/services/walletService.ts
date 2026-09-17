@@ -1,5 +1,7 @@
 import api from "./api";
 
+///////////////// Wallet //////////////////
+
 export interface WalletResponse {
   data: {
     id: number;
@@ -59,7 +61,9 @@ export const getWalletTransactions = async (): Promise<WalletTransaction[]> => {
 };
 
 // Fetch dynamic preset shortcuts from the server
-export const getWalletPresets = async (): Promise<{ data: WalletPreset[] }> => {
+export const getWalletPresets = async (): Promise<{
+  data: WalletPreset[];
+}> => {
   const res = await api.get("/wallet/presets");
   return res.data;
 };
@@ -88,7 +92,8 @@ export interface PaymentMethod {
   gateway_type: string;
 }
 
-/////////////// Wallet ///////////////////
+///////////////// Wallet Transfer //////////////////
+
 export interface TransferPayload {
   channel_id: string;
   amount: number;
@@ -129,5 +134,33 @@ export const getTransferStatus = async (
   reference: string,
 ): Promise<{ data: TransferResource }> => {
   const res = await api.get(`/wallet/transfer/${reference}`);
+  return res.data;
+};
+
+///////////////// QR Resolution //////////////////
+
+export interface ResolveQrPayload {
+  qr_payload: string;
+}
+
+export interface ResolveQrResource {
+  provider?: string;
+  account_name?: string;
+  account_number?: string;
+  amount?: number;
+  qr_type?: string;
+  raw?: string;
+}
+
+export interface ResolveQrResponse {
+  success: boolean;
+  message: string;
+  data?: ResolveQrResource;
+}
+
+export const resolveQr = async (
+  payload: ResolveQrPayload,
+): Promise<ResolveQrResponse> => {
+  const res = await api.post("/wallet/transfer/resolve-qr", payload);
   return res.data;
 };

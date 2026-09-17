@@ -1,14 +1,16 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { getWalletBalance } from "@/services/walletService";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Modal,
+  Platform,
+  Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,9 +18,15 @@ import "../../global.css";
 
 const MIN_TRANSFER = 1.0;
 
+// Match your Tailwind "primary" color token here
+const PRIMARY_COLOR = "#034194";
+
+// Kept in sync with App\Services\Transfer\TransferService::CHANNELS
 const CHANNELS = [
+  { id: "instapay", name: "InstaPay (QR Ph)", category: "Payment Network" },
   { id: "gcash", name: "GCash", category: "E-Wallet" },
   { id: "maya", name: "Maya", category: "E-Wallet" },
+  { id: "aub", name: "AUB", category: "Bank" },
   { id: "bdo", name: "BDO Unibank", category: "Bank" },
   { id: "bpi", name: "BPI", category: "Bank" },
   { id: "landbank", name: "LandBank", category: "Bank" },
@@ -34,21 +42,79 @@ const PURPOSES = [
   "Others",
 ];
 
+const MODE_TABS: { key: "manual" | "qr"; label: string }[] = [
+  { key: "manual", label: "Account No." },
+  { key: "qr", label: "Transfer via QR" },
+];
+
+const toggleStyles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    backgroundColor: "#f1f5f9",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+  },
+  tabBase: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  tabActive: {
+    backgroundColor: "#ffffff",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
+  },
+  labelBase: {
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+  labelActive: {
+    color: PRIMARY_COLOR,
+  },
+  labelInactive: {
+    color: "#94a3b8",
+  },
+});
+
 export default function TransferPage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  const params = useLocalSearchParams<{
+    scannedName?: string;
+    scannedNumber?: string;
+    scannedAmount?: string;
+    scannedChannelId?: string;
+    scannedRaw?: string;
+  }>();
+  const lastProcessedRaw = useRef<string | null>(null);
 
   const [pageLoading, setPageLoading] = useState(true);
   const [walletBalance, setWalletBalance] = useState(0);
 
   // Form Fields
   const [transferMode, setTransferMode] = useState<"manual" | "qr">("manual");
-  const [selectedChannel, setSelectedChannel] = useState(CHANNELS[0]);
+  const [selectedChannel, setSelectedChannel] = useState(CHANNELS[1]); // Default manual to GCash
   const [accountName, setAccountName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [purpose, setPurpose] = useState(PURPOSES[0]);
   const [remarks, setRemarks] = useState("");
+
+  // QR-specific state
+  const [qrScanned, setQrScanned] = useState(false);
+  const [qrAmountLocked, setQrAmountLocked] = useState(false);
 
   // Modals
   const [showChannelModal, setShowChannelModal] = useState(false);
@@ -75,10 +141,78 @@ export default function TransferPage() {
   const handleAmountChange = (value: string) => {
     let raw = value.replace(/[^0-9]/g, "");
     if (raw) {
-      setAmount(parseInt(raw).toLocaleString());
+      setAmount(parseInt(raw, 10).toLocaleString());
     } else {
       setAmount("");
     }
+  };
+
+  // Process scanner return data
+  useEffect(() => {
+    if (!params.scannedRaw || params.scannedRaw === lastProcessedRaw.current) {
+      return;
+    }
+    lastProcessedRaw.current = params.scannedRaw;
+
+    setTransferMode("qr");
+    setAccountName(params.scannedName || "");
+    setAccountNumber(params.scannedNumber || "");
+
+    // Auto set channel to InstaPay for QR transfers
+    setSelectedChannel(
+      CHANNELS.find((c) => c.id === "instapay") || {
+        id: "instapay",
+        name: "InstaPay (QR Ph)",
+        category: "Payment Network",
+      },
+    );
+
+    if (params.scannedAmount) {
+      handleAmountChange(params.scannedAmount);
+      setQrAmountLocked(true);
+    } else {
+      setQrAmountLocked(false);
+    }
+
+    setQrScanned(true);
+  }, [params.scannedRaw]);
+
+  const handleModeChange = (mode: "manual" | "qr") => {
+    if (mode === "qr") {
+      setTransferMode("qr");
+      setSelectedChannel(
+        CHANNELS.find((c) => c.id === "instapay") || {
+          id: "instapay",
+          name: "InstaPay (QR Ph)",
+          category: "Payment Network",
+        },
+      );
+      router.push("./scanqrcode");
+      return;
+    }
+
+    if (mode === transferMode) return;
+
+    setTransferMode("manual");
+    setSelectedChannel(CHANNELS[1]); // Reset back to default manual channel
+    setAccountName("");
+    setAccountNumber("");
+    setQrScanned(false);
+    if (qrAmountLocked) {
+      setAmount("");
+    }
+    setQrAmountLocked(false);
+  };
+
+  const handleRescan = () => {
+    setQrScanned(false);
+    setAccountName("");
+    setAccountNumber("");
+    if (qrAmountLocked) {
+      setAmount("");
+    }
+    setQrAmountLocked(false);
+    router.push("./scanqrcode");
   };
 
   const cleanAmount = parseFloat(amount.replace(/,/g, "") || "0");
@@ -86,8 +220,9 @@ export default function TransferPage() {
   const isValid =
     cleanAmount >= MIN_TRANSFER &&
     cleanAmount <= walletBalance &&
-    (transferMode === "qr" ||
-      (accountName.trim() !== "" && accountNumber.trim() !== ""));
+    (transferMode === "qr"
+      ? qrScanned && accountNumber.trim() !== ""
+      : accountName.trim() !== "" && accountNumber.trim() !== "");
 
   const handleContinue = () => {
     if (!isValid) return;
@@ -96,12 +231,11 @@ export default function TransferPage() {
       pathname: "/review",
       params: {
         amount: cleanAmount,
-        channelId: selectedChannel.id,
-        channelName: selectedChannel.name,
-        recipientName:
-          transferMode === "qr" ? "QR Scanned Account" : accountName,
-        recipientNumber:
-          transferMode === "qr" ? "Scanned via QR" : accountNumber,
+        channelId: transferMode === "qr" ? "instapay" : selectedChannel.id,
+        channelName:
+          transferMode === "qr" ? "InstaPay (QR Ph)" : selectedChannel.name,
+        recipientName: accountName,
+        recipientNumber: accountNumber,
         transferMode,
         purpose,
         remarks,
@@ -137,71 +271,115 @@ export default function TransferPage() {
             </View>
 
             {/* TRANSFER MODE TOGGLE */}
-            <View className="flex-row bg-slate-100 rounded-xl p-1 mb-5">
-              <TouchableOpacity
-                onPress={() => setTransferMode("manual")}
-                className={`flex-1 py-3 rounded-lg items-center ${
-                  transferMode === "manual" ? "bg-white shadow-sm" : ""
-                }`}
-              >
-                <Text
-                  className={`font-bold text-sm ${
-                    transferMode === "manual"
-                      ? "text-primary"
-                      : "text-slate-400"
-                  }`}
-                >
-                  Account No.
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setTransferMode("qr")}
-                className={`flex-1 py-3 rounded-lg items-center ${
-                  transferMode === "qr" ? "bg-white shadow-sm" : ""
-                }`}
-              >
-                <Text
-                  className={`font-bold text-sm ${
-                    transferMode === "qr" ? "text-primary" : "text-slate-400"
-                  }`}
-                >
-                  Transfer via QR
-                </Text>
-              </TouchableOpacity>
+            <View style={toggleStyles.container}>
+              {MODE_TABS.map((tab) => {
+                const isActive = transferMode === tab.key;
+                return (
+                  <Pressable
+                    key={tab.key}
+                    onPress={() => handleModeChange(tab.key)}
+                    style={[
+                      toggleStyles.tabBase,
+                      isActive && toggleStyles.tabActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        toggleStyles.labelBase,
+                        isActive
+                          ? toggleStyles.labelActive
+                          : toggleStyles.labelInactive,
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             {/* TRANSFER DETAILS FORM */}
             {transferMode === "qr" ? (
-              <View className="border border-slate-200 bg-slate-50 rounded-xl p-6 items-center mb-5">
-                <Text className="text-slate-700 font-bold mb-1">
-                  Scan Recipient QR
-                </Text>
-                <Text className="text-slate-400 text-xs text-center mb-4">
-                  Upload or scan an InstaPay / QR Ph code
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    Alert.alert(
-                      "QR Scanner",
-                      "Trigger camera / QR scanner here.",
-                    )
-                  }
-                  className="bg-primary px-6 py-3 rounded-xl"
-                >
-                  <Text className="text-white font-bold">
-                    Open Camera / Scan
+              qrScanned ? (
+                <View className="gap-y-4 mb-5">
+                  <View className="border border-emerald-200 bg-emerald-50 rounded-xl p-4">
+                    <View className="flex-row justify-between items-center mb-1">
+                      <Text className="text-emerald-700 text-xs font-bold">
+                        QR Ph Scanned
+                      </Text>
+                      <Text className="text-[10px] font-bold text-emerald-800 bg-emerald-200 px-2.5 py-0.5 rounded-full">
+                        InstaPay
+                      </Text>
+                    </View>
+                    <Text className="text-slate-800 font-bold">
+                      {accountName || "Unknown recipient"}
+                    </Text>
+                    <Text className="text-slate-500 text-xs">
+                      {accountNumber ||
+                        "No account number detected — enter it below"}
+                    </Text>
+                  </View>
+
+                  <View>
+                    <Text className="text-slate-600 text-xs font-bold mb-1">
+                      Recipient Name
+                    </Text>
+                    <TextInput
+                      value={accountName}
+                      onChangeText={setAccountName}
+                      placeholder="Recipient name"
+                      className="border border-slate-200 rounded-xl p-4 text-slate-800 bg-white"
+                    />
+                  </View>
+
+                  <View>
+                    <Text className="text-slate-600 text-xs font-bold mb-1">
+                      Account / Mobile Number
+                    </Text>
+                    <TextInput
+                      value={accountNumber}
+                      onChangeText={setAccountNumber}
+                      keyboardType="number-pad"
+                      placeholder="Account number"
+                      className="border border-slate-200 rounded-xl p-4 text-slate-800 bg-white"
+                    />
+                  </View>
+
+                  <Pressable
+                    onPress={handleRescan}
+                    className="items-center py-2"
+                  >
+                    <Text className="text-primary text-xs font-bold">
+                      Scan a different QR code
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View className="border border-slate-200 bg-slate-50 rounded-xl p-6 items-center mb-5">
+                  <Text className="text-slate-700 font-bold mb-1">
+                    Scan Recipient QR
                   </Text>
-                </TouchableOpacity>
-              </View>
+                  <Text className="text-slate-400 text-xs text-center mb-4">
+                    You backed out before scanning.
+                  </Text>
+                  <Pressable
+                    onPress={() => router.push("./scanqrcode")}
+                    className="bg-primary px-6 py-3 rounded-xl"
+                  >
+                    <Text className="text-white font-bold">
+                      Open Camera / Scan
+                    </Text>
+                  </Pressable>
+                </View>
+              )
             ) : (
               <View className="gap-y-4 mb-5">
-                {/* BANK / E-WALLET PICKER */}
+                {/* BANK / E-WALLET PICKER (Manual Mode Only) */}
                 <View>
                   <Text className="text-slate-600 text-xs font-bold mb-1">
                     Bank / E-Wallet
                   </Text>
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => setShowChannelModal(true)}
                     className="border border-slate-200 rounded-xl p-4 bg-white flex-row justify-between items-center"
                   >
@@ -211,7 +389,7 @@ export default function TransferPage() {
                     <Text className="text-slate-400 text-xs">
                       Tap to change
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
 
                 {/* ACCOUNT NAME */}
@@ -253,14 +431,21 @@ export default function TransferPage() {
                 <TextInput
                   value={amount}
                   onChangeText={handleAmountChange}
+                  editable={!qrAmountLocked}
                   keyboardType="numeric"
                   placeholder="0.00"
-                  className="text-slate-800 text-xl font-bold py-3 flex-1"
+                  className={`text-xl font-bold py-3 flex-1 ${
+                    qrAmountLocked ? "text-slate-400" : "text-slate-800"
+                  }`}
                 />
               </View>
               {cleanAmount > walletBalance ? (
-                <Text className="text-xs text-red-500 mt-1">
+                <Text className="text-xs text-[#ef4444] mt-1">
                   Exceeds available balance
+                </Text>
+              ) : qrAmountLocked ? (
+                <Text className="text-xs text-emerald-600 mt-1">
+                  Amount set by the scanned QR code
                 </Text>
               ) : (
                 <Text className="text-xs text-slate-400 mt-1">
@@ -274,13 +459,13 @@ export default function TransferPage() {
               <Text className="text-slate-600 text-xs font-bold mb-1">
                 Purpose (Optional)
               </Text>
-              <TouchableOpacity
+              <Pressable
                 onPress={() => setShowPurposeModal(true)}
                 className="border border-slate-200 rounded-xl p-4 bg-white flex-row justify-between items-center"
               >
                 <Text className="text-slate-800">{purpose}</Text>
                 <Text className="text-slate-400 text-xs">Select</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {/* REMARKS */}
@@ -301,7 +486,7 @@ export default function TransferPage() {
 
       {/* FOOTER */}
       <View className="w-full p-5 bg-white border-t border-slate-200">
-        <TouchableOpacity
+        <Pressable
           onPress={handleContinue}
           disabled={!isValid}
           className={`h-14 rounded-xl justify-center items-center ${
@@ -309,7 +494,7 @@ export default function TransferPage() {
           }`}
         >
           <Text className="text-white font-bold text-lg">Continue</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {/* BANK / WALLET MODAL */}
@@ -329,8 +514,8 @@ export default function TransferPage() {
               Select Bank or E-Wallet
             </Text>
             <ScrollView>
-              {CHANNELS.map((item) => (
-                <TouchableOpacity
+              {CHANNELS.filter((item) => item.id !== "instapay").map((item) => (
+                <Pressable
                   key={item.id}
                   onPress={() => {
                     setSelectedChannel(item);
@@ -342,15 +527,15 @@ export default function TransferPage() {
                   <Text className="text-xs text-slate-400">
                     {item.category}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </ScrollView>
-            <TouchableOpacity
+            <Pressable
               onPress={() => setShowChannelModal(false)}
               className="mt-4 p-3 bg-slate-100 rounded-xl items-center"
             >
               <Text className="font-bold text-slate-600">Close</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -370,7 +555,7 @@ export default function TransferPage() {
           >
             <Text className="font-bold text-lg mb-4">Select Purpose</Text>
             {PURPOSES.map((item) => (
-              <TouchableOpacity
+              <Pressable
                 key={item}
                 onPress={() => {
                   setPurpose(item);
@@ -379,14 +564,14 @@ export default function TransferPage() {
                 className="py-3 border-b border-slate-100"
               >
                 <Text className="text-slate-800">{item}</Text>
-              </TouchableOpacity>
+              </Pressable>
             ))}
-            <TouchableOpacity
+            <Pressable
               onPress={() => setShowPurposeModal(false)}
               className="mt-4 p-3 bg-slate-100 rounded-xl items-center"
             >
               <Text className="font-bold text-slate-600">Close</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </Modal>

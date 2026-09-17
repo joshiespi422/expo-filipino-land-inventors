@@ -1,0 +1,208 @@
+import { CustomAlert } from "@/components/CustomAlert";
+import { resolveQr } from "@/services/walletService";
+import { Ionicons } from "@expo/vector-icons";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+
+export default function CameraScreen() {
+  const router = useRouter();
+
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const [resolvingQr, setResolvingQr] = useState(false);
+
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  /**
+   * Prevent duplicate QR scans.
+   */
+  const scannedRef = useRef(false);
+
+  // Permission handling
+  useEffect(() => {
+    if (!permission) {
+      return;
+    }
+
+    if (!permission.granted && permission.canAskAgain) {
+      requestPermission();
+    }
+  }, [permission?.granted]);
+
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
+    if (scannedRef.current || resolvingQr) {
+      return;
+    }
+
+    const rawQr = data?.trim();
+
+    if (!rawQr) {
+      return;
+    }
+
+    scannedRef.current = true;
+    setResolvingQr(true);
+
+    try {
+      /**
+       * Send the complete QR payload to Laravel.
+       *
+       * We intentionally don't extract an account number
+       * locally.
+       */
+      const result = await resolveQr({
+        qr_payload: rawQr,
+      });
+
+      if (!result.success || !result.data) {
+        throw new Error(result.message || "Unable to identify this QR code.");
+      }
+
+      const accountName = result.data.account_name ?? "";
+      const accountNumber = result.data.account_number ?? "";
+
+      if (!accountNumber) {
+        throw new Error(
+          "The recipient account could not be identified from this QR code. Please use a supported QR code or enter the recipient details manually.",
+        );
+      }
+
+      router.replace({
+        pathname: "../",
+        params: {
+          scannedName: accountName,
+          scannedNumber: accountNumber,
+
+          scannedAmount:
+            result.data.amount !== undefined && result.data.amount !== null
+              ? String(result.data.amount)
+              : "",
+
+          scannedProvider: result.data.provider ?? "",
+
+          scannedQrType: result.data.qr_type ?? "",
+
+          scannedRaw: result.data.raw ?? rawQr,
+        },
+      });
+    } catch (error: any) {
+      scannedRef.current = false;
+
+      setAlertConfig({
+        visible: true,
+        title: "QR Code Error",
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Unable to identify this QR code.",
+      });
+    } finally {
+      setResolvingQr(false);
+    }
+  };
+
+  const handleCloseAlert = () => {
+    setAlertConfig((prev) => ({
+      ...prev,
+      visible: false,
+    }));
+
+    scannedRef.current = false;
+  };
+
+  // LOADING
+  if (!permission) {
+    return (
+      <View className="flex-1 items-center justify-center bg-black">
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
+  }
+
+  // NO PERMISSION
+  if (!permission.granted) {
+    return (
+      <View className="flex-1 items-center justify-center bg-black px-6">
+        <Ionicons name="camera-outline" size={48} color="white" />
+
+        <Text className="text-white text-lg text-center mb-4 mt-4">
+          Camera permission is required
+        </Text>
+
+        <TouchableOpacity
+          onPress={requestPermission}
+          className="bg-[#C6890F] px-6 py-3 rounded-xl"
+        >
+          <Text className="text-white font-bold">Grant Permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // CAMERA VIEW
+  return (
+    <View className="flex-1 bg-black">
+      {/* CAMERA */}
+      <CameraView
+        style={{ flex: 1 }}
+        facing="back"
+        barcodeScannerSettings={{
+          barcodeTypes: ["qr"],
+        }}
+        onBarcodeScanned={resolvingQr ? undefined : handleBarcodeScanned}
+      />
+
+      {/* UI OVERLAY */}
+      <View className="absolute inset-0 bg-black/40 items-center justify-center">
+        {/* TOP BAR */}
+        <View className="absolute top-12 w-full flex-row justify-between px-5">
+          {/* BACK */}
+          <TouchableOpacity
+            onPress={() => router.back()}
+            disabled={resolvingQr}
+            className="bg-black/60 p-3 rounded-full"
+          >
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+
+          <Text className="text-white text-lg font-semibold">QR Scanner</Text>
+
+          <View style={{ width: 40 }} />
+        </View>
+
+        {/* SCAN FRAME */}
+        <View className="items-center justify-center">
+          <View className="w-[270px] h-[270px] border-2 border-[#C6890F] rounded-3xl bg-black/10" />
+
+          {resolvingQr ? (
+            <View className="items-center mt-4">
+              <ActivityIndicator size="small" color="white" />
+
+              <Text className="text-white mt-3 text-sm font-semibold">
+                Verifying QR code...
+              </Text>
+            </View>
+          ) : (
+            <Text className="text-white mt-4 text-sm opacity-80">
+              Point your camera at QR code
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* CUSTOM ALERT */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        onClose={handleCloseAlert}
+      />
+    </View>
+  );
+}
