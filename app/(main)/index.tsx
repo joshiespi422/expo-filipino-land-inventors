@@ -89,8 +89,6 @@ export default function DashboardPage() {
       if (adsResponse.success) {
         setAds(adsResponse.data);
       }
-    } catch (error) {
-      console.error("Dashboard Load Error:", error);
     } finally {
       setPageLoading(false);
     }
@@ -115,19 +113,13 @@ export default function DashboardPage() {
     const channelName = `wallet.${user.id}`;
     const channel = echo.private(channelName);
 
-    channel.subscribed(() => {
-      console.log(`✅ Subscribed to wallet channel: ${channelName}`);
-    });
-
     channel.listen(".wallet.balance.updated", (e: any) => {
-      console.log("💰 Wallet balance updated in realtime:", e);
       setBalance(e.balance);
     });
 
     return () => {
       if (echo) {
         echo.leave(channelName);
-        console.log(`👋 Left wallet channel: ${channelName}`);
       }
     };
   }, [user?.id, isMember]);
@@ -218,11 +210,6 @@ export default function DashboardPage() {
       setShowAlert(true);
       return;
     }
-
-    // 4. Authorized Members: Proceed with navigation
-    console.log(
-      `📍 [Dashboard] Navigating to ${item.label} from home/dashboard`,
-    );
     router.push({
       pathname: item.href as any,
       params: { from: "home" },
