@@ -1,16 +1,25 @@
+// app/scanqrcode.tsx
 import { CustomAlert } from "@/components/CustomAlert";
-import { resolveQr } from "@/services/walletService";
+import { parseInstapayQr } from "@/utils/emvQr";
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import React, { useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-export default function CameraScreen() {
+export default function ScanQrCodePage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [permission, requestPermission] = useCameraPermissions();
-
+  const [torchOn, setTorchOn] = useState(false);
   const [resolvingQr, setResolvingQr] = useState(false);
 
   const [alertConfig, setAlertConfig] = useState({
@@ -19,21 +28,7 @@ export default function CameraScreen() {
     message: "",
   });
 
-  /**
-   * Prevent duplicate QR scans.
-   */
   const scannedRef = useRef(false);
-
-  // Permission handling
-  useEffect(() => {
-    if (!permission) {
-      return;
-    }
-
-    if (!permission.granted && permission.canAskAgain) {
-      requestPermission();
-    }
-  }, [permission?.granted]);
 
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
     if (scannedRef.current || resolvingQr) {
@@ -50,57 +45,30 @@ export default function CameraScreen() {
     setResolvingQr(true);
 
     try {
-      /**
-       * Send the complete QR payload to Laravel.
-       *
-       * We intentionally don't extract an account number
-       * locally.
-       */
-      const result = await resolveQr({
-        qr_payload: rawQr,
-      });
+      const parsed = parseInstapayQr(rawQr);
 
-      if (!result.success || !result.data) {
-        throw new Error(result.message || "Unable to identify this QR code.");
-      }
-
-      const accountName = result.data.account_name ?? "";
-      const accountNumber = result.data.account_number ?? "";
-
-      if (!accountNumber) {
+      if (!parsed.accountNumber) {
         throw new Error(
-          "The recipient account could not be identified from this QR code. Please use a supported QR code or enter the recipient details manually.",
+          "Could not read account details automatically. Please enter recipient details manually.",
         );
       }
 
       router.replace({
         pathname: "../",
         params: {
-          scannedName: accountName,
-          scannedNumber: accountNumber,
-
-          scannedAmount:
-            result.data.amount !== undefined && result.data.amount !== null
-              ? String(result.data.amount)
-              : "",
-
-          scannedProvider: result.data.provider ?? "",
-
-          scannedQrType: result.data.qr_type ?? "",
-
-          scannedRaw: result.data.raw ?? rawQr,
+          scannedName: parsed.merchantName ?? "",
+          scannedNumber: parsed.accountNumber,
+          scannedProvider: parsed.swiftCode ?? "",
+          scannedRaw: rawQr,
         },
       });
     } catch (error: any) {
-      scannedRef.current = false;
+      const message = error?.message || "Unable to identify this QR code.";
 
       setAlertConfig({
         visible: true,
         title: "QR Code Error",
-        message:
-          error?.response?.data?.message ||
-          error?.message ||
-          "Unable to identify this QR code.",
+        message,
       });
     } finally {
       setResolvingQr(false);
@@ -116,87 +84,126 @@ export default function CameraScreen() {
     scannedRef.current = false;
   };
 
-  // LOADING
   if (!permission) {
     return (
-      <View className="flex-1 items-center justify-center bg-black">
+      <View className="flex-1 bg-black items-center justify-center">
         <ActivityIndicator size="large" color="#fff" />
       </View>
     );
   }
 
-  // NO PERMISSION
   if (!permission.granted) {
     return (
-      <View className="flex-1 items-center justify-center bg-black px-6">
+      <View className="flex-1 bg-black items-center justify-center px-8">
         <Ionicons name="camera-outline" size={48} color="white" />
 
-        <Text className="text-white text-lg text-center mb-4 mt-4">
-          Camera permission is required
+        <Text className="text-white text-center font-bold text-lg mt-4 mb-2">
+          Camera access needed
+        </Text>
+
+        <Text className="text-slate-300 text-center text-sm mb-6">
+          We need camera permission to scan the recipient{"'"}s QR code.
         </Text>
 
         <TouchableOpacity
           onPress={requestPermission}
-          className="bg-[#C6890F] px-6 py-3 rounded-xl"
+          className="bg-primary px-6 py-3 rounded-xl mb-3"
+          disabled={resolvingQr}
         >
           <Text className="text-white font-bold">Grant Permission</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => router.back()} disabled={resolvingQr}>
+          <Text className="text-slate-400 text-xs font-bold">Go Back</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // CAMERA VIEW
   return (
-    <View className="flex-1 bg-black">
-      {/* CAMERA */}
+    <View className="flex-1 bg-black relative">
       <CameraView
-        style={{ flex: 1 }}
+        style={StyleSheet.absoluteFillObject}
         facing="back"
+        enableTorch={torchOn}
         barcodeScannerSettings={{
           barcodeTypes: ["qr"],
         }}
         onBarcodeScanned={resolvingQr ? undefined : handleBarcodeScanned}
       />
 
-      {/* UI OVERLAY */}
-      <View className="absolute inset-0 bg-black/40 items-center justify-center">
-        {/* TOP BAR */}
-        <View className="absolute top-12 w-full flex-row justify-between px-5">
-          {/* BACK */}
+      <View className="absolute inset-0 justify-between">
+        <View
+          className="flex-row justify-between items-center px-5 z-10"
+          style={{ marginTop: insets.top + 10 }}
+        >
           <TouchableOpacity
             onPress={() => router.back()}
             disabled={resolvingQr}
-            className="bg-black/60 p-3 rounded-full"
+            className="bg-black/50 w-10 h-10 rounded-full items-center justify-center"
           >
-            <Ionicons name="arrow-back" size={22} color="white" />
+            <Ionicons name="close" size={22} color="white" />
           </TouchableOpacity>
 
-          <Text className="text-white text-lg font-semibold">QR Scanner</Text>
-
-          <View style={{ width: 40 }} />
+          <TouchableOpacity
+            onPress={() => setTorchOn((prev) => !prev)}
+            disabled={resolvingQr}
+            className="bg-black/50 w-10 h-10 rounded-full items-center justify-center"
+          >
+            <Ionicons
+              name={torchOn ? "flash" : "flash-off"}
+              size={20}
+              color="white"
+            />
+          </TouchableOpacity>
         </View>
 
-        {/* SCAN FRAME */}
-        <View className="items-center justify-center">
-          <View className="w-[270px] h-[270px] border-2 border-[#C6890F] rounded-3xl bg-black/10" />
+        <View className="items-center justify-center flex-1">
+          <View className="w-64 h-64 relative">
+            <View className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-white rounded-tl-2xl" />
+            <View className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-white rounded-tr-2xl" />
+            <View className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-white rounded-bl-2xl" />
+            <View className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-white rounded-br-2xl" />
+          </View>
 
           {resolvingQr ? (
-            <View className="items-center mt-4">
+            <View className="items-center mt-6">
               <ActivityIndicator size="small" color="white" />
-
-              <Text className="text-white mt-3 text-sm font-semibold">
-                Verifying QR code...
+              <Text className="text-white text-sm font-bold mt-3 text-center px-10">
+                Reading QR code...
+              </Text>
+              <Text className="text-slate-300 text-xs mt-1 text-center px-10">
+                Identifying the recipient
               </Text>
             </View>
           ) : (
-            <Text className="text-white mt-4 text-sm opacity-80">
-              Point your camera at QR code
-            </Text>
+            <>
+              <Text className="text-white text-sm font-bold mt-6 text-center px-10">
+                Align the QR code within the frame
+              </Text>
+              <Text className="text-slate-300 text-xs mt-1 text-center px-10">
+                QR Ph / InstaPay codes are scanned automatically
+              </Text>
+            </>
           )}
+        </View>
+
+        <View
+          className="items-center z-10"
+          style={{ marginBottom: Math.max(insets.bottom, 20) + 10 }}
+        >
+          <TouchableOpacity
+            onPress={() => router.back()}
+            disabled={resolvingQr}
+            className="px-6 py-3"
+          >
+            <Text className="text-white text-xs font-bold underline">
+              Enter details manually instead
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* CUSTOM ALERT */}
       <CustomAlert
         visible={alertConfig.visible}
         title={alertConfig.title}

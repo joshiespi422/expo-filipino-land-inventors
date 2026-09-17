@@ -1,3 +1,5 @@
+// Polyfill global Buffer for React Native / Expo
+
 import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -16,7 +18,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import "../../global.css";
-
 const queryClient = new QueryClient();
 
 function NavigationBarWrapper({ children }: { children: React.ReactNode }) {

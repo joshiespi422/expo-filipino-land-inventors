@@ -395,7 +395,7 @@ export default function DashboardPage() {
 
         {/* 2. WALLET SECTION */}
         {isMember && !pageLoading && (
-          <View className="bg-primary p-3 rounded-2xl shadow-lg mb-3">
+          <View className="bg-primary p-3 rounded-2xl shadow-lg mb-2">
             <View className="flex-row justify-between items-center">
               <View className="flex-row items-center gap-3">
                 <Text className="text-white text-2xl font-bold">
@@ -416,15 +416,15 @@ export default function DashboardPage() {
               </View>
               <View className="flex-row gap-3">
                 <TouchableOpacity
-                  // onPress={() => router.push("/(load)")}
-                  onPress={handleComingSoon}
+                  onPress={() => router.push("/(load)")}
+                  // onPress={handleComingSoon}
                   className="bg-white h-10 w-10 flex justify-center items-center rounded-lg"
                 >
                   <FontAwesome name="plus" size={22} color="#034194" />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  // onPress={() => router.push("/(transper)/")}
-                  onPress={handleComingSoon}
+                  onPress={() => router.push("/(transper)/")}
+                  // onPress={handleComingSoon}
                   className="bg-white h-10 w-10 flex justify-center items-center rounded-lg"
                 >
                   <FontAwesome name="send" size={20} color="#034194" />

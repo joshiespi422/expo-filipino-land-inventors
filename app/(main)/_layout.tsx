@@ -633,8 +633,8 @@ export default function MainLayout() {
                   }}
                 >
                   <TouchableOpacity
-                    // onPress={() => router.push("/camera")}
-                    onPress={handleComingSoon}
+                    onPress={() => router.push("/(transper)/scanqrcode")}
+                    // onPress={handleComingSoon}
                     style={{
                       position: "absolute",
                       top: -43,
