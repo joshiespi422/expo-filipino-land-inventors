@@ -1,4 +1,5 @@
 import { CustomAlert } from "@/components/CustomAlert";
+import { PasswordPromptModal } from "@/components/PasswordPromptModal";
 import { biometricService } from "@/services/biometricService";
 import { profileService } from "@/services/profileService";
 import { Ionicons } from "@expo/vector-icons";
@@ -35,6 +36,8 @@ const CARD_SHADOW = {
   shadowRadius: 2,
   elevation: 2,
 };
+
+type PasswordModalMode = "enable" | "remove" | null;
 
 export default function BiometricSettingsScreen() {
   const router = useRouter();
@@ -83,6 +86,19 @@ export default function BiometricSettingsScreen() {
     visible: false,
     title: "",
     message: "",
+  });
+
+  // Password confirmation modal (used for both enabling and removing a device)
+  const [passwordModal, setPasswordModal] = useState<{
+    visible: boolean;
+    mode: PasswordModalMode;
+    target: AuthDevice | null;
+    errorMessage: string | null;
+  }>({
+    visible: false,
+    mode: null,
+    target: null,
+    errorMessage: null,
   });
 
   // Safe state setter
@@ -156,7 +172,16 @@ export default function BiometricSettingsScreen() {
     initData(true);
   }, []);
 
-  // Enable biometrics
+  const closePasswordModal = () => {
+    setPasswordModal({
+      visible: false,
+      mode: null,
+      target: null,
+      errorMessage: null,
+    });
+  };
+
+  // Step 1: biometric prompt, then open password modal instead of finishing immediately
   const handleEnableBiometrics = async () => {
     if (!isSupported) {
       Alert.alert(
@@ -173,10 +198,34 @@ export default function BiometricSettingsScreen() {
         `Confirm your ${biometryLabel} to enable quick login`,
       );
 
+      setProcessing(false);
+
       if (!authenticated) {
-        setProcessing(false);
         return;
       }
+
+      setPasswordModal({
+        visible: true,
+        mode: "enable",
+        target: null,
+        errorMessage: null,
+      });
+    } catch (error: any) {
+      console.error("Enable Biometrics Error:", error);
+      setProcessing(false);
+
+      Alert.alert(
+        "Error",
+        error?.response?.data?.message || "Failed to enable biometric login.",
+      );
+    }
+  };
+
+  // Step 2: called once the user submits their password in the modal
+  const finalizeEnableBiometrics = async (password: string) => {
+    try {
+      setPasswordModal((prev) => ({ ...prev, errorMessage: null }));
+      setProcessing(true);
 
       const publicKey = await biometricService.createKeys();
 
@@ -185,9 +234,12 @@ export default function BiometricSettingsScreen() {
         platform: biometricService.getPlatform(),
         public_key: publicKey,
         device_name: biometricService.getDeviceName(),
+        password,
       });
 
       if (response.success) {
+        closePasswordModal();
+
         setTimeout(async () => {
           await initData(true);
 
@@ -203,18 +255,27 @@ export default function BiometricSettingsScreen() {
         }, 100);
       }
     } catch (error: any) {
-      console.error("Enable Biometrics Error:", error);
+      const status = error?.response?.status;
+      const message =
+        error?.response?.data?.message || "Failed to enable biometric login.";
 
-      Alert.alert(
-        "Error",
-        error?.response?.data?.message || "Failed to enable biometric login.",
-      );
+      if (status === 422) {
+        // Expected validation error (e.g. wrong password) — no need for a full stack trace
+        console.warn("Enable Biometrics Error:", message);
+      } else {
+        console.error("Enable Biometrics Error:", error);
+      }
+
+      setPasswordModal((prev) => ({
+        ...prev,
+        errorMessage: message,
+      }));
     } finally {
       setProcessing(false);
     }
   };
 
-  // Disable biometrics
+  // Disable biometrics (unchanged — no password step, since you only asked for add/delete)
   const handleDisableBiometrics = async () => {
     if (!currentDevice) {
       return;
@@ -273,7 +334,7 @@ export default function BiometricSettingsScreen() {
     }
   };
 
-  // Remove/revoke auth device
+  // Step 1: confirm intent, then open the password modal instead of finishing immediately
   const handleRemoveDevice = (device: AuthDevice) => {
     const isThisDevice = device.device_id === currentDeviceId;
 
@@ -285,43 +346,84 @@ export default function BiometricSettingsScreen() {
         : `Are you sure you want to remove "${
             device.device_name || "Unknown Device"
           }"?`,
-      onConfirm: async () => {
+      onConfirm: () => {
         setAlertConfig((prev) => ({
           ...prev,
           visible: false,
         }));
 
-        setTimeout(async () => {
-          try {
-            setProcessing(true);
-
-            await profileService.removeAuthDevice(device.id);
-
-            if (isThisDevice) {
-              await biometricService.resetDevice();
-            }
-
-            await initData(true);
-
-            if (!isMounted.current) {
-              return;
-            }
-
-            setSuccessAlertConfig({
-              visible: true,
-              title: "Success",
-              message: "Device has been successfully removed.",
-            });
-          } catch (error: any) {
-            console.error("Remove Device Error:", error);
-
-            Alert.alert("Error", "Failed to remove device.");
-          } finally {
-            setProcessing(false);
-          }
+        setTimeout(() => {
+          setPasswordModal({
+            visible: true,
+            mode: "remove",
+            target: device,
+            errorMessage: null,
+          });
         }, 150);
       },
     });
+  };
+
+  // Step 2: called once the user submits their password in the modal
+  const finalizeRemoveDevice = async (password: string) => {
+    const device = passwordModal.target;
+
+    if (!device) {
+      return;
+    }
+
+    const isThisDevice = device.device_id === currentDeviceId;
+
+    try {
+      setPasswordModal((prev) => ({ ...prev, errorMessage: null }));
+      setProcessing(true);
+
+      await profileService.removeAuthDevice(device.id, password);
+
+      if (isThisDevice) {
+        await biometricService.resetDevice();
+      }
+
+      closePasswordModal();
+
+      await initData(true);
+
+      if (!isMounted.current) {
+        return;
+      }
+
+      setSuccessAlertConfig({
+        visible: true,
+        title: "Success",
+        message: "Device has been successfully removed.",
+      });
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const message =
+        error?.response?.data?.message || "Failed to remove device.";
+
+      if (status === 422) {
+        // Expected validation error (e.g. wrong password) — no need for a full stack trace
+        console.warn("Remove Device Error:", message);
+      } else {
+        console.error("Remove Device Error:", error);
+      }
+
+      setPasswordModal((prev) => ({
+        ...prev,
+        errorMessage: message,
+      }));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handlePasswordSubmit = (password: string) => {
+    if (passwordModal.mode === "enable") {
+      finalizeEnableBiometrics(password);
+    } else if (passwordModal.mode === "remove") {
+      finalizeRemoveDevice(password);
+    }
   };
 
   if (loading) {
@@ -371,6 +473,21 @@ export default function BiometricSettingsScreen() {
             visible: false,
           }))
         }
+      />
+
+      {/* Password Confirmation Modal (enable + remove) */}
+      <PasswordPromptModal
+        visible={passwordModal.visible}
+        title="Confirm Your Password"
+        message={
+          passwordModal.mode === "enable"
+            ? "Enter your account password to enable Quick and Secure Login."
+            : "Enter your account password to remove this device."
+        }
+        loading={processing}
+        errorMessage={passwordModal.errorMessage}
+        onClose={closePasswordModal}
+        onSubmit={handlePasswordSubmit}
       />
 
       {/* Unsupported Device */}

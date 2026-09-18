@@ -249,6 +249,7 @@ export const profileService = {
     platform: "android" | "ios";
     public_key: string;
     device_name?: string;
+    password: string;
   }) => {
     const response = await api.post("/profile/auth-devices", data);
 
@@ -267,8 +268,10 @@ export const profileService = {
   /**
    * Remove authentication device.
    */
-  removeAuthDevice: async (id: number) => {
-    const response = await api.delete(`/profile/auth-devices/${id}`);
+  removeAuthDevice: async (id: number, password: string) => {
+    const response = await api.delete(`/profile/auth-devices/${id}`, {
+      data: { password },
+    });
 
     return response.data;
   },
