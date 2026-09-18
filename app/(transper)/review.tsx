@@ -1,4 +1,8 @@
 import { CustomAlert } from "@/components/CustomAlert";
+import {
+  TransferVerification,
+  TransferVerifyModal,
+} from "@/components/TransferVerifyModal";
 import { createTransfer } from "@/services/walletService";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -10,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import "../../global.css";
 
 const TRANSFER_FEE: number = 0.0;
@@ -23,6 +28,7 @@ const formatCurrency = (value: number): string => {
 
 export default function ReviewTransferPage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const params = useLocalSearchParams<{
     amount?: string;
@@ -33,6 +39,7 @@ export default function ReviewTransferPage() {
     transferMode?: string;
     purpose?: string;
     remarks?: string;
+    destinationBic?: string; // BIC decoded from the scanned QR (QR mode only)
   }>();
 
   const amount = parseFloat(params.amount || "0");
@@ -47,7 +54,16 @@ export default function ReviewTransferPage() {
     message: "",
   });
 
-  const handleConfirm = async () => {
+  // Verification modal (password OR Quick & Secure Login)
+  const [verifyModal, setVerifyModal] = useState<{
+    visible: boolean;
+    errorMessage: string | null;
+  }>({
+    visible: false,
+    errorMessage: null,
+  });
+
+  const handleOpenVerify = () => {
     if (!isConfirmed || isProcessing) return;
 
     if (!params.channelId) {
@@ -59,17 +75,34 @@ export default function ReviewTransferPage() {
       return;
     }
 
+    setVerifyModal({ visible: true, errorMessage: null });
+  };
+
+  const closeVerifyModal = () => {
+    if (isProcessing) return;
+    setVerifyModal({ visible: false, errorMessage: null });
+  };
+
+  const handleVerified = async (verification: TransferVerification) => {
     setIsProcessing(true);
+    setVerifyModal((prev) => ({ ...prev, errorMessage: null }));
 
     try {
       const response = await createTransfer({
-        channel_id: params.channelId,
+        channel_id: params.channelId!,
         amount,
         account_name: params.recipientName || "",
         account_number: params.recipientNumber || "",
+        destination_bic: params.destinationBic || undefined,
         purpose: params.purpose,
         remarks: params.remarks,
+        verification_method: verification.method,
+        ...(verification.method === "password"
+          ? { password: verification.password }
+          : { device_id: verification.device_id }),
       });
+
+      setVerifyModal({ visible: false, errorMessage: null });
 
       router.push({
         pathname: "/success",
@@ -85,16 +118,40 @@ export default function ReviewTransferPage() {
         },
       });
     } catch (error: any) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Transfer could not be processed. Please try again.";
+      const status = error?.response?.status;
 
-      setAlert({
-        visible: true,
-        title: "Transfer Failed",
-        message,
-      });
+      // Extract specific field errors from Laravel validation response if available
+      const responseData = error?.response?.data;
+      let message =
+        responseData?.message ||
+        error?.message ||
+        "Transfer could not be processed.";
+
+      if (responseData?.errors) {
+        const firstErrorKey = Object.keys(responseData.errors)[0];
+        if (firstErrorKey && responseData.errors[firstErrorKey][0]) {
+          message = responseData.errors[firstErrorKey][0];
+        }
+      }
+
+      if (status === 422) {
+        console.warn("Transfer Verification Error:", message);
+
+        setVerifyModal((prev) => ({
+          ...prev,
+          errorMessage: message,
+        }));
+      } else {
+        console.error("Transfer Error:", error);
+
+        setVerifyModal({ visible: false, errorMessage: null });
+
+        setAlert({
+          visible: true,
+          title: "Transfer Failed",
+          message,
+        });
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -199,7 +256,10 @@ export default function ReviewTransferPage() {
       </ScrollView>
 
       {/* FOOTER */}
-      <View className="w-full p-5 bg-white border-t border-slate-200">
+      <View
+        className="w-full p-5 bg-white border-t border-slate-200"
+        style={{ paddingBottom: Math.max(insets.bottom, 20) }}
+      >
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() => setIsConfirmed((prev) => !prev)}
@@ -223,7 +283,7 @@ export default function ReviewTransferPage() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={handleConfirm}
+          onPress={handleOpenVerify}
           disabled={!isConfirmed || isProcessing}
           className={`h-14 rounded-xl justify-center items-center ${
             !isConfirmed || isProcessing ? "bg-slate-300" : "bg-primary"
@@ -238,6 +298,14 @@ export default function ReviewTransferPage() {
           )}
         </TouchableOpacity>
       </View>
+
+      <TransferVerifyModal
+        visible={verifyModal.visible}
+        loading={isProcessing}
+        errorMessage={verifyModal.errorMessage}
+        onClose={closeVerifyModal}
+        onVerify={handleVerified}
+      />
 
       <CustomAlert
         visible={alert.visible}

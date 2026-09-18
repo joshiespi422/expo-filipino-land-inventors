@@ -88,14 +88,18 @@ export interface PaymentMethod {
   gateway_type: string;
 }
 
-/////////////// Wallet ///////////////////
+/////////////// Transfer ///////////////////
 export interface TransferPayload {
   channel_id: string;
   amount: number;
   account_name: string;
   account_number: string;
+  destination_bic?: string;
   purpose?: string;
   remarks?: string;
+  verification_method: "password" | "biometric";
+  password?: string;
+  device_id?: string;
 }
 
 export interface TransferResource {

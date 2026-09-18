@@ -18,9 +18,6 @@ import "../../global.css";
 
 const MIN_TRANSFER = 1.0;
 
-// Match your Tailwind "primary" color token here
-const PRIMARY_COLOR = "#034194";
-
 // Kept in sync with App\Services\Transfer\TransferService::CHANNELS
 const CHANNELS = [
   { id: "instapay", name: "InstaPay (QR Ph)", category: "Payment Network" },
@@ -80,7 +77,7 @@ const toggleStyles = StyleSheet.create({
     fontSize: 14,
   },
   labelActive: {
-    color: PRIMARY_COLOR,
+    color: "#034194",
   },
   labelInactive: {
     color: "#94a3b8",
@@ -96,6 +93,7 @@ export default function TransferPage() {
     scannedNumber?: string;
     scannedAmount?: string;
     scannedChannelId?: string;
+    scannedProvider?: string; // BIC / institution code extracted from the QR
     scannedRaw?: string;
   }>();
   const lastProcessedRaw = useRef<string | null>(null);
@@ -115,6 +113,7 @@ export default function TransferPage() {
   // QR-specific state
   const [qrScanned, setQrScanned] = useState(false);
   const [qrAmountLocked, setQrAmountLocked] = useState(false);
+  const [scannedBic, setScannedBic] = useState(""); // BIC/provider code decoded from the QR
 
   // Modals
   const [showChannelModal, setShowChannelModal] = useState(false);
@@ -157,6 +156,7 @@ export default function TransferPage() {
     setTransferMode("qr");
     setAccountName(params.scannedName || "");
     setAccountNumber(params.scannedNumber || "");
+    setScannedBic(params.scannedProvider || "");
 
     // Auto set channel to InstaPay for QR transfers
     setSelectedChannel(
@@ -198,6 +198,7 @@ export default function TransferPage() {
     setAccountName("");
     setAccountNumber("");
     setQrScanned(false);
+    setScannedBic("");
     if (qrAmountLocked) {
       setAmount("");
     }
@@ -208,6 +209,7 @@ export default function TransferPage() {
     setQrScanned(false);
     setAccountName("");
     setAccountNumber("");
+    setScannedBic("");
     if (qrAmountLocked) {
       setAmount("");
     }
@@ -239,6 +241,9 @@ export default function TransferPage() {
         transferMode,
         purpose,
         remarks,
+        // Only meaningful for QR transfers — lets the backend skip the
+        // name-based BIC lookup that fails for the generic InstaPay channel.
+        destinationBic: transferMode === "qr" ? scannedBic : undefined,
       },
     });
   };
