@@ -28,7 +28,7 @@ function cleanAccountNumber(val: string | undefined): string | undefined {
 
 /**
  * Client-side parse for QR Ph / InstaPay EMV payload.
- * Recursively scans tags 26-51 to extract the account/mobile number and SWIFT/BIC code.
+ * Recursively scans tags 26-51 to extract the account/mobile number and BIC.
  */
 export function parseInstapayQr(rawQr: string): ParsedInstapayQr {
   const decoded = decodeQrData(rawQr);
@@ -47,12 +47,19 @@ export function parseInstapayQr(rawQr: string): ParsedInstapayQr {
 
     if (!accountInfo || typeof accountInfo !== "object") continue;
 
-    // Sub-tag 00 usually holds the Globally Unique Identifier (e.g., "ph.ppmi.qrph" or SWIFT code)
-    if (!extractedSwift && accountInfo["00"]?.data) {
-      extractedSwift = accountInfo["00"]?.data;
-    }
+    // IMPORTANT: sub-tag "00" is ALWAYS the template GUID (e.g. "com.p2pqrpay")
+    // per the QR Ph / EMV spec — it identifies the scheme, never the
+    // receiving institution's BIC. Do NOT read it as swiftCode.
+    //
+    // Sub-tag "01" holds the actual receiving BIC (e.g. "PAEYPHM2XXX"),
+    // per PayMongo's own QR Ph transfer spec.
     if (!extractedSwift && accountInfo["01"]?.data) {
-      extractedSwift = accountInfo["01"]?.data;
+      const candidate = accountInfo["01"].data;
+      // Guard against malformed payloads where "01" is itself a GUID-like
+      // reverse-domain string instead of a BIC.
+      if (typeof candidate === "string" && !candidate.startsWith("com.")) {
+        extractedSwift = candidate;
+      }
     }
 
     // Check common account number sub-tags (01, 02, 03, 04, 05, 26)
@@ -61,7 +68,6 @@ export function parseInstapayQr(rawQr: string): ParsedInstapayQr {
       accountInfo["03"]?.data,
       accountInfo["02"]?.data,
       accountInfo["05"]?.data,
-      accountInfo["01"]?.data,
     ];
 
     for (const candidate of candidates) {
