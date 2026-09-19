@@ -1,3 +1,11 @@
+import TransactionDetails, {
+  formatDate,
+  formatMoney,
+  getStyle,
+  getSubtitle,
+  getTitle,
+  getTotal,
+} from "@/components/TransactionDetails";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   getWalletTransactions,
@@ -7,14 +15,13 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
-  Modal,
   RefreshControl,
-  StyleSheet,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
+
+type Filter = "all" | "today" | "week" | "month";
 
 export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
@@ -25,9 +32,7 @@ export default function HistoryPage() {
   const [selectedTransaction, setSelectedTransaction] =
     useState<WalletTransaction | null>(null);
 
-  const [filter, setFilter] = useState<"all" | "today" | "week" | "month">(
-    "all",
-  );
+  const [filter, setFilter] = useState<Filter>("all");
 
   const loadTransactions = async () => {
     try {
@@ -78,51 +83,7 @@ export default function HistoryPage() {
     });
   }, [transactions, filter]);
 
-  const getStyle = (type: string) => {
-    switch (type?.toLowerCase()) {
-      case "deposit":
-        return {
-          label: "Money In",
-          color: "#16a34a",
-          bg: "#dcfce7",
-          icon: "arrow-down",
-          sign: "+",
-        };
-
-      case "withdrawal":
-        return {
-          label: "Money Out",
-          color: "#dc2626",
-          bg: "#fee2e2",
-          icon: "arrow-up",
-          sign: "-",
-        };
-
-      default:
-        return {
-          label: "Transaction",
-          color: "#475569",
-          bg: "#e2e8f0",
-          icon: "swap-horizontal",
-          sign: "",
-        };
-    }
-  };
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleString("en-PH", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const renderFilterButton = (
-    label: string,
-    value: "all" | "today" | "week" | "month",
-  ) => {
+  const renderFilterButton = (label: string, value: Filter) => {
     const active = filter === value;
 
     return (
@@ -200,6 +161,7 @@ export default function HistoryPage() {
           }
           renderItem={({ item }) => {
             const style = getStyle(item.type);
+            const subtitle = getSubtitle(item);
 
             return (
               <TouchableOpacity
@@ -221,26 +183,36 @@ export default function HistoryPage() {
                   </View>
 
                   {/* DETAILS */}
-                  <View className="flex-1 ml-3">
-                    <Text className="text-base font-semibold text-slate-800">
-                      {item.description || "Wallet Transaction"}
+                  <View className="flex-1 ml-3 mr-2">
+                    <Text
+                      numberOfLines={1}
+                      className="text-base font-semibold text-slate-800"
+                    >
+                      {getTitle(item)}
                     </Text>
+
+                    {subtitle ? (
+                      <Text
+                        numberOfLines={1}
+                        className="text-xs text-slate-500 mt-0.5"
+                      >
+                        {subtitle}
+                      </Text>
+                    ) : null}
 
                     <Text className="text-xs text-slate-400 mt-1">
                       {formatDate(item.created_at)}
                     </Text>
                   </View>
 
-                  {/* AMOUNT */}
+                  {/* AMOUNT (total = amount + fee) */}
                   <View className="items-end">
                     <Text
                       style={{ color: style.color }}
                       className="text-base font-bold"
                     >
-                      {style.sign}₱
-                      {Number(item.amount).toLocaleString("en-PH", {
-                        minimumFractionDigits: 2,
-                      })}
+                      {style.sign}
+                      {formatMoney(getTotal(item))}
                     </Text>
 
                     <Text
@@ -257,122 +229,11 @@ export default function HistoryPage() {
         />
       )}
 
-      {/* DETAILS MODAL */}
-      <Modal
-        visible={!!selectedTransaction}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setSelectedTransaction(null)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.modalOverlay}
-          onPress={() => setSelectedTransaction(null)}
-        >
-          <TouchableWithoutFeedback>
-            <View className="bg-white rounded-t-[30px] p-5 pb-8 w-full">
-              {selectedTransaction && (
-                <>
-                  <View className="items-center mb-5">
-                    <View className="w-14 h-1.5 rounded-full bg-slate-200 mb-5" />
-
-                    <Text className="text-xl font-bold text-slate-800">
-                      Transaction Details
-                    </Text>
-                  </View>
-
-                  {(() => {
-                    const style = getStyle(selectedTransaction.type);
-
-                    return (
-                      <>
-                        <View className="items-center mb-6">
-                          <View
-                            style={{ backgroundColor: style.bg }}
-                            className="w-20 h-20 rounded-full items-center justify-center"
-                          >
-                            <Ionicons
-                              name={style.icon as any}
-                              size={38}
-                              color={style.color}
-                            />
-                          </View>
-
-                          <Text
-                            style={{ color: style.color }}
-                            className="text-3xl font-bold mt-4"
-                          >
-                            {style.sign}₱
-                            {Number(selectedTransaction.amount).toLocaleString(
-                              "en-PH",
-                              { minimumFractionDigits: 2 },
-                            )}
-                          </Text>
-
-                          <Text className="text-slate-500 mt-1">
-                            {style.label}
-                          </Text>
-                        </View>
-
-                        <View className="bg-slate-50 rounded-2xl p-4">
-                          <View className="flex-row justify-between py-3 border-b border-slate-200">
-                            <Text className="text-slate-400">Description</Text>
-                            <Text className="font-medium text-slate-700 max-w-[60%] text-right">
-                              {selectedTransaction.description ||
-                                "Wallet Transaction"}
-                            </Text>
-                          </View>
-
-                          <View className="flex-row justify-between py-3 border-b border-slate-200">
-                            <Text className="text-slate-400">Type</Text>
-                            <Text className="font-medium text-slate-700 capitalize">
-                              {selectedTransaction.type}
-                            </Text>
-                          </View>
-
-                          <View className="flex-row justify-between py-3 border-b border-slate-200">
-                            <Text className="text-slate-400">Reference ID</Text>
-                            <Text className="font-medium text-slate-700">
-                              {selectedTransaction.reference_id || "N/A"}
-                            </Text>
-                          </View>
-
-                          <View className="flex-row justify-between py-3">
-                            <Text className="text-slate-400">Date</Text>
-                            <Text className="font-medium text-slate-700 max-w-[60%] text-right">
-                              {formatDate(selectedTransaction.created_at)}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <TouchableOpacity
-                          onPress={() => setSelectedTransaction(null)}
-                          className="bg-[#034194] rounded-2xl py-4 mt-6"
-                        >
-                          <Text className="text-white text-center font-semibold">
-                            Close
-                          </Text>
-                        </TouchableOpacity>
-                      </>
-                    );
-                  })()}
-                </>
-              )}
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
-      </Modal>
+      {/* DETAILS BOTTOM SHEET */}
+      <TransactionDetails
+        transaction={selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+      />
     </View>
   );
 }
-
-// Fixed standard style object for the overlay backdrop
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-});
