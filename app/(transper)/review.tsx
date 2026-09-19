@@ -32,6 +32,7 @@ export default function ReviewTransferPage() {
 
   const params = useLocalSearchParams<{
     amount?: string;
+    fee?: string;
     channelId?: string;
     channelName?: string;
     recipientName?: string;
@@ -39,11 +40,12 @@ export default function ReviewTransferPage() {
     transferMode?: string;
     purpose?: string;
     remarks?: string;
-    destinationBic?: string; // BIC decoded from the scanned QR (QR mode only)
+    destinationBic?: string;
   }>();
 
   const amount = parseFloat(params.amount || "0");
-  const total = amount + TRANSFER_FEE;
+  const fee = parseFloat(params.fee || "0");
+  const total = amount + fee;
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
@@ -223,9 +225,7 @@ export default function ReviewTransferPage() {
 
               <Row
                 label="Transfer Fee"
-                value={
-                  TRANSFER_FEE === 0 ? "Free" : formatCurrency(TRANSFER_FEE)
-                }
+                value={fee === 0 ? "Free" : formatCurrency(fee)}
               />
 
               <View className="h-[1px] bg-slate-100 my-2" />
