@@ -12,10 +12,16 @@ export interface WalletResponse {
 export interface WalletTransaction {
   id: number;
   amount: string;
+  transfer_fee: string;
   type: string;
-  description: string;
+  from_name: string | null;
+  to_account_name: string | null;
+  to_account_number: string | null;
+  to_provider: string | null;
+  description: string | null;
   reference_id: number | null;
   reference_type: string | null;
+  reference_number: string | null;
   created_at: string;
 }
 
@@ -134,4 +140,42 @@ export const getTransferStatus = async (
 ): Promise<{ data: TransferResource }> => {
   const res = await api.get(`/wallet/transfer/${reference}`);
   return res.data;
+};
+
+// transfer config for dynamic channel/transfer fee/minimum transfer
+export interface TransferChannel {
+  id: string;
+  name: string;
+  category: string;
+}
+
+export interface TransferConfig {
+  min_transfer: number;
+  fee: {
+    type: "PHP" | "Percentage";
+    transfer_fee: number;
+  };
+  channels: TransferChannel[];
+}
+
+export const getTransferConfig = async (): Promise<{
+  data: TransferConfig;
+}> => {
+  const res = await api.get("/wallet/transfer/config");
+  return res.data;
+};
+
+// TransactionFee calculate
+export const calculateTransferFee = (
+  amount: number,
+  fee: TransferConfig["fee"],
+): number => {
+  if (!amount) return 0;
+
+  const raw =
+    fee.type === "Percentage"
+      ? amount * (fee.transfer_fee / 100)
+      : fee.transfer_fee;
+
+  return Math.round(raw * 100) / 100;
 };
