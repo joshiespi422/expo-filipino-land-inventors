@@ -1,5 +1,11 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { getWalletBalance } from "@/services/walletService";
+import {
+  calculateTransferFee,
+  getTransferConfig,
+  getWalletBalance,
+  TransferChannel,
+  TransferConfig,
+} from "@/services/walletService";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -15,21 +21,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import "../../global.css";
-
-const MIN_TRANSFER = 1.0;
-
-// Kept in sync with App\Services\Transfer\TransferService::CHANNELS
-const CHANNELS = [
-  { id: "instapay", name: "InstaPay (QR Ph)", category: "Payment Network" },
-  { id: "gcash", name: "GCash", category: "E-Wallet" },
-  { id: "maya", name: "Maya", category: "E-Wallet" },
-  { id: "aub", name: "AUB", category: "Bank" },
-  { id: "bdo", name: "BDO Unibank", category: "Bank" },
-  { id: "bpi", name: "BPI", category: "Bank" },
-  { id: "landbank", name: "LandBank", category: "Bank" },
-  { id: "metrobank", name: "Metrobank", category: "Bank" },
-  { id: "unionbank", name: "UnionBank", category: "Bank" },
-];
 
 const PURPOSES = [
   "Personal Transfer",
@@ -101,9 +92,21 @@ export default function TransferPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [walletBalance, setWalletBalance] = useState(0);
 
+  // Dynamic config from the server
+  const [channels, setChannels] = useState<TransferChannel[]>([]);
+  const [config, setConfig] = useState<TransferConfig>({
+    min_transfer: 1,
+    fee: { type: "PHP", transfer_fee: 0 },
+    channels: [],
+  });
+
+  const instapayChannel = channels.find((c) => c.id === "instapay") ?? null;
+  const manualChannels = channels.filter((c) => c.id !== "instapay");
+
   // Form Fields
   const [transferMode, setTransferMode] = useState<"manual" | "qr">("manual");
-  const [selectedChannel, setSelectedChannel] = useState(CHANNELS[1]); // Default manual to GCash
+  const [selectedChannel, setSelectedChannel] =
+    useState<TransferChannel | null>(null);
   const [accountName, setAccountName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [amount, setAmount] = useState("");
@@ -122,12 +125,20 @@ export default function TransferPage() {
   const fetchWalletData = async () => {
     try {
       setPageLoading(true);
-      const response = await getWalletBalance();
-      const balanceStr = response?.data?.balance || "0";
-      setWalletBalance(parseFloat(balanceStr));
+      const [walletRes, configRes] = await Promise.all([
+        getWalletBalance(),
+        getTransferConfig(),
+      ]);
+
+      setWalletBalance(parseFloat(walletRes?.data?.balance || "0"));
+
+      const cfg = configRes.data;
+      setConfig(cfg);
+      setChannels(cfg.channels);
+      setSelectedChannel(cfg.channels.find((c) => c.id !== "instapay") ?? null);
     } catch (err) {
-      console.error("Failed to load wallet metrics:", err);
-      Alert.alert("Error", "Could not fetch wallet data.");
+      console.error("Failed to load transfer data:", err);
+      Alert.alert("Error", "Could not fetch transfer data.");
     } finally {
       setPageLoading(false);
     }
@@ -146,8 +157,9 @@ export default function TransferPage() {
     }
   };
 
-  // Process scanner return data
+  // Process scanner return data (wait until channels have loaded)
   useEffect(() => {
+    if (pageLoading) return;
     if (!params.scannedRaw || params.scannedRaw === lastProcessedRaw.current) {
       return;
     }
@@ -157,15 +169,7 @@ export default function TransferPage() {
     setAccountName(params.scannedName || "");
     setAccountNumber(params.scannedNumber || "");
     setScannedBic(params.scannedProvider || "");
-
-    // Auto set channel to InstaPay for QR transfers
-    setSelectedChannel(
-      CHANNELS.find((c) => c.id === "instapay") || {
-        id: "instapay",
-        name: "InstaPay (QR Ph)",
-        category: "Payment Network",
-      },
-    );
+    setSelectedChannel(instapayChannel);
 
     if (params.scannedAmount) {
       handleAmountChange(params.scannedAmount);
@@ -175,18 +179,16 @@ export default function TransferPage() {
     }
 
     setQrScanned(true);
-  }, [params.scannedRaw]);
+  }, [params.scannedRaw, pageLoading]);
 
   const handleModeChange = (mode: "manual" | "qr") => {
     if (mode === "qr") {
+      if (!instapayChannel) {
+        Alert.alert("Unavailable", "QR transfers are currently unavailable.");
+        return;
+      }
       setTransferMode("qr");
-      setSelectedChannel(
-        CHANNELS.find((c) => c.id === "instapay") || {
-          id: "instapay",
-          name: "InstaPay (QR Ph)",
-          category: "Payment Network",
-        },
-      );
+      setSelectedChannel(instapayChannel);
       router.push("./scanqrcode");
       return;
     }
@@ -194,7 +196,7 @@ export default function TransferPage() {
     if (mode === transferMode) return;
 
     setTransferMode("manual");
-    setSelectedChannel(CHANNELS[1]); // Reset back to default manual channel
+    setSelectedChannel(manualChannels[0] ?? null); // Reset back to first manual channel
     setAccountName("");
     setAccountNumber("");
     setQrScanned(false);
@@ -218,24 +220,31 @@ export default function TransferPage() {
   };
 
   const cleanAmount = parseFloat(amount.replace(/,/g, "") || "0");
+  const fee = calculateTransferFee(cleanAmount, config.fee);
+  const totalDeduct = cleanAmount + fee;
 
   const isValid =
-    cleanAmount >= MIN_TRANSFER &&
-    cleanAmount <= walletBalance &&
+    cleanAmount >= config.min_transfer &&
+    totalDeduct <= walletBalance &&
     (transferMode === "qr"
       ? qrScanned && accountNumber.trim() !== ""
-      : accountName.trim() !== "" && accountNumber.trim() !== "");
+      : !!selectedChannel &&
+        accountName.trim() !== "" &&
+        accountNumber.trim() !== "");
 
   const handleContinue = () => {
     if (!isValid) return;
+
+    const channel = transferMode === "qr" ? instapayChannel : selectedChannel;
+    if (!channel) return;
 
     router.push({
       pathname: "/review",
       params: {
         amount: cleanAmount,
-        channelId: transferMode === "qr" ? "instapay" : selectedChannel.id,
-        channelName:
-          transferMode === "qr" ? "InstaPay (QR Ph)" : selectedChannel.name,
+        fee,
+        channelId: channel.id,
+        channelName: channel.name,
         recipientName: accountName,
         recipientNumber: accountNumber,
         transferMode,
@@ -389,7 +398,7 @@ export default function TransferPage() {
                     className="border border-slate-200 rounded-xl p-4 bg-white flex-row justify-between items-center"
                   >
                     <Text className="text-slate-800 font-bold">
-                      {selectedChannel.name}
+                      {selectedChannel?.name ?? "No channels available"}
                     </Text>
                     <Text className="text-slate-400 text-xs">
                       Tap to change
@@ -444,9 +453,9 @@ export default function TransferPage() {
                   }`}
                 />
               </View>
-              {cleanAmount > walletBalance ? (
+              {totalDeduct > walletBalance ? (
                 <Text className="text-xs text-[#ef4444] mt-1">
-                  Exceeds available balance
+                  Exceeds available balance{fee > 0 ? " (including fee)" : ""}
                 </Text>
               ) : qrAmountLocked ? (
                 <Text className="text-xs text-emerald-600 mt-1">
@@ -454,7 +463,8 @@ export default function TransferPage() {
                 </Text>
               ) : (
                 <Text className="text-xs text-slate-400 mt-1">
-                  Minimum transfer is ₱{MIN_TRANSFER.toLocaleString()}.00
+                  Minimum transfer is ₱{config.min_transfer.toLocaleString()}
+                  {fee > 0 ? ` • Fee: ₱${fee.toFixed(2)}` : ""}
                 </Text>
               )}
             </View>
@@ -519,7 +529,7 @@ export default function TransferPage() {
               Select Bank or E-Wallet
             </Text>
             <ScrollView>
-              {CHANNELS.filter((item) => item.id !== "instapay").map((item) => (
+              {manualChannels.map((item) => (
                 <Pressable
                   key={item.id}
                   onPress={() => {
