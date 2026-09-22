@@ -1,6 +1,7 @@
 import { CustomAlert } from "@/components/CustomAlert";
 import {
   getPaymentMethods,
+  getWalletBalance,
   PaymentMethod,
   rechargeWallet,
 } from "@/services/walletService";
@@ -20,6 +21,7 @@ export default function CheckoutPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
+  const [isTampered, setIsTampered] = useState(false);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
     null,
@@ -33,17 +35,22 @@ export default function CheckoutPage() {
   const safeAmount = Array.isArray(amount) ? amount[0] : amount;
   const isWalletLoad = type === "wallet_load";
 
+  // =========================
   // CUSTOM ALERT STATE
+  // =========================
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
     message: "",
-    redirectHome: false,
+    redirectToMain: false,
     isConfirmation: false,
     onConfirm: () => {},
   });
 
-  // RESET LOCKS WHEN SCREEN COMES INTO FOCUS
+  // =========================
+  // RESET LOCKS WHEN SCREEN
+  // COMES INTO FOCUS
+  // =========================
   useFocusEffect(
     useCallback(() => {
       setLoading(false);
@@ -53,11 +60,14 @@ export default function CheckoutPage() {
   );
 
   // =========================
-  // FORMATTERS
+  // FORMAT AMOUNT
   // =========================
   const formatAmount = (value: any) => {
     const num = Number(String(value).replace(/,/g, ""));
-    if (isNaN(num)) return "0.00";
+
+    if (isNaN(num)) {
+      return "0.00";
+    }
 
     return num.toLocaleString("en-PH", {
       minimumFractionDigits: 2,
@@ -65,16 +75,49 @@ export default function CheckoutPage() {
     });
   };
 
+  // =========================
+  // PARSE PESO AMOUNT TO CENTS
+  // =========================
   const parseAmountInCents = (value: any) => {
     const cleaned = String(value)
       .replace(/,/g, "")
       .replace(/[^\d.]/g, "");
+
     const num = Number(cleaned);
+
     return isNaN(num) ? 0 : Math.round(num * 100);
   };
 
   // =========================
-  // LOAD METHODS
+  // WALLET INTEGRITY CHECK
+  // =========================
+  const verifyWalletIntegrity = async () => {
+    try {
+      const response: any = await getWalletBalance();
+
+      const walletData = response?.data || response;
+
+      if (Boolean(walletData?.is_tampered)) {
+        setIsTampered(true);
+
+        setAlert({
+          visible: true,
+          title: "Security Notice",
+          message:
+            walletData?.message ||
+            "Your wallet balance integrity check failed. Please contact chat support for assistance.",
+          redirectToMain: true,
+          isConfirmation: false,
+          onConfirm: () => {},
+        });
+      }
+    } catch (err) {
+      console.log("Failed to verify wallet state", err);
+    }
+  };
+
+  // =========================
+  // LOAD PAYMENT METHODS
   // =========================
   const loadMethods = async () => {
     try {
@@ -82,8 +125,8 @@ export default function CheckoutPage() {
 
       const list = Array.isArray(res)
         ? res
-        : Array.isArray(res?.data)
-          ? res.data
+        : Array.isArray((res as any)?.data)
+          ? (res as any).data
           : [];
 
       const formatted: PaymentMethod[] = list.map((item: any) => ({
@@ -103,15 +146,29 @@ export default function CheckoutPage() {
       }
     } catch (err) {
       console.log("Failed to load payment methods", err);
+
+      setAlert({
+        visible: true,
+        title: "Connection Error",
+        message:
+          "Unable to load payment methods at this time. Please try again later.",
+        redirectToMain: false,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
     }
   };
 
+  // =========================
+  // INITIAL LOAD
+  // =========================
   useEffect(() => {
+    verifyWalletIntegrity();
     loadMethods();
   }, []);
 
   // =========================
-  // TRANSACTION PAYLOAD LOGIC
+  // PAYMENT EXECUTION
   // =========================
   const executePaymentPayload = async () => {
     try {
@@ -120,79 +177,118 @@ export default function CheckoutPage() {
 
       const amountInCents = parseAmountInCents(safeAmount);
 
-      if (isWalletLoad) {
-        // WALLET RECHARGE INTEGRATION
-        const payload = {
-          amount: amountInCents,
-          payment_method_id: Number(selectedMethod!.id),
-          gateway_payment_method_id: null,
-        };
-
-        console.log("SENDING WALLET RECHARGE PAYLOAD:", payload);
-        const response = await rechargeWallet(payload);
-        console.log("RECHARGE RESPONSE:", JSON.stringify(response, null, 2));
-
-        // FIXED: Extract data layers using the same robust extraction strategy as membership
-        const result = response?.data || response;
-
-        // Treat them as 'any' so TypeScript stops checking their keys
-        const resAny = response as any;
-        const resultAny = result as any;
-
-        const nextAction =
-          resAny?.next_action ||
-          resultAny?.next_action ||
-          resAny?.data?.next_action;
-
-        const qr = nextAction?.qr_code_url || nextAction?.qr_url;
-        const url = nextAction?.redirect_url || nextAction?.url;
-
-        // QR FLOW
-        if (qr) {
-          setNavigating(true);
-          router.push({
-            pathname: "/profile/membership-qrph",
-            params: {
-              qrUrl: String(qr),
-              paymentIntentId: String(result?.id || response?.data?.id || ""),
-              amount: String(amountInCents / 100),
-            },
-          });
-          return;
-        }
-
-        // WEBVIEW FLOW
-        if (url) {
-          setCheckoutUrl(String(url));
-          return;
-        }
-      } else {
-        throw new Error(
-          "Invalid request process channel target configuration context.",
-        );
+      if (!isWalletLoad) {
+        throw new Error("Invalid payment context routing channel.");
       }
 
+      // =========================
+      // WALLET RECHARGE PAYLOAD
+      // =========================
+      const payload = {
+        amount: amountInCents,
+        payment_method_id: Number(selectedMethod!.id),
+        gateway_payment_method_id: null,
+      };
+
+      console.log("WALLET RECHARGE PAYLOAD:", payload);
+
+      const response = await rechargeWallet(payload);
+
+      console.log(
+        "WALLET RECHARGE RESPONSE:",
+        JSON.stringify(response, null, 2),
+      );
+
+      const resAny = response as any;
+
+      // =========================
+      // GET NEXT ACTION
+      // =========================
+      const nextAction = resAny?.next_action || resAny?.data?.next_action;
+
+      const qr = nextAction?.qr_code_url || nextAction?.qr_url;
+
+      const url = nextAction?.redirect_url || nextAction?.url;
+
+      // =========================
+      // GET PAYMENT INTENT ID
+      // =========================
+      //
+      // IMPORTANT:
+      //
+      // response.data.id
+      // = Wallet ID
+      //
+      // response.payment.id
+      // = Laravel Payment ID
+      //
+      // response.payment.gateway_payment_intent_id
+      // = Gateway / PayMongo Payment Intent ID
+      //
+      const paymentIntentId = resAny?.payment?.gateway_payment_intent_id;
+
+      console.log("WALLET PAYMENT DATABASE ID:", resAny?.payment?.id);
+
+      console.log("WALLET PAYMENT INTENT ID:", paymentIntentId);
+
+      console.log("WALLET ID:", resAny?.data?.id);
+
+      // =========================
+      // QR FLOW
+      // =========================
+      if (qr) {
+        if (!paymentIntentId) {
+          throw new Error("Payment intent ID was not returned by the server.");
+        }
+
+        setNavigating(true);
+
+        router.push({
+          pathname: "/(load)/load-qrph",
+          params: {
+            qrUrl: String(qr),
+            paymentIntentId: String(paymentIntentId),
+            amount: String(amountInCents / 100),
+          },
+        });
+
+        return;
+      }
+
+      // =========================
+      // WEBVIEW FLOW
+      // =========================
+      if (url) {
+        setCheckoutUrl(String(url));
+        return;
+      }
+
+      // =========================
+      // INVALID GATEWAY RESPONSE
+      // =========================
       setAlert({
         visible: true,
-        title: "Error",
-        message:
-          "No usable payment transaction context route action URLs could be derived.",
-        redirectHome: false,
+        title: "Transaction Error",
+        message: "No valid gateway redirect URL was returned by the system.",
+        redirectToMain: false,
         isConfirmation: false,
         onConfirm: () => {},
       });
     } catch (error: any) {
-      console.log("PAYMENT SUBMISSION TRANSACTION FAILED ERROR:", error);
+      console.log("PAYMENT SUBMISSION ERROR:", error);
+
+      const isTamperResponse = Boolean(error?.response?.data?.is_tampered);
+
       const message =
         error?.response?.data?.message ||
         error?.message ||
-        "Recharge pipeline execution failure.";
+        "An unexpected error occurred during checkout execution.";
 
       setAlert({
         visible: true,
-        title: "Transaction Error",
-        message: message,
-        redirectHome: true, // Triggers redirect back home safely
+        title: "Transaction Failed",
+        message,
+        redirectToMain: isTamperResponse,
         isConfirmation: false,
         onConfirm: () => {},
       });
@@ -203,38 +299,61 @@ export default function CheckoutPage() {
   };
 
   // =========================
-  // CONFIRMATION DIALOG INTERCEPT
+  // CONFIRMATION DIALOG
   // =========================
   const handleProceed = () => {
-    if (isProcessing.current || loading || navigating) return;
+    if (isProcessing.current || loading || navigating) {
+      return;
+    }
+
+    if (isTampered) {
+      setAlert({
+        visible: true,
+        title: "Security Notice",
+        message:
+          "Your wallet balance integrity check failed. Please contact chat support for assistance.",
+        redirectToMain: true,
+        isConfirmation: false,
+        onConfirm: () => {},
+      });
+
+      return;
+    }
 
     if (!selectedMethod) {
       setAlert({
         visible: true,
         title: "Selection Required",
-        message: "Please choose an active gateway route option method below.",
-        redirectHome: false,
+        message: "Please choose a payment method before proceeding.",
+        redirectToMain: false,
         isConfirmation: false,
         onConfirm: () => {},
       });
+
       return;
     }
 
     setAlert({
       visible: true,
       title: "Confirm Wallet Load",
-      message: `Proceed with loading ₱${formatAmount(safeAmount)} into your wallet using ${selectedMethod.name}?`,
-      redirectHome: false,
+      message: `Proceed with loading ₱${formatAmount(
+        safeAmount,
+      )} into your wallet via ${selectedMethod.name}?`,
+      redirectToMain: false,
       isConfirmation: true,
       onConfirm: () => {
-        setAlert((prev) => ({ ...prev, visible: false }));
+        setAlert((prev) => ({
+          ...prev,
+          visible: false,
+        }));
+
         executePaymentPayload();
       },
     });
   };
 
   // =========================
-  // EMBEDDED WEBVIEW ENGINE RENDERING
+  // EMBEDDED WEBVIEW
   // =========================
   if (checkoutUrl) {
     return (
@@ -244,28 +363,36 @@ export default function CheckoutPage() {
         startInLoadingState
         onNavigationStateChange={(nav) => {
           if (nav.url.includes("payment/success")) {
-            // FIXED: Avoid routing straight to layout group directories like /(main)
-            router.replace("/payment-success");
+            router.replace("/(load)/payment-success");
           }
         }}
       />
     );
   }
 
+  // =========================
+  // SCREEN
+  // =========================
   return (
     <View className="flex-1 bg-gray-50">
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
-        {/* WALLET BRANDED METRIC CARD */}
+      <ScrollView
+        contentContainerStyle={{
+          padding: 20,
+          paddingBottom: 120,
+        }}
+      >
+        {/* WALLET METRIC CARD */}
         <View className="bg-white rounded-3xl p-6 mb-6 shadow-sm border border-slate-100">
           <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider">
             Wallet Funds Recharge
           </Text>
+
           <Text className="text-primary text-3xl font-black mt-1">
             ₱{formatAmount(safeAmount)}
           </Text>
         </View>
 
-        {/* PAYMENT ROUTING SELECTION COMPONENT GRID */}
+        {/* PAYMENT METHOD SELECTION */}
         <Text className="font-semibold text-gray-800 mb-3 px-1">
           Select Gateway Method
         </Text>
@@ -276,19 +403,22 @@ export default function CheckoutPage() {
           return (
             <TouchableOpacity
               key={m.id}
-              disabled={loading || navigating}
+              disabled={loading || navigating || isTampered}
               onPress={() => setSelectedMethod(m)}
               className={`p-4 mb-3 rounded-xl border ${
                 active
-                  ? "border-primary bg-blue/60"
+                  ? "border-primary bg-blue-50/60"
                   : "border-gray-200 bg-white"
               }`}
             >
               <Text
-                className={`font-semibold ${active ? "text-primary" : "text-slate-800"}`}
+                className={`font-semibold ${
+                  active ? "text-primary" : "text-slate-800"
+                }`}
               >
                 {m.name}
               </Text>
+
               <Text className="text-xs text-gray-400 uppercase mt-0.5">
                 {m.gateway_type}
               </Text>
@@ -297,13 +427,13 @@ export default function CheckoutPage() {
         })}
       </ScrollView>
 
-      {/* FOOTER CALL-TO-ACTION PANEL */}
+      {/* FOOTER CTA */}
       <View className="absolute bottom-0 w-full p-5 bg-white border-t border-gray-100">
         <TouchableOpacity
           onPress={handleProceed}
-          disabled={loading || navigating}
+          disabled={loading || navigating || isTampered}
           className={`h-16 rounded-2xl justify-center items-center ${
-            loading || navigating ? "bg-slate-300" : "bg-primary"
+            loading || navigating || isTampered ? "bg-slate-300" : "bg-primary"
           }`}
         >
           {loading ? (
@@ -316,7 +446,7 @@ export default function CheckoutPage() {
         </TouchableOpacity>
       </View>
 
-      {/* SYSTEM FEEDBACK NOTIFICATIONS POPUP ALERT */}
+      {/* SYSTEM FEEDBACK CUSTOM ALERT */}
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
@@ -324,11 +454,15 @@ export default function CheckoutPage() {
         confirmText={alert.isConfirmation ? "Proceed" : "Okay"}
         onConfirm={alert.isConfirmation ? alert.onConfirm : undefined}
         onClose={() => {
-          const shouldRedirect = alert.redirectHome;
-          setAlert((prev) => ({ ...prev, visible: false }));
+          const shouldRedirect = alert.redirectToMain;
+
+          setAlert((prev) => ({
+            ...prev,
+            visible: false,
+          }));
+
           if (shouldRedirect) {
-            // FIXED: Replaces folder layout string with explicitly clean base indexing path target alias
-            router.replace("/");
+            router.replace("/(main)");
           }
         }}
       />
