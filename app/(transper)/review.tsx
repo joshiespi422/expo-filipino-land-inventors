@@ -3,10 +3,10 @@ import {
   TransferVerification,
   TransferVerifyModal,
 } from "@/components/TransferVerifyModal";
-import { createTransfer } from "@/services/walletService";
+import { createTransfer, getWalletBalance } from "@/services/walletService";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -49,11 +49,13 @@ export default function ReviewTransferPage() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [isTampered, setIsTampered] = useState(false);
 
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
     message: "",
+    redirectToMain: false,
   });
 
   // Verification modal (password OR Quick & Secure Login)
@@ -65,14 +67,60 @@ export default function ReviewTransferPage() {
     errorMessage: null,
   });
 
+  // Re-check wallet integrity every time this screen gains focus — the
+  // person may have gone back and forth, and the balance could have been
+  // flagged as tampered since the form was first filled in.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      (async () => {
+        try {
+          const res = await getWalletBalance();
+          if (cancelled) return;
+
+          if (res?.data?.is_tampered) {
+            setIsTampered(true);
+            setAlert({
+              visible: true,
+              title: "Security Notice",
+              message:
+                res.data.message ||
+                "Your wallet balance integrity check failed. Please contact chat support for assistance.",
+              redirectToMain: true,
+            });
+          }
+        } catch (err) {
+          console.log("Failed to verify wallet state", err);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
   const handleOpenVerify = () => {
     if (!isConfirmed || isProcessing) return;
+
+    if (isTampered) {
+      setAlert({
+        visible: true,
+        title: "Security Notice",
+        message:
+          "Your wallet balance integrity check failed. Transactions are restricted.",
+        redirectToMain: true,
+      });
+      return;
+    }
 
     if (!params.channelId) {
       setAlert({
         visible: true,
         title: "Missing Destination",
         message: "Please go back and select a destination channel.",
+        redirectToMain: false,
       });
       return;
     }
@@ -121,9 +169,10 @@ export default function ReviewTransferPage() {
       });
     } catch (error: any) {
       const status = error?.response?.status;
+      const responseData = error?.response?.data;
+      const isTamperResponse = Boolean(responseData?.is_tampered);
 
       // Extract specific field errors from Laravel validation response if available
-      const responseData = error?.response?.data;
       let message =
         responseData?.message ||
         error?.message ||
@@ -136,7 +185,17 @@ export default function ReviewTransferPage() {
         }
       }
 
-      if (status === 422) {
+      if (isTamperResponse) {
+        setIsTampered(true);
+        setVerifyModal({ visible: false, errorMessage: null });
+
+        setAlert({
+          visible: true,
+          title: "Security Notice",
+          message,
+          redirectToMain: true,
+        });
+      } else if (status === 422) {
         console.warn("Transfer Verification Error:", message);
 
         setVerifyModal((prev) => ({
@@ -152,6 +211,7 @@ export default function ReviewTransferPage() {
           visible: true,
           title: "Transfer Failed",
           message,
+          redirectToMain: false,
         });
       }
     } finally {
@@ -263,6 +323,7 @@ export default function ReviewTransferPage() {
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() => setIsConfirmed((prev) => !prev)}
+          disabled={isTampered}
           className="flex-row items-center pb-4"
         >
           <View
@@ -284,9 +345,11 @@ export default function ReviewTransferPage() {
 
         <TouchableOpacity
           onPress={handleOpenVerify}
-          disabled={!isConfirmed || isProcessing}
+          disabled={!isConfirmed || isProcessing || isTampered}
           className={`h-14 rounded-xl justify-center items-center ${
-            !isConfirmed || isProcessing ? "bg-slate-300" : "bg-primary"
+            !isConfirmed || isProcessing || isTampered
+              ? "bg-slate-300"
+              : "bg-primary"
           }`}
         >
           {isProcessing ? (
@@ -312,7 +375,15 @@ export default function ReviewTransferPage() {
         title={alert.title}
         message={alert.message}
         confirmText="Okay"
-        onClose={() => setAlert((prev) => ({ ...prev, visible: false }))}
+        onClose={() => {
+          const shouldRedirect = alert.redirectToMain;
+
+          setAlert((prev) => ({ ...prev, visible: false }));
+
+          if (shouldRedirect) {
+            router.replace("/(main)");
+          }
+        }}
       />
     </View>
   );
