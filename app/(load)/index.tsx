@@ -1,7 +1,8 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getWalletBalance } from "@/services/walletService";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,16 +23,40 @@ export default function WalletPage() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Tamper Alert State
+  const [tamperAlert, setTamperAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
   // FETCH LIVE WALLET BALANCE
-  const fetchWalletData = async () => {
+  // FETCH LIVE WALLET BALANCE
+  const fetchWalletData = useCallback(async () => {
     try {
       setPageLoading(true);
       const response = await getWalletBalance();
-      // Handle response structure mapping from ApiWalletResource
-      const balanceStr = response?.data?.balance || "0";
+
+      // Type assertion for response data
+      const responseData = response?.data as {
+        balance?: string;
+        is_tampered?: boolean;
+        message?: string;
+      };
+
+      const balanceStr = responseData?.balance || "0";
       setWalletBalance(parseFloat(balanceStr));
-    } catch (err: any) {
-      console.error("Failed to load wallet metrics:", err);
+
+      if (responseData?.is_tampered) {
+        setTamperAlert({
+          visible: true,
+          title: "Security Notice",
+          message:
+            responseData.message ||
+            "Your wallet balance integrity check failed. Please contact support.",
+        });
+      }
+    } catch {
       Alert.alert(
         "Error",
         "Could not fetch wallet data. Please check your connection.",
@@ -39,18 +64,20 @@ export default function WalletPage() {
     } finally {
       setPageLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchWalletData();
   }, []);
+
+  // Re-fetch balance whenever screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchWalletData();
+    }, [fetchWalletData]),
+  );
 
   // FORMAT INPUT
   const handleChange = (value: string) => {
-    let raw = value.replace(/[^0-9]/g, "");
-
+    const raw = value.replace(/[^0-9]/g, "");
     if (raw) {
-      setAmount(parseInt(raw).toLocaleString());
+      setAmount(parseInt(raw, 10).toLocaleString());
     } else {
       setAmount("");
     }
@@ -58,29 +85,33 @@ export default function WalletPage() {
 
   const cleanAmount = parseFloat(amount.replace(/,/g, "") || "0");
 
-  // VALIDATION AGAINST BACKEND RULES (Min amount rule match: min 5000 cents = ₱50.00)
-  const isValid = cleanAmount >= 50;
+  // VALIDATION AGAINST BACKEND RULES (Min ₱50.00)
+  const isValid = cleanAmount >= 1;
 
   // SUBMIT (LOAD WALLET → CHECKOUT)
   const handleProceed = () => {
     if (!isValid) {
-      Alert.alert("Invalid Amount", "Minimum load amount is ₱50.00.");
+      Alert.alert("Invalid Amount", "Minimum load amount is ₱1.00.");
       return;
     }
 
     setIsProcessing(true);
 
-    setTimeout(() => {
-      setIsProcessing(false);
+    router.push({
+      pathname: "/(load)/checkout",
+      params: {
+        amount: cleanAmount.toString(),
+        type: "wallet_load",
+      },
+    });
 
-      router.push({
-        pathname: "/(load)/checkout",
-        params: {
-          amount: cleanAmount,
-          type: "wallet_load",
-        },
-      });
-    }, 300);
+    setIsProcessing(false);
+  };
+
+  // HANDLE TAMPER ALERT CLOSE & REDIRECT TO HOME
+  const handleCloseTamperAlert = () => {
+    setTamperAlert((prev) => ({ ...prev, visible: false }));
+    router.replace("./(home)");
   };
 
   // LOADING UI
@@ -107,6 +138,7 @@ export default function WalletPage() {
                 ₱
                 {walletBalance.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
                 })}
               </Text>
             </View>
@@ -124,7 +156,7 @@ export default function WalletPage() {
             </View>
 
             <Text className="p-1 text-xs text-slate-400 mt-1">
-              Minimum load is ₱50.00 (Processed via secure gateway)
+              Minimum load is ₱1.00 (Processed via secure gateway)
             </Text>
 
             {/* SUMMARY */}
@@ -134,7 +166,11 @@ export default function WalletPage() {
               <View className="flex-row justify-between mb-2">
                 <Text className="text-slate-600">Load Amount</Text>
                 <Text className="font-bold text-primary">
-                  ₱{cleanAmount.toLocaleString() || "0.00"}
+                  ₱
+                  {cleanAmount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </Text>
               </View>
 
@@ -144,6 +180,7 @@ export default function WalletPage() {
                   ₱
                   {(walletBalance + cleanAmount).toLocaleString(undefined, {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </Text>
               </View>
@@ -170,6 +207,14 @@ export default function WalletPage() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* TAMPER DETECTED CUSTOM ALERT */}
+      <CustomAlert
+        visible={tamperAlert.visible}
+        title={tamperAlert.title}
+        message={tamperAlert.message}
+        onClose={handleCloseTamperAlert}
+      />
     </View>
   );
 }
