@@ -1,7 +1,10 @@
 import { CustomAlert } from "@/components/CustomAlert";
 import {
+  calculateLoadFee,
+  getLoadConfig,
   getPaymentMethods,
   getWalletBalance,
+  LoadConfig,
   PaymentMethod,
   rechargeWallet,
 } from "@/services/walletService";
@@ -26,6 +29,7 @@ export default function CheckoutPage() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
     null,
   );
+  const [loadConfig, setLoadConfig] = useState<LoadConfig | null>(null);
 
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [navigating, setNavigating] = useState(false);
@@ -34,6 +38,15 @@ export default function CheckoutPage() {
 
   const safeAmount = Array.isArray(amount) ? amount[0] : amount;
   const isWalletLoad = type === "wallet_load";
+
+  // Net load amount, in pesos (this is the amount that gets credited to the wallet)
+  const netAmountPesos = Number(String(safeAmount).replace(/,/g, "")) || 0;
+
+  const loadFee = loadConfig?.fee
+    ? calculateLoadFee(netAmountPesos, loadConfig.fee)
+    : 0;
+
+  const totalChargePesos = netAmountPesos + loadFee;
 
   // =========================
   // CUSTOM ALERT STATE
@@ -60,7 +73,7 @@ export default function CheckoutPage() {
   );
 
   // =========================
-  // FORMAT AMOUNT
+  // FORMAT AMOUNT (pesos in)
   // =========================
   const formatAmount = (value: any) => {
     const num = Number(String(value).replace(/,/g, ""));
@@ -117,6 +130,19 @@ export default function CheckoutPage() {
   };
 
   // =========================
+  // LOAD DYNAMIC FEE CONFIG
+  // =========================
+  const loadFeeConfig = async () => {
+    try {
+      const res = await getLoadConfig();
+      setLoadConfig(res.data);
+    } catch (err) {
+      console.log("Failed to load fee config", err);
+      // Not fatal — checkout still works, just without a fee breakdown shown
+    }
+  };
+
+  // =========================
   // LOAD PAYMENT METHODS
   // =========================
   const loadMethods = async () => {
@@ -164,6 +190,7 @@ export default function CheckoutPage() {
   // =========================
   useEffect(() => {
     verifyWalletIntegrity();
+    loadFeeConfig();
     loadMethods();
   }, []);
 
@@ -175,6 +202,8 @@ export default function CheckoutPage() {
       isProcessing.current = true;
       setLoading(true);
 
+      // Net amount to be credited to the wallet (in cents) — the backend
+      // adds the fee on top and charges amount + fee at the gateway.
       const amountInCents = parseAmountInCents(safeAmount);
 
       if (!isWalletLoad) {
@@ -213,25 +242,20 @@ export default function CheckoutPage() {
       // =========================
       // GET PAYMENT INTENT ID
       // =========================
-      //
-      // IMPORTANT:
-      //
-      // response.data.id
-      // = Wallet ID
-      //
-      // response.payment.id
-      // = Laravel Payment ID
-      //
-      // response.payment.gateway_payment_intent_id
-      // = Gateway / PayMongo Payment Intent ID
-      //
       const paymentIntentId = resAny?.payment?.gateway_payment_intent_id;
 
       console.log("WALLET PAYMENT DATABASE ID:", resAny?.payment?.id);
-
       console.log("WALLET PAYMENT INTENT ID:", paymentIntentId);
-
       console.log("WALLET ID:", resAny?.data?.id);
+
+      // The fee actually charged by the gateway, in pesos — prefer the
+      // server's number (resAny?.payment?.fee is in cents) over our local
+      // estimate, since transaction_fees may have changed between page loads.
+      const serverFeeCents = resAny?.payment?.fee;
+      const feePesos =
+        typeof serverFeeCents === "number" ? serverFeeCents / 100 : loadFee;
+
+      const totalChargedPesos = amountInCents / 100 + feePesos;
 
       // =========================
       // QR FLOW
@@ -249,6 +273,8 @@ export default function CheckoutPage() {
             qrUrl: String(qr),
             paymentIntentId: String(paymentIntentId),
             amount: String(amountInCents / 100),
+            fee: String(feePesos),
+            totalCharged: String(totalChargedPesos),
           },
         });
 
@@ -336,9 +362,13 @@ export default function CheckoutPage() {
     setAlert({
       visible: true,
       title: "Confirm Wallet Load",
-      message: `Proceed with loading ₱${formatAmount(
-        safeAmount,
-      )} into your wallet via ${selectedMethod.name}?`,
+      message: `Load ₱${formatAmount(safeAmount)} into your wallet via ${
+        selectedMethod.name
+      }?${
+        loadFee > 0
+          ? ` A ₱${loadFee.toFixed(2)} fee applies — you'll be charged ₱${totalChargePesos.toFixed(2)} total.`
+          : ""
+      }`,
       redirectToMain: false,
       isConfirmation: true,
       onConfirm: () => {
@@ -390,6 +420,23 @@ export default function CheckoutPage() {
           <Text className="text-primary text-3xl font-black mt-1">
             ₱{formatAmount(safeAmount)}
           </Text>
+
+          {loadFee > 0 && (
+            <View className="mt-4 pt-4 border-t border-slate-100">
+              <View className="flex-row justify-between mb-1">
+                <Text className="text-slate-500 text-sm">Processing Fee</Text>
+                <Text className="text-slate-700 text-sm font-semibold">
+                  ₱{loadFee.toFixed(2)}
+                </Text>
+              </View>
+              <View className="flex-row justify-between">
+                <Text className="text-slate-500 text-sm">Total to Pay</Text>
+                <Text className="text-slate-800 text-sm font-bold">
+                  ₱{totalChargePesos.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* PAYMENT METHOD SELECTION */}
@@ -440,7 +487,10 @@ export default function CheckoutPage() {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text className="text-white font-bold text-lg">
-              Confirm & Pay ₱{formatAmount(safeAmount)}
+              Confirm & Pay ₱
+              {loadFee > 0
+                ? totalChargePesos.toFixed(2)
+                : formatAmount(safeAmount)}
             </Text>
           )}
         </TouchableOpacity>
