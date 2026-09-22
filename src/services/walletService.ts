@@ -6,6 +6,8 @@ export interface WalletResponse {
     balance: string;
     show: boolean;
     updated_at: string;
+    is_tampered?: boolean;
+    message?: string | null;
   };
 }
 
@@ -68,6 +70,31 @@ export const getWalletTransactions = async (): Promise<WalletTransaction[]> => {
 export const getWalletPresets = async (): Promise<{ data: WalletPreset[] }> => {
   const res = await api.get("/wallet/presets");
   return res.data;
+};
+
+/////////////// Load Wallet config (dynamic min + fee) ///////////////////
+export interface LoadFee {
+  type: "PHP" | "Percentage";
+  fee: number;
+}
+
+export interface LoadConfig {
+  min_recharge: number;
+  fee: LoadFee;
+}
+
+export const getLoadConfig = async (): Promise<{ data: LoadConfig }> => {
+  const res = await api.get("/wallet/load/config");
+  return res.data;
+};
+
+// Mirrors calculateTransferFee — computes the fee for a given net load amount
+export const calculateLoadFee = (amount: number, fee: LoadFee): number => {
+  if (!amount) return 0;
+
+  const raw = fee.type === "Percentage" ? amount * (fee.fee / 100) : fee.fee;
+
+  return Math.round(raw * 100) / 100;
 };
 
 // Send recharge parameters to the server
