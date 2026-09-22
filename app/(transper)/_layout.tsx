@@ -9,13 +9,13 @@ import { Redirect, Stack, usePathname, useRouter } from "expo-router";
 import React, { useEffect } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   StatusBar,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import "../../global.css";
@@ -73,15 +73,12 @@ export default function BusinessLayout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <NavigationBarWrapper>
-        <StatusBar hidden={isScannerScreen} />
+    <KeyboardProvider>
+      <QueryClientProvider client={queryClient}>
+        <NavigationBarWrapper>
+          <StatusBar hidden={isScannerScreen} />
 
-        <View className="flex-1 bg-white">
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            className="flex-1"
-          >
+          <View className="flex-1 bg-white">
             {/* GLOBAL HEADER (Hidden on Scan QR Code Screen) */}
             {!isScannerScreen && (
               <View className="bg-primary w-full items-center rounded-b-2xl pt-14 pb-4">
@@ -119,9 +116,9 @@ export default function BusinessLayout() {
                 <Stack.Screen name="scanqrcode" />
               </Stack>
             </View>
-          </KeyboardAvoidingView>
-        </View>
-      </NavigationBarWrapper>
-    </QueryClientProvider>
+          </View>
+        </NavigationBarWrapper>
+      </QueryClientProvider>
+    </KeyboardProvider>
   );
 }
