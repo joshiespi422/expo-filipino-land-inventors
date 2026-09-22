@@ -15,7 +15,8 @@ import {
 } from "react-native";
 
 export default function WalletLoadQRPage() {
-  const { qrUrl, paymentIntentId, amount } = useLocalSearchParams();
+  const { qrUrl, paymentIntentId, amount, fee, totalCharged } =
+    useLocalSearchParams();
 
   const router = useRouter();
 
@@ -148,10 +149,22 @@ export default function WalletLoadQRPage() {
   // =========================
   // FORMAT AMOUNT
   // =========================
-  const formattedAmount = Number(amount || 0).toLocaleString("en-PH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const formatPesos = (value: any) =>
+    Number(value || 0).toLocaleString("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const feeValue = Number(fee || 0);
+  // Fall back to `amount` if totalCharged wasn't passed (e.g. old links) so
+  // the page never breaks on a stale deep link — it just shows no fee row.
+  const totalChargedValue = totalCharged
+    ? Number(totalCharged)
+    : Number(amount || 0);
+
+  const formattedAmount = formatPesos(amount);
+  const formattedFee = formatPesos(feeValue);
+  const formattedTotal = formatPesos(totalChargedValue);
 
   return (
     <View className="flex-1 bg-white">
@@ -166,10 +179,33 @@ export default function WalletLoadQRPage() {
         {/* TITLE */}
         <Text className="text-xl font-bold mb-2">Scan to Load Wallet</Text>
 
-        {/* AMOUNT */}
-        <Text className="text-primary text-3xl font-bold mb-6">
+        {/* AMOUNT TO BE CREDITED */}
+        <Text className="text-primary text-3xl font-bold mb-1">
           ₱ {formattedAmount}
         </Text>
+        <Text className="text-slate-400 text-xs mb-4">
+          Will be credited to your wallet
+        </Text>
+
+        {/* FEE / TOTAL CHARGED BREAKDOWN */}
+        {feeValue > 0 && (
+          <View className="w-full max-w-[320px] bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 mb-6">
+            <View className="flex-row justify-between mb-1">
+              <Text className="text-slate-500 text-sm">Processing Fee</Text>
+              <Text className="text-slate-700 text-sm font-semibold">
+                ₱ {formattedFee}
+              </Text>
+            </View>
+            <View className="flex-row justify-between pt-1 border-t border-slate-200">
+              <Text className="text-slate-600 text-sm font-semibold">
+                Total to Scan/Pay
+              </Text>
+              <Text className="text-slate-900 text-sm font-bold">
+                ₱ {formattedTotal}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* QR */}
         {qrUrl ? (
