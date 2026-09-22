@@ -8,13 +8,12 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  Platform,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import OTPVerification from "../../assets/images/vector/OTPVerification.png";
 import "../../global.css";
 
@@ -49,11 +48,12 @@ export default function OtpSendPage() {
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={{ flexGrow: 1 }}
+    <KeyboardAwareScrollView
+      contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
-      automaticallyAdjustKeyboardInsets={Platform.OS === "android"}
+      bounces={false}
+      bottomOffset={20}
     >
       <View className="flex-1 bg-slate-50">
         <HeaderAuth title="Join Us" />
@@ -148,6 +148,6 @@ export default function OtpSendPage() {
           </View>
         </View>
       </View>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }

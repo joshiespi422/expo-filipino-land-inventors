@@ -9,25 +9,20 @@ import { passwordService } from "@/services/passwordService";
 import { termsAndConditionsService } from "@/services/termsAndConditionsService";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+
 import "../../global.css";
 
 export default function CreatePasswordPage() {
   const router = useRouter();
-
-  const scrollRef = useRef<ScrollView>(null);
-  const scrollPosition = useRef(0);
 
   const { phone, token } = useLocalSearchParams<{
     phone: string;
@@ -50,8 +45,6 @@ export default function CreatePasswordPage() {
   });
 
   const showAlert = (title: string, message: string) => {
-    Keyboard.dismiss();
-
     setTimeout(() => {
       setAlert({
         visible: true,
@@ -110,31 +103,6 @@ export default function CreatePasswordPage() {
   }, []);
 
   // ==========================================
-  // KEYBOARD SCROLL
-  // ==========================================
-
-  useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", () => {
-      scrollRef.current?.scrollTo({
-        y: scrollPosition.current,
-        animated: true,
-      });
-    });
-
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({
-        y: 0,
-        animated: true,
-      });
-    });
-
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-
-  // ==========================================
   // SET PASSWORD
   // ==========================================
 
@@ -148,8 +116,6 @@ export default function CreatePasswordPage() {
       }),
 
     onSuccess: (data) => {
-      Keyboard.dismiss();
-
       router.replace({
         pathname: "/congratulations",
         params: {
@@ -255,130 +221,118 @@ export default function CreatePasswordPage() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <KeyboardAwareScrollView
+      contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+      bottomOffset={20}
     >
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingBottom: 30,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        onScroll={(e) => {
-          scrollPosition.current = e.nativeEvent.contentOffset.y;
-        }}
-        scrollEventThrottle={16}
-      >
-        <View className="flex-1 bg-slate-50">
-          <HeaderAuth title="Join Us" />
+      <View className="flex-1 bg-slate-50">
+        <HeaderAuth title="Join Us" />
 
-          <View className="flex-1 -mt-10">
-            <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
+        <View className="flex-1 -mt-10">
+          <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
-            <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
-              <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
-                {/* LOGO */}
-                {pageLoading ? (
-                  <View className="items-center mb-4">
-                    <Skeleton className="w-32 h-32 rounded-full border-4 border-white" />
-                  </View>
-                ) : (
-                  <LogoAuth />
-                )}
+          <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
+            <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
+              {/* LOGO */}
+              {pageLoading ? (
+                <View className="items-center mb-4">
+                  <Skeleton className="w-32 h-32 rounded-full border-4 border-white" />
+                </View>
+              ) : (
+                <LogoAuth />
+              )}
 
-                {/* CONTENT */}
-                {pageLoading ? (
-                  <View className="gap-y-6">
-                    <Skeleton className="h-8 w-56" />
-                    <Skeleton className="h-[70px] w-full rounded-2xl" />
-                  </View>
-                ) : (
-                  <>
-                    <TitleAuth
-                      title="Create Password"
-                      description={`Set password for +${phone}`}
-                    />
+              {/* CONTENT */}
+              {pageLoading ? (
+                <View className="gap-y-6">
+                  <Skeleton className="h-8 w-56" />
+                  <Skeleton className="h-[70px] w-full rounded-2xl" />
+                </View>
+              ) : (
+                <>
+                  <TitleAuth
+                    title="Create Password"
+                    description={`Set password for +${phone}`}
+                  />
 
-                    {/* PASSWORD */}
-                    <AuthInput
-                      label="Password"
-                      placeholder="Minimum 8 characters"
-                      value={password}
-                      onChangeText={setPassword}
-                      editable={!mutation.isPending}
-                      isPassword
-                      showPassword={showPassword}
-                      onTogglePassword={() => setShowPassword(!showPassword)}
-                    />
+                  {/* PASSWORD */}
+                  <AuthInput
+                    label="Password"
+                    placeholder="Minimum 8 characters"
+                    value={password}
+                    onChangeText={setPassword}
+                    editable={!mutation.isPending}
+                    isPassword
+                    showPassword={showPassword}
+                    onTogglePassword={() => setShowPassword(!showPassword)}
+                  />
 
-                    {/* CONFIRM PASSWORD */}
-                    <AuthInput
-                      label="Retype Password"
-                      placeholder="Repeat your password"
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      editable={!mutation.isPending}
-                      isPassword
-                      showPassword={showConfirmPassword}
-                      onTogglePassword={() =>
-                        setShowConfirmPassword(!showConfirmPassword)
-                      }
-                    />
+                  {/* CONFIRM PASSWORD */}
+                  <AuthInput
+                    label="Retype Password"
+                    placeholder="Repeat your password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    editable={!mutation.isPending}
+                    isPassword
+                    showPassword={showConfirmPassword}
+                    onTogglePassword={() =>
+                      setShowConfirmPassword(!showConfirmPassword)
+                    }
+                  />
 
-                    {/* TERMS CHECKBOX */}
-                    <View className="flex-row ps-2 items-center my-2">
-                      <TouchableOpacity
-                        onPress={handleCheckboxToggle}
-                        disabled={termsLoading}
-                        className={`w-5 h-5 rounded border mr-2 items-center justify-center ${
-                          agreeToTerms
-                            ? "bg-primary border-primary"
-                            : "border-slate-300 bg-slate-50"
-                        }`}
-                      >
-                        {agreeToTerms && (
-                          <View className="w-1.5 h-1.5 bg-white rounded-sm" />
-                        )}
-                      </TouchableOpacity>
-
-                      <Text className="text-primary text-sm flex-1">
-                        I agree to the{" "}
-                        <Text
-                          onPress={handleOpenTerms}
-                          className="underline font-bold"
-                        >
-                          Terms and Conditions
-                        </Text>
-                      </Text>
-                    </View>
-
-                    {/* REGISTER */}
+                  {/* TERMS CHECKBOX */}
+                  <View className="flex-row ps-2 items-center my-2">
                     <TouchableOpacity
-                      onPress={handleRegister}
-                      disabled={mutation.isPending}
-                      className={`mt-5 p-5 rounded-2xl flex-row justify-center items-center ${
-                        mutation.isPending ? "bg-slate-400" : "bg-primary"
+                      onPress={handleCheckboxToggle}
+                      disabled={termsLoading}
+                      className={`w-5 h-5 rounded border mr-2 items-center justify-center ${
+                        agreeToTerms
+                          ? "bg-primary border-primary"
+                          : "border-slate-300 bg-slate-50"
                       }`}
                     >
-                      {mutation.isPending ? (
-                        <ActivityIndicator color="white" />
-                      ) : (
-                        <Text className="text-white font-bold text-lg">
-                          Complete Registration
-                        </Text>
+                      {agreeToTerms && (
+                        <View className="w-1.5 h-1.5 bg-white rounded-sm" />
                       )}
                     </TouchableOpacity>
-                  </>
-                )}
-              </View>
+
+                    <Text className="text-primary text-sm flex-1">
+                      I agree to the{" "}
+                      <Text
+                        onPress={handleOpenTerms}
+                        className="underline font-bold"
+                      >
+                        Terms and Conditions
+                      </Text>
+                    </Text>
+                  </View>
+
+                  {/* REGISTER */}
+                  <TouchableOpacity
+                    onPress={handleRegister}
+                    disabled={mutation.isPending}
+                    className={`mt-5 p-5 rounded-2xl flex-row justify-center items-center ${
+                      mutation.isPending ? "bg-slate-400" : "bg-primary"
+                    }`}
+                  >
+                    {mutation.isPending ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <Text className="text-white font-bold text-lg">
+                        Complete Registration
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         </View>
-      </ScrollView>
+      </View>
 
       {/* CUSTOM ALERT */}
       <CustomAlert
@@ -405,6 +359,6 @@ export default function CreatePasswordPage() {
         onAccept={handleAcceptTerms}
         onCancel={() => setTermsModalVisible(false)}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }

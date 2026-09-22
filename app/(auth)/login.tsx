@@ -5,15 +5,8 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 // Components
 import { AuthInput } from "@/components/AuthInput";
@@ -32,7 +25,6 @@ export default function LoginPage() {
   const [form, setForm] = useState({ number: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
 
-  // Standard alert state
   const [alert, setAlert] = useState({
     visible: false,
     title: "",
@@ -40,14 +32,12 @@ export default function LoginPage() {
     onCloseOverride: null as (() => void) | null,
   });
 
-  // Biometric alert state
   const [biometricAlert, setBiometricAlert] = useState({
     visible: false,
     title: "",
     message: "",
   });
 
-  // Reactivation / Deletion trigger custom alert state
   const [reactivationAlert, setReactivationAlert] = useState({
     visible: false,
     title: "",
@@ -62,13 +52,13 @@ export default function LoginPage() {
     biometric: false,
   });
 
-  // Biometric state
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometryLabel, setBiometryLabel] = useState<string>("Biometrics");
   const [currentDeviceId, setCurrentDeviceId] = useState<string>("");
   const [hasBiometricEnabled, setHasBiometricEnabled] = useState(false);
 
   const isProcessing = useRef(false);
+  const isDisabled = loadingState.action || loadingState.nav;
 
   useEffect(() => {
     const timer = setTimeout(
@@ -78,7 +68,6 @@ export default function LoginPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Initialize biometric support
   useEffect(() => {
     const initBiometric = async () => {
       try {
@@ -119,10 +108,6 @@ export default function LoginPage() {
     setBiometricAlert({ visible: true, title, message });
   };
 
-  /**
-   * Called only when the user taps "Okay" on the reactivation
-   * confirmation custom alert.
-   */
   const sendReactivationOtp = async (phone: string) => {
     if (isProcessing.current) return;
 
@@ -178,7 +163,6 @@ export default function LoginPage() {
       isProcessing.current = false;
       setLoadingState((prev) => ({ ...prev, action: false }));
 
-      // --- ACCOUNT SCHEDULED FOR DELETION: trigger custom reactivation modal ---
       if (error?.status === "pending_reactivation") {
         setReactivationAlert({
           visible: true,
@@ -284,136 +268,125 @@ export default function LoginPage() {
     router.push("/forgetPassword");
   };
 
-  const isDisabled = loadingState.action || loadingState.nav;
-
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <KeyboardAwareScrollView
+      contentContainerStyle={{ flexGrow: 1 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+      bottomOffset={20}
     >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <View className="flex-1 bg-slate-50">
-          <HeaderAuth title="Hello" subtitle="Welcome back!" />
+      <View className="flex-1 bg-slate-50">
+        <HeaderAuth title="Hello" subtitle="Welcome back!" />
 
-          <View className="flex-1 -mt-10">
-            <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
+        <View className="flex-1 -mt-10">
+          <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
-            <View className="mx-5 pb-10 pt-5 max-w-[500px] w-[90%] self-center">
-              <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4 mb-10">
-                {loadingState.page ? (
-                  <LoginSkeleton />
-                ) : (
-                  <>
-                    <LogoAuth />
+          <View className="mx-5 pb-10 pt-5 max-w-[500px] w-[90%] self-center">
+            <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4 mb-10">
+              {loadingState.page ? (
+                <LoginSkeleton />
+              ) : (
+                <>
+                  <LogoAuth />
 
-                    <TitleAuth
-                      title="Login Account"
-                      description="Log in to your account to securely access your dashboard and manage your features."
-                    />
+                  <TitleAuth
+                    title="Login Account"
+                    description="Log in to your account to securely access your dashboard and manage your features."
+                  />
 
-                    {/* --- BIOMETRIC LOGIN BUTTON --- */}
-                    {biometricAvailable && hasBiometricEnabled && (
-                      <TouchableOpacity
-                        onPress={handleBiometricLogin}
-                        disabled={isDisabled || loadingState.biometric}
-                        activeOpacity={0.8}
-                        className={`mb-4 p-4 rounded-2xl flex-row justify-center items-center border-2 ${
-                          isDisabled || loadingState.biometric
-                            ? "border-slate-300 bg-slate-50"
-                            : "border-primary bg-primary/5"
-                        }`}
-                      >
-                        {loadingState.biometric ? (
-                          <ActivityIndicator color="#034194" />
-                        ) : (
-                          <>
-                            <Ionicons
-                              name="finger-print"
-                              size={20}
-                              color="#034194"
-                              style={{ marginRight: 8 }}
-                            />
-                            <Text className="text-primary font-bold text-base">
-                              Login with {biometryLabel}
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    )}
-
-                    {/* --- DIVIDER --- */}
-                    {biometricAvailable && hasBiometricEnabled && (
-                      <View className="flex-row items-center mb-4">
-                        <View className="flex-1 h-[1px] bg-gray-200" />
-                        <Text className="px-3 text-gray-400 text-xs">OR</Text>
-                        <View className="flex-1 h-[1px] bg-gray-200" />
-                      </View>
-                    )}
-
-                    <AuthInput
-                      label="Mobile Number"
-                      placeholder="09123456789"
-                      value={form.number}
-                      onChangeText={(val) => setForm({ ...form, number: val })}
-                      keyboardType="phone-pad"
-                      editable={!isDisabled}
-                    />
-
-                    <AuthInput
-                      label="Password"
-                      placeholder="••••••••"
-                      value={form.password}
-                      onChangeText={(val) =>
-                        setForm({ ...form, password: val })
-                      }
-                      editable={!isDisabled}
-                      isPassword={true}
-                      showPassword={showPassword}
-                      onTogglePassword={() => setShowPassword(!showPassword)}
-                      hasForgotPassword={true}
-                      onForgotPassword={handleForgotPassword}
-                    />
-
+                  {biometricAvailable && hasBiometricEnabled && (
                     <TouchableOpacity
-                      onPress={handleLogin}
-                      disabled={isDisabled}
+                      onPress={handleBiometricLogin}
+                      disabled={isDisabled || loadingState.biometric}
                       activeOpacity={0.8}
-                      className={`mt-3 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
-                        isDisabled ? "bg-slate-400" : "bg-primary"
+                      className={`mb-4 p-4 rounded-2xl flex-row justify-center items-center border-2 ${
+                        isDisabled || loadingState.biometric
+                          ? "border-slate-300 bg-slate-50"
+                          : "border-primary bg-primary/5"
                       }`}
                     >
-                      {loadingState.action ? (
-                        <ActivityIndicator color="white" />
+                      {loadingState.biometric ? (
+                        <ActivityIndicator color="#034194" />
                       ) : (
-                        <Text className="text-white font-bold text-lg">
-                          {loadingState.nav ? "Redirecting..." : "Log in"}
-                        </Text>
+                        <>
+                          <Ionicons
+                            name="finger-print"
+                            size={20}
+                            color="#034194"
+                            style={{ marginRight: 8 }}
+                          />
+                          <Text className="text-primary font-bold text-base">
+                            Login with {biometryLabel}
+                          </Text>
+                        </>
                       )}
                     </TouchableOpacity>
+                  )}
 
-                    <LinkAuth
-                      onNavigating={(val) =>
-                        setLoadingState((p) => ({
-                          ...p,
-                          nav: val,
-                        }))
-                      }
-                      isNavigating={loadingState.nav}
-                    />
-                  </>
-                )}
-              </View>
+                  {biometricAvailable && hasBiometricEnabled && (
+                    <View className="flex-row items-center mb-4">
+                      <View className="flex-1 h-[1px] bg-gray-200" />
+                      <Text className="px-3 text-gray-400 text-xs">OR</Text>
+                      <View className="flex-1 h-[1px] bg-gray-200" />
+                    </View>
+                  )}
+
+                  <AuthInput
+                    label="Mobile Number"
+                    placeholder="09123456789"
+                    value={form.number}
+                    onChangeText={(val) => setForm({ ...form, number: val })}
+                    keyboardType="phone-pad"
+                    editable={!isDisabled}
+                  />
+
+                  <AuthInput
+                    label="Password"
+                    placeholder="••••••••"
+                    value={form.password}
+                    onChangeText={(val) => setForm({ ...form, password: val })}
+                    editable={!isDisabled}
+                    isPassword={true}
+                    showPassword={showPassword}
+                    onTogglePassword={() => setShowPassword(!showPassword)}
+                    hasForgotPassword={true}
+                    onForgotPassword={handleForgotPassword}
+                  />
+
+                  <TouchableOpacity
+                    onPress={handleLogin}
+                    disabled={isDisabled}
+                    activeOpacity={0.8}
+                    className={`mt-3 p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                      isDisabled ? "bg-slate-400" : "bg-primary"
+                    }`}
+                  >
+                    {loadingState.action ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <Text className="text-white font-bold text-lg">
+                        {loadingState.nav ? "Redirecting..." : "Log in"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <LinkAuth
+                    onNavigating={(val) =>
+                      setLoadingState((p) => ({
+                        ...p,
+                        nav: val,
+                      }))
+                    }
+                    isNavigating={loadingState.nav}
+                  />
+                </>
+              )}
             </View>
           </View>
         </View>
-      </ScrollView>
+      </View>
 
-      {/* --- REGULAR LOGIN ALERT --- */}
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
@@ -425,7 +398,6 @@ export default function LoginPage() {
         }}
       />
 
-      {/* --- BIOMETRIC LOGIN ALERT --- */}
       <CustomAlert
         visible={biometricAlert.visible}
         title={biometricAlert.title}
@@ -433,7 +405,6 @@ export default function LoginPage() {
         onClose={() => setBiometricAlert({ ...biometricAlert, visible: false })}
       />
 
-      {/* --- ACCOUNT DELETION / REACTIVATION ALERT --- */}
       <CustomAlert
         visible={reactivationAlert.visible}
         title={reactivationAlert.title}
@@ -448,6 +419,6 @@ export default function LoginPage() {
           sendReactivationOtp(targetPhone);
         }}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }

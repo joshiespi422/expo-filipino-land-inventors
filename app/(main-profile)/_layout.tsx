@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // --------------------------------------------------
@@ -133,17 +134,11 @@ function CustomHeader() {
   // --------------------------------------------------
 
   const isProfileEdit = pathname.includes("editProfile");
-
   const isProfileSetup = pathname.includes("setupProfile");
-
   const isCongratulations = pathname.includes("congratulations");
-
   const isChangePassword = pathname.includes("changePassword");
-
   const isBiometric = pathname.includes("biometricSettings");
-
   const isDeleteAccount = pathname.includes("deleteAccount");
-
   const isDeleteVerification = pathname.includes("deleteVerification");
 
   const title = isProfileEdit
@@ -213,12 +208,14 @@ function CustomHeader() {
 
 export default function MainProfileLayout() {
   return (
-    <NavigationBarWrapper>
-      <StatusBar hidden={true} />
+    <KeyboardProvider>
+      <NavigationBarWrapper>
+        <StatusBar hidden={true} />
 
-      <CustomHeader />
+        <CustomHeader />
 
-      <Slot />
-    </NavigationBarWrapper>
+        <Slot />
+      </NavigationBarWrapper>
+    </KeyboardProvider>
   );
 }

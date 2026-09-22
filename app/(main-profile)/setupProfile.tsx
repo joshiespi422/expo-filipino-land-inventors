@@ -13,7 +13,6 @@ import {
   Dimensions,
   Image,
   Modal,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
@@ -24,6 +23,7 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -656,9 +656,13 @@ export default function SetupProfileScreen() {
 
   return (
     <View className="flex-1 bg-white">
-      <ScrollView
-        className="flex-1 bg-[#F8F9FB] px-4"
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        bottomOffset={20}
+        className="px-4"
       >
         {/* =====================================================
             BASIC INFORMATION
@@ -1031,7 +1035,7 @@ export default function SetupProfileScreen() {
             <Text className="text-white font-bold text-lg">Complete Setup</Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* =====================================================
           ID IMAGE SOURCE OPTIONS MODAL

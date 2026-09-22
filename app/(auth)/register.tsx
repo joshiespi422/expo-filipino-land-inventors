@@ -11,25 +11,20 @@ import {
 } from "@/services/accountRegister";
 import { useMutation } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Keyboard,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StatusBar,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import "../../global.css";
 
 export default function RegisterPage() {
   const router = useRouter();
-
-  const scrollRef = useRef<ScrollView>(null);
-  const scrollPosition = useRef(0);
 
   const [form, setForm] = useState({
     fullName: "",
@@ -64,25 +59,6 @@ export default function RegisterPage() {
       400,
     );
     return () => clearTimeout(timer);
-  }, []);
-
-  // 🔥 KEYBOARD SCROLL RESTORE SYSTEM
-  useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", () => {
-      scrollRef.current?.scrollTo({
-        y: scrollPosition.current,
-        animated: true,
-      });
-    });
-
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-
-    return () => {
-      show.remove();
-      hide.remove();
-    };
   }, []);
 
   const showAlert = (title: string, message: string) => {
@@ -169,101 +145,92 @@ export default function RegisterPage() {
     <>
       <StatusBar hidden={true} />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardAwareScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: 30,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        bottomOffset={20}
       >
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingBottom: 30,
-          }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          bounces={false} // 🔥 prevents snap-back issue
-          onScroll={(e) => {
-            scrollPosition.current = e.nativeEvent.contentOffset.y;
-          }}
-          scrollEventThrottle={16}
-        >
-          <View className="flex-1 bg-slate-50">
-            <HeaderAuth title="Join Us" />
+        <View className="flex-1 bg-slate-50">
+          <HeaderAuth title="Join Us" />
 
-            <View className="flex-1 -mt-10">
-              <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
+          <View className="flex-1 -mt-10">
+            <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
-              <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
-                <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
-                  {status.pageLoading ? (
-                    <LoginSkeleton />
-                  ) : (
-                    <>
-                      <LogoAuth />
+            <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
+              <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
+                {status.pageLoading ? (
+                  <LoginSkeleton />
+                ) : (
+                  <>
+                    <LogoAuth />
 
-                      <TitleAuth
-                        title="Register Account"
-                        containerClass="mb-8 mt-2"
-                        description="Create an Account to get started"
-                      />
+                    <TitleAuth
+                      title="Register Account"
+                      containerClass="mb-8 mt-2"
+                      description="Create an Account to get started"
+                    />
 
-                      <AuthInput
-                        label="Full Name"
-                        placeholder="Enter your full name"
-                        value={form.fullName}
-                        onChangeText={(val) =>
-                          setForm({ ...form, fullName: val })
-                        }
-                        autoCapitalize="words"
-                        editable={!isBusy}
-                      />
+                    <AuthInput
+                      label="Full Name"
+                      placeholder="Enter your full name"
+                      value={form.fullName}
+                      onChangeText={(val) =>
+                        setForm({ ...form, fullName: val })
+                      }
+                      autoCapitalize="words"
+                      editable={!isBusy}
+                    />
 
-                      <AuthInput
-                        label="Mobile Number"
-                        placeholder="09123456789"
-                        value={form.number}
-                        onChangeText={handleNumberChange}
-                        keyboardType="phone-pad"
-                        maxLength={11}
-                        editable={!isBusy}
-                      />
+                    <AuthInput
+                      label="Mobile Number"
+                      placeholder="09123456789"
+                      value={form.number}
+                      onChangeText={handleNumberChange}
+                      keyboardType="phone-pad"
+                      maxLength={11}
+                      editable={!isBusy}
+                    />
 
-                      <TouchableOpacity
-                        onPress={handleRegister}
-                        disabled={isBusy}
-                        activeOpacity={0.8}
-                        className={`p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
-                          isBusy ? "bg-slate-400" : "bg-primary"
-                        }`}
-                      >
-                        {mutation.isPending ? (
-                          <ActivityIndicator color="white" />
-                        ) : (
-                          <Text className="text-white font-bold text-lg">
-                            {status.navigating
-                              ? "Redirecting..."
-                              : "Register Now"}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleRegister}
+                      disabled={isBusy}
+                      activeOpacity={0.8}
+                      className={`p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                        isBusy ? "bg-slate-400" : "bg-primary"
+                      }`}
+                    >
+                      {mutation.isPending ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text className="text-white font-bold text-lg">
+                          {status.navigating
+                            ? "Redirecting..."
+                            : "Register Now"}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
 
-                      <LinkAuth
-                        onNavigating={(val) =>
-                          setStatus((p) => ({
-                            ...p,
-                            navigating: val,
-                          }))
-                        }
-                        isNavigating={status.navigating}
-                      />
-                    </>
-                  )}
-                </View>
+                    <LinkAuth
+                      onNavigating={(val) =>
+                        setStatus((p) => ({
+                          ...p,
+                          navigating: val,
+                        }))
+                      }
+                      isNavigating={status.navigating}
+                    />
+                  </>
+                )}
               </View>
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+      </KeyboardAwareScrollView>
 
       <CustomAlert
         visible={alert.visible}

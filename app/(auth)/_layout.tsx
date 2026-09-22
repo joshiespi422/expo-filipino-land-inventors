@@ -5,6 +5,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import { ActivityIndicator, Platform, View } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import "../../global.css";
 
@@ -66,32 +67,34 @@ export default function AuthLayout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <StatusBar hidden={true} />
+    <KeyboardProvider>
+      <QueryClientProvider client={queryClient}>
+        <StatusBar hidden={true} />
 
-      <NavigationBarWrapper>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: "fade",
-            navigationBarColor: "#ffffff",
-            contentStyle: {
-              backgroundColor: "#f8fafc",
-            },
-          }}
-        >
-          <Stack.Screen name="login" />
-          <Stack.Screen
-            name="register"
-            options={{ animation: "slide_from_right" }}
-          />
-          <Stack.Screen name="otpSend" />
-          <Stack.Screen name="otpVerification" />
-          <Stack.Screen name="successVerification" />
-          <Stack.Screen name="createPassword" />
-          <Stack.Screen name="congratulations" />
-        </Stack>
-      </NavigationBarWrapper>
-    </QueryClientProvider>
+        <NavigationBarWrapper>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "fade",
+              navigationBarColor: "#ffffff",
+              contentStyle: {
+                backgroundColor: "#f8fafc",
+              },
+            }}
+          >
+            <Stack.Screen name="login" />
+            <Stack.Screen
+              name="register"
+              options={{ animation: "slide_from_right" }}
+            />
+            <Stack.Screen name="otpSend" />
+            <Stack.Screen name="otpVerification" />
+            <Stack.Screen name="successVerification" />
+            <Stack.Screen name="createPassword" />
+            <Stack.Screen name="congratulations" />
+          </Stack>
+        </NavigationBarWrapper>
+      </QueryClientProvider>
+    </KeyboardProvider>
   );
 }

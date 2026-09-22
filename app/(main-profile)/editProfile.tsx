@@ -13,7 +13,6 @@ import {
   Dimensions,
   Image,
   Modal,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
@@ -24,6 +23,7 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -520,12 +520,13 @@ export default function EditProfileScreen() {
 
   return (
     <View className="flex-1 bg-white">
-      <ScrollView
-        className="flex-1 bg-[#F8F9FB] px-4"
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: isEditing ? 50 : 30,
-        }}
+        bounces={false}
+        className="px-4"
+        bottomOffset={20}
       >
         {/* HEADER */}
         <View className="flex-row justify-between items-center mt-6 mb-4">
@@ -980,7 +981,7 @@ export default function EditProfileScreen() {
             )}
           </View>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* ================================================= */}
       {/* SAVE BUTTON */}

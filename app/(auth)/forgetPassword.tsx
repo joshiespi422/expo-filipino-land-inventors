@@ -7,26 +7,22 @@ import TitleAuth from "@/components/TitleAuth";
 import { authService } from "@/services/forgetService";
 import { useMutation } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Keyboard,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StatusBar,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import "../../global.css";
 
 type Step = "PHONE" | "OTP" | "RESET";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
-  const scrollPosition = useRef(0);
 
   // Flow Tracking States
   const [step, setStep] = useState<Step>("PHONE");
@@ -85,23 +81,6 @@ export default function ForgotPasswordPage() {
       400,
     );
     return () => clearTimeout(timer);
-  }, []);
-
-  // Keyboard Layout Shift Handler
-  useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", () => {
-      scrollRef.current?.scrollTo({
-        y: scrollPosition.current,
-        animated: true,
-      });
-    });
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
   }, []);
 
   const showAlert = (
@@ -324,188 +303,179 @@ export default function ForgotPasswordPage() {
     <>
       <StatusBar hidden={true} />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        bottomOffset={20}
       >
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          onScroll={(e) => {
-            scrollPosition.current = e.nativeEvent.contentOffset.y;
-          }}
-          scrollEventThrottle={16}
-        >
-          <View className="flex-1 bg-slate-50">
-            <HeaderAuth title="Security" />
+        <View className="flex-1 bg-slate-50">
+          <HeaderAuth title="Security" />
 
-            <View className="flex-1 -mt-10">
-              <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
+          <View className="flex-1 -mt-10">
+            <View className="bg-primary h-[240px] rounded-b-[60px] absolute w-full top-0" />
 
-              <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
-                <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
-                  {status.pageLoading ? (
-                    <LoginSkeleton />
-                  ) : (
-                    <>
-                      <LogoAuth />
+            <View className="mx-5 pb-10 max-w-[500px] w-[90%] self-center">
+              <View className="bg-white p-6 rounded-[40px] shadow-black/20 shadow-md elevation-4">
+                {status.pageLoading ? (
+                  <LoginSkeleton />
+                ) : (
+                  <>
+                    <LogoAuth />
 
-                      {/* Step 1 UI Context */}
-                      {step === "PHONE" && (
-                        <>
-                          <TitleAuth
-                            title="Forgot Password"
-                            containerClass="mb-8 mt-2"
-                            description="Enter your registered phone to receive verification details."
-                          />
-                          <AuthInput
-                            label="Mobile Number"
-                            placeholder="09123456789"
-                            value={form.number}
-                            onChangeText={handleNumberChange}
-                            keyboardType="phone-pad"
-                            maxLength={11}
-                            editable={!isBusy}
-                          />
-                        </>
-                      )}
+                    {/* Step 1 UI Context */}
+                    {step === "PHONE" && (
+                      <>
+                        <TitleAuth
+                          title="Forgot Password"
+                          containerClass="mb-8 mt-2"
+                          description="Enter your registered phone to receive verification details."
+                        />
+                        <AuthInput
+                          label="Mobile Number"
+                          placeholder="09123456789"
+                          value={form.number}
+                          onChangeText={handleNumberChange}
+                          keyboardType="phone-pad"
+                          maxLength={11}
+                          editable={!isBusy}
+                        />
+                      </>
+                    )}
 
-                      {/* Step 2 UI Context */}
-                      {step === "OTP" && (
-                        <>
-                          <TitleAuth
-                            title="OTP Verification"
-                            containerClass="mb-8 mt-2"
-                            description={`Enter OTP sent to ${form.number}`}
-                          />
-                          <AuthInput
-                            label="OTP Verification Code"
-                            placeholder="Enter OTP Code"
-                            value={form.otpCode}
-                            onChangeText={(val) =>
-                              setForm({ ...form, otpCode: val })
-                            }
-                            keyboardType="number-pad"
-                            editable={!isBusy}
-                          />
-                          <View className="flex-row justify-between items-center mb-6 px-1">
-                            <Text className="text-slate-500 text-sm">
-                              Didn&apos;t get code?
-                            </Text>
-                            <TouchableOpacity
-                              onPress={handleResendAction}
-                              disabled={cooldown > 0 || isBusy}
-                            >
-                              <Text
-                                className={`font-semibold text-sm ${
-                                  cooldown > 0 || isBusy
-                                    ? "text-slate-400"
-                                    : "text-primary"
-                                }`}
-                              >
-                                {cooldown > 0
-                                  ? `Resend in ${cooldown}s`
-                                  : "Resend OTP"}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </>
-                      )}
-
-                      {/* Step 3 UI Context */}
-                      {step === "RESET" && (
-                        <>
-                          <TitleAuth
-                            title="Reset Password"
-                            containerClass="mb-8 mt-2"
-                            description="Please configure a fresh password update context configuration secure credentials."
-                          />
-
-                          <AuthInput
-                            label="New Password"
-                            placeholder="Minimum 8 characters"
-                            value={form.password}
-                            onChangeText={(val) =>
-                              setForm({ ...form, password: val })
-                            }
-                            editable={!isBusy}
-                            isPassword
-                            showPassword={showPassword}
-                            onTogglePassword={() =>
-                              setShowPassword(!showPassword)
-                            }
-                          />
-
-                          <AuthInput
-                            label="Confirm New Password"
-                            placeholder="Repeat your password"
-                            value={form.passwordConfirmation}
-                            onChangeText={(val) =>
-                              setForm({
-                                ...form,
-                                passwordConfirmation: val,
-                              })
-                            }
-                            editable={!isBusy}
-                            isPassword
-                            showPassword={showConfirmPassword}
-                            onTogglePassword={() =>
-                              setShowConfirmPassword(!showConfirmPassword)
-                            }
-                          />
-                        </>
-                      )}
-
-                      {/* Central Dispatch Interface Trigger Action */}
-                      <TouchableOpacity
-                        onPress={handlePrimaryAction}
-                        disabled={isBusy}
-                        activeOpacity={0.8}
-                        className={`p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
-                          isBusy ? "bg-slate-400" : "bg-primary"
-                        }`}
-                      >
-                        {isPendingState ? (
-                          <ActivityIndicator color="white" />
-                        ) : (
-                          <Text className="text-white font-bold text-lg">
-                            {status.navigating
-                              ? "Processing..."
-                              : step === "PHONE"
-                                ? "Send Verification"
-                                : step === "OTP"
-                                  ? "Verify OTP"
-                                  : "Update Password"}
+                    {/* Step 2 UI Context */}
+                    {step === "OTP" && (
+                      <>
+                        <TitleAuth
+                          title="OTP Verification"
+                          containerClass="mb-8 mt-2"
+                          description={`Enter OTP sent to ${form.number}`}
+                        />
+                        <AuthInput
+                          label="OTP Verification Code"
+                          placeholder="Enter OTP Code"
+                          value={form.otpCode}
+                          onChangeText={(val) =>
+                            setForm({ ...form, otpCode: val })
+                          }
+                          keyboardType="number-pad"
+                          editable={!isBusy}
+                        />
+                        <View className="flex-row justify-between items-center mb-6 px-1">
+                          <Text className="text-slate-500 text-sm">
+                            Didn&apos;t get code?
                           </Text>
-                        )}
-                      </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={handleResendAction}
+                            disabled={cooldown > 0 || isBusy}
+                          >
+                            <Text
+                              className={`font-semibold text-sm ${
+                                cooldown > 0 || isBusy
+                                  ? "text-slate-400"
+                                  : "text-primary"
+                              }`}
+                            >
+                              {cooldown > 0
+                                ? `Resend in ${cooldown}s`
+                                : "Resend OTP"}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    )}
 
-                      {/* Return Route Control Footer */}
-                      <TouchableOpacity
-                        className="mt-5 self-center"
-                        disabled={isBusy}
-                        onPress={() => {
-                          if (step === "OTP") setStep("PHONE");
-                          else router.back();
-                        }}
-                      >
-                        <Text className="text-primary text-lg font-bold">
-                          {step === "OTP"
-                            ? "Back to Change Number"
-                            : "Back to Login"}
+                    {/* Step 3 UI Context */}
+                    {step === "RESET" && (
+                      <>
+                        <TitleAuth
+                          title="Reset Password"
+                          containerClass="mb-8 mt-2"
+                          description="Please configure a fresh password update context configuration secure credentials."
+                        />
+
+                        <AuthInput
+                          label="New Password"
+                          placeholder="Minimum 8 characters"
+                          value={form.password}
+                          onChangeText={(val) =>
+                            setForm({ ...form, password: val })
+                          }
+                          editable={!isBusy}
+                          isPassword
+                          showPassword={showPassword}
+                          onTogglePassword={() =>
+                            setShowPassword(!showPassword)
+                          }
+                        />
+
+                        <AuthInput
+                          label="Confirm New Password"
+                          placeholder="Repeat your password"
+                          value={form.passwordConfirmation}
+                          onChangeText={(val) =>
+                            setForm({
+                              ...form,
+                              passwordConfirmation: val,
+                            })
+                          }
+                          editable={!isBusy}
+                          isPassword
+                          showPassword={showConfirmPassword}
+                          onTogglePassword={() =>
+                            setShowConfirmPassword(!showConfirmPassword)
+                          }
+                        />
+                      </>
+                    )}
+
+                    {/* Central Dispatch Interface Trigger Action */}
+                    <TouchableOpacity
+                      onPress={handlePrimaryAction}
+                      disabled={isBusy}
+                      activeOpacity={0.8}
+                      className={`p-5 rounded-2xl shadow-lg flex-row justify-center items-center ${
+                        isBusy ? "bg-slate-400" : "bg-primary"
+                      }`}
+                    >
+                      {isPendingState ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text className="text-white font-bold text-lg">
+                          {status.navigating
+                            ? "Processing..."
+                            : step === "PHONE"
+                              ? "Send Verification"
+                              : step === "OTP"
+                                ? "Verify OTP"
+                                : "Update Password"}
                         </Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Return Route Control Footer */}
+                    <TouchableOpacity
+                      className="mt-5 self-center"
+                      disabled={isBusy}
+                      onPress={() => {
+                        if (step === "OTP") setStep("PHONE");
+                        else router.back();
+                      }}
+                    >
+                      <Text className="text-primary text-lg font-bold">
+                        {step === "OTP"
+                          ? "Back to Change Number"
+                          : "Back to Login"}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+      </KeyboardAwareScrollView>
 
       <CustomAlert
         visible={alert.visible}
