@@ -1,3 +1,4 @@
+import { CustomAlert } from "@/components/CustomAlert";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   calculateTransferFee,
@@ -19,6 +20,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import "../../global.css";
 
@@ -92,6 +94,14 @@ export default function TransferPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [walletBalance, setWalletBalance] = useState(0);
 
+  // Tamper Alert State
+  const [isTampered, setIsTampered] = useState(false);
+  const [tamperAlert, setTamperAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
   // Dynamic config from the server
   const [channels, setChannels] = useState<TransferChannel[]>([]);
   const [config, setConfig] = useState<TransferConfig>({
@@ -131,6 +141,17 @@ export default function TransferPage() {
       ]);
 
       setWalletBalance(parseFloat(walletRes?.data?.balance || "0"));
+
+      if (walletRes?.data?.is_tampered) {
+        setIsTampered(true);
+        setTamperAlert({
+          visible: true,
+          title: "Security Notice",
+          message:
+            walletRes.data.message ||
+            "Your wallet balance integrity check failed. Transactions are restricted.",
+        });
+      }
 
       const cfg = configRes.data;
       setConfig(cfg);
@@ -182,6 +203,8 @@ export default function TransferPage() {
   }, [params.scannedRaw, pageLoading]);
 
   const handleModeChange = (mode: "manual" | "qr") => {
+    if (isTampered) return;
+
     if (mode === "qr") {
       if (!instapayChannel) {
         Alert.alert("Unavailable", "QR transfers are currently unavailable.");
@@ -208,6 +231,8 @@ export default function TransferPage() {
   };
 
   const handleRescan = () => {
+    if (isTampered) return;
+
     setQrScanned(false);
     setAccountName("");
     setAccountNumber("");
@@ -224,6 +249,7 @@ export default function TransferPage() {
   const totalDeduct = cleanAmount + fee;
 
   const isValid =
+    !isTampered &&
     cleanAmount >= config.min_transfer &&
     totalDeduct <= walletBalance &&
     (transferMode === "qr"
@@ -233,6 +259,16 @@ export default function TransferPage() {
         accountNumber.trim() !== "");
 
   const handleContinue = () => {
+    if (isTampered) {
+      setTamperAlert({
+        visible: true,
+        title: "Security Notice",
+        message:
+          "Your wallet balance integrity check failed. Transactions are restricted.",
+      });
+      return;
+    }
+
     if (!isValid) return;
 
     const channel = transferMode === "qr" ? instapayChannel : selectedChannel;
@@ -257,6 +293,13 @@ export default function TransferPage() {
     });
   };
 
+  const handleCloseTamperAlert = () => {
+    setTamperAlert((prev) => ({ ...prev, visible: false }));
+    if (isTampered) {
+      router.replace("/(main)");
+    }
+  };
+
   if (pageLoading) {
     return (
       <View className="flex-1 bg-white p-5 pt-20">
@@ -268,7 +311,13 @@ export default function TransferPage() {
 
   return (
     <View className="flex-1 bg-white">
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        bottomOffset={20}
+      >
         <View className="items-center py-8 px-6 w-full max-w-[600px] mx-auto">
           <View className="w-full max-w-[500px]">
             {/* AVAILABLE BALANCE */}
@@ -341,6 +390,7 @@ export default function TransferPage() {
                     <TextInput
                       value={accountName}
                       onChangeText={setAccountName}
+                      editable={!isTampered}
                       placeholder="Recipient name"
                       className="border border-slate-200 rounded-xl p-4 text-slate-800 bg-white"
                     />
@@ -353,6 +403,7 @@ export default function TransferPage() {
                     <TextInput
                       value={accountNumber}
                       onChangeText={setAccountNumber}
+                      editable={!isTampered}
                       keyboardType="number-pad"
                       placeholder="Account number"
                       className="border border-slate-200 rounded-xl p-4 text-slate-800 bg-white"
@@ -361,6 +412,7 @@ export default function TransferPage() {
 
                   <Pressable
                     onPress={handleRescan}
+                    disabled={isTampered}
                     className="items-center py-2"
                   >
                     <Text className="text-primary text-xs font-bold">
@@ -378,6 +430,7 @@ export default function TransferPage() {
                   </Text>
                   <Pressable
                     onPress={() => router.push("./scanqrcode")}
+                    disabled={isTampered}
                     className="bg-primary px-6 py-3 rounded-xl"
                   >
                     <Text className="text-white font-bold">
@@ -395,6 +448,7 @@ export default function TransferPage() {
                   </Text>
                   <Pressable
                     onPress={() => setShowChannelModal(true)}
+                    disabled={isTampered}
                     className="border border-slate-200 rounded-xl p-4 bg-white flex-row justify-between items-center"
                   >
                     <Text className="text-slate-800 font-bold">
@@ -414,6 +468,7 @@ export default function TransferPage() {
                   <TextInput
                     value={accountName}
                     onChangeText={setAccountName}
+                    editable={!isTampered}
                     placeholder="e.g. Juan Dela Cruz"
                     className="border border-slate-200 rounded-xl p-4 text-slate-800 bg-white"
                   />
@@ -427,6 +482,7 @@ export default function TransferPage() {
                   <TextInput
                     value={accountNumber}
                     onChangeText={setAccountNumber}
+                    editable={!isTampered}
                     keyboardType="number-pad"
                     placeholder="e.g. 09123456789"
                     className="border border-slate-200 rounded-xl p-4 text-slate-800 bg-white"
@@ -445,7 +501,7 @@ export default function TransferPage() {
                 <TextInput
                   value={amount}
                   onChangeText={handleAmountChange}
-                  editable={!qrAmountLocked}
+                  editable={!qrAmountLocked && !isTampered}
                   keyboardType="numeric"
                   placeholder="0.00"
                   className={`text-xl font-bold py-3 flex-1 ${
@@ -476,6 +532,7 @@ export default function TransferPage() {
               </Text>
               <Pressable
                 onPress={() => setShowPurposeModal(true)}
+                disabled={isTampered}
                 className="border border-slate-200 rounded-xl p-4 bg-white flex-row justify-between items-center"
               >
                 <Text className="text-slate-800">{purpose}</Text>
@@ -491,13 +548,14 @@ export default function TransferPage() {
               <TextInput
                 value={remarks}
                 onChangeText={setRemarks}
+                editable={!isTampered}
                 placeholder="Add a note or message"
                 className="border border-slate-200 rounded-xl p-4 text-slate-800 bg-white"
               />
             </View>
           </View>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* FOOTER */}
       <View className="w-full p-5 bg-white border-t border-slate-200">
@@ -590,6 +648,14 @@ export default function TransferPage() {
           </View>
         </View>
       </Modal>
+
+      {/* TAMPER DETECTED CUSTOM ALERT */}
+      <CustomAlert
+        visible={tamperAlert.visible}
+        title={tamperAlert.title}
+        message={tamperAlert.message}
+        onClose={handleCloseTamperAlert}
+      />
     </View>
   );
 }
