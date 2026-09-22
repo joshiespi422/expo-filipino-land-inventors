@@ -1,6 +1,11 @@
 import { CustomAlert } from "@/components/CustomAlert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getWalletBalance } from "@/services/walletService";
+import {
+  calculateLoadFee,
+  getLoadConfig,
+  getWalletBalance,
+  LoadConfig,
+} from "@/services/walletService";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
@@ -14,6 +19,8 @@ import {
 } from "react-native";
 import "../../global.css";
 
+const DEFAULT_MIN = 1.0;
+
 export default function WalletPage() {
   const router = useRouter();
 
@@ -22,6 +29,7 @@ export default function WalletPage() {
   const [amount, setAmount] = useState("");
   const [walletBalance, setWalletBalance] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loadConfig, setLoadConfig] = useState<LoadConfig | null>(null);
 
   // Tamper Alert State
   const [tamperAlert, setTamperAlert] = useState({
@@ -30,15 +38,18 @@ export default function WalletPage() {
     message: "",
   });
 
-  // FETCH LIVE WALLET BALANCE
-  // FETCH LIVE WALLET BALANCE
+  // FETCH LIVE WALLET BALANCE + DYNAMIC LOAD CONFIG
   const fetchWalletData = useCallback(async () => {
     try {
       setPageLoading(true);
-      const response = await getWalletBalance();
+
+      const [balanceRes, configRes] = await Promise.all([
+        getWalletBalance(),
+        getLoadConfig().catch(() => null), // don't block the page if config fails
+      ]);
 
       // Type assertion for response data
-      const responseData = response?.data as {
+      const responseData = balanceRes?.data as {
         balance?: string;
         is_tampered?: boolean;
         message?: string;
@@ -46,6 +57,10 @@ export default function WalletPage() {
 
       const balanceStr = responseData?.balance || "0";
       setWalletBalance(parseFloat(balanceStr));
+
+      if (configRes?.data) {
+        setLoadConfig(configRes.data);
+      }
 
       if (responseData?.is_tampered) {
         setTamperAlert({
@@ -85,13 +100,24 @@ export default function WalletPage() {
 
   const cleanAmount = parseFloat(amount.replace(/,/g, "") || "0");
 
-  // VALIDATION AGAINST BACKEND RULES (Min ₱50.00)
-  const isValid = cleanAmount >= 1;
+  const minRecharge = loadConfig?.min_recharge ?? DEFAULT_MIN;
+
+  const loadFee = loadConfig?.fee
+    ? calculateLoadFee(cleanAmount, loadConfig.fee)
+    : 0;
+
+  const totalToPay = cleanAmount + loadFee;
+
+  // VALIDATION AGAINST DYNAMIC BACKEND RULE
+  const isValid = cleanAmount >= minRecharge;
 
   // SUBMIT (LOAD WALLET → CHECKOUT)
   const handleProceed = () => {
     if (!isValid) {
-      Alert.alert("Invalid Amount", "Minimum load amount is ₱1.00.");
+      Alert.alert(
+        "Invalid Amount",
+        `Minimum load amount is ₱${minRecharge.toFixed(2)}.`,
+      );
       return;
     }
 
@@ -156,7 +182,8 @@ export default function WalletPage() {
             </View>
 
             <Text className="p-1 text-xs text-slate-400 mt-1">
-              Minimum load is ₱1.00 (Processed via secure gateway)
+              Minimum load is ₱{minRecharge.toFixed(2)} (Processed via secure
+              gateway)
             </Text>
 
             {/* SUMMARY */}
@@ -173,6 +200,32 @@ export default function WalletPage() {
                   })}
                 </Text>
               </View>
+
+              {loadFee > 0 && (
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-slate-600">Processing Fee</Text>
+                  <Text className="font-bold text-slate-700">
+                    ₱
+                    {loadFee.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Text>
+                </View>
+              )}
+
+              {loadFee > 0 && (
+                <View className="flex-row justify-between mb-2 pt-2 border-t border-slate-100">
+                  <Text className="text-slate-600">Total to Pay</Text>
+                  <Text className="font-bold text-slate-800">
+                    ₱
+                    {totalToPay.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Text>
+                </View>
+              )}
 
               <View className="flex-row justify-between">
                 <Text className="text-slate-600">New Balance After Load</Text>
