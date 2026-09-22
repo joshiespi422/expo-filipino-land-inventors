@@ -14,6 +14,10 @@ import {
 } from "react-native";
 import "../../global.css";
 
+// Components
+import { BannerSlider } from "@/components/BannerSlider";
+import { CustomAlert } from "@/components/CustomAlert";
+
 // Hooks & Services
 import { AdItem, getAds } from "@/services/adService";
 import echo from "@/services/echo";
@@ -41,7 +45,6 @@ import News from "../../assets/images/icon/News.png";
 // import RD from "../../assets/images/icon/RD.png";
 // import Suggest from "../../assets/images/icon/Suggest.png";
 // import image from "../../assets/images/HomeImage.png";
-import { BannerSlider } from "@/components/BannerSlider";
 
 const SCREEN = Dimensions.get("screen");
 
@@ -58,6 +61,13 @@ export default function DashboardPage() {
   const [showAlert, setShowAlert] = useState(false);
   const [pendingFeature, setPendingFeature] = useState("");
   const [ads, setAds] = useState<AdItem[]>([]);
+
+  // Tamper Alert State
+  const [tamperAlert, setTamperAlert] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
 
   const userTypeName = user?.user_type?.name?.toUpperCase() || "";
   const statusName = user?.status?.name?.toLowerCase() || "";
@@ -82,6 +92,17 @@ export default function DashboardPage() {
         const walletData = await getWalletBalance();
         setBalance(walletData.data.balance);
         setShowBalance(walletData.data.show);
+
+        // Integrity / Tampering Check
+        if (walletData.data.is_tampered) {
+          setTamperAlert({
+            visible: true,
+            title: "Security Notice",
+            message:
+              walletData.data.message ||
+              "Your wallet balance integrity check failed. Please contact chat support for assistance.",
+          });
+        }
       }
 
       // Fetch dynamic banner ads
@@ -535,6 +556,14 @@ export default function DashboardPage() {
           </View>
         </View>
       </Modal>
+
+      {/* TAMPER DETECTED CUSTOM ALERT */}
+      <CustomAlert
+        visible={tamperAlert.visible}
+        title={tamperAlert.title}
+        message={tamperAlert.message}
+        onClose={() => setTamperAlert((prev) => ({ ...prev, visible: false }))}
+      />
     </ScrollView>
   );
 }
