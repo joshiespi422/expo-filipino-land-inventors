@@ -117,12 +117,8 @@ export default function NotificationsPage() {
 
     if (item.route) {
       try {
-        console.log("📍 [Notification] Original route:", item.route);
-
         const [rawPath, queryString] = item.route.split("?");
-
         const cleanPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
-        console.log("📍 [Notification] Clean path:", cleanPath);
 
         const params: Record<string, string> = {};
         if (queryString) {
@@ -131,9 +127,7 @@ export default function NotificationsPage() {
             params[key] = val;
           });
         }
-
         params.from = "notification";
-        console.log("📍 [Notification] Final params:", params);
 
         router.push({
           pathname: cleanPath as any,

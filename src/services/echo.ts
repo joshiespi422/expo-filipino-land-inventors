@@ -58,8 +58,6 @@ try {
     forceTLS: isSecure,
     enabledTransports: isSecure ? ["ws", "wss"] : ["ws"],
   });
-
-  console.log("✅ Echo initialized successfully");
 } catch (err) {
   console.error("❌ Echo/Pusher setup failed — real-time chat disabled:", err);
   echo = null;
