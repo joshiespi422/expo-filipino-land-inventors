@@ -1,3 +1,4 @@
+import { useAuthStore } from "@/store/useAuthStore";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useRef, useState } from "react";
@@ -23,36 +24,38 @@ const { width } = Dimensions.get("window");
 
 const slides = [
   {
-    normal: "Need",
-    highlight: "Business",
-    second: "Training?",
+    highlight: "Develop your skills",
+    second: "and grow your business with confidence.",
     image: s1,
   },
   {
-    normal: "Need",
-    highlight: "Intellectual",
-    second: "Property Assistance?",
+    highlight: "Stay informed",
+    second: "with the latest news, events, and activities.",
     image: s2,
   },
   {
-    normal: "Need",
-    highlight: "Funding &",
-    second: "Investment Opportunities?",
+    highlight: "Join our growing community",
+    second: "and discover opportunities together.",
     image: s3,
   },
   {
-    normal: "Need",
-    highlight: "Loan",
-    second: "Assistance",
-    second_normal: "and more?",
+    highlight: "Empowering Filipino ideas",
+    second: "and",
+    second_highlight: "innovation.",
     image: s4,
   },
 ];
 
-const WELCOME_COMPLETED_KEY = "welcome_page_completed";
-
 export default function CongratulationPage() {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+
+  // Scope the "completed" flag to the logged-in user, not the whole device.
+  // Falls back to a guest key only if user isn't hydrated yet (shouldn't
+  // normally render this screen without a user, but guards against crashes).
+  const WELCOME_COMPLETED_KEY = user?.id
+    ? `welcome_page_completed_${user.id}`
+    : "welcome_page_completed_guest";
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -67,19 +70,19 @@ export default function CongratulationPage() {
   const [navigating, setNavigating] = useState(false);
 
   // ============================================================
-  // CHECK IF WELCOME PAGE WAS ALREADY COMPLETED
+  // CHECK IF WELCOME PAGE WAS ALREADY COMPLETED (per user)
   // ============================================================
 
   useEffect(() => {
     let mounted = true;
 
     const checkWelcomeStatus = async () => {
+      if (!user?.id) return;
+
       try {
         const completed = await SecureStore.getItemAsync(WELCOME_COMPLETED_KEY);
 
         if (completed === "true" && mounted) {
-          // This screen has already been completed.
-          // Never allow it to remain in navigation history.
           router.replace("/(main)/");
           return;
         }
@@ -93,7 +96,7 @@ export default function CongratulationPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user?.id]);
 
   // ============================================================
   // SPLASH ANIMATION
@@ -273,13 +276,9 @@ export default function CongratulationPage() {
 
             <View className="mt-8 items-center">
               <Text className="text-[28px] font-bold text-center leading-[42px]">
-                {item.normal}{" "}
-                <Text className="text-primary">{item.highlight}</Text>
-              </Text>
-
-              <Text className="text-[28px] font-bold text-center leading-[42px]">
-                <Text className="text-primary">{item.second}</Text>{" "}
-                {item.second_normal}
+                <Text className="text-primary">{item.highlight} </Text>{" "}
+                {item.second}{" "}
+                <Text className="text-primary">{item.second_highlight}</Text>
               </Text>
             </View>
           </View>
