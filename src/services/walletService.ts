@@ -13,6 +13,7 @@ export interface WalletResponse {
 
 export interface WalletTransaction {
   id: number;
+  wallet_id: number | string | null;
   amount: string;
   transfer_fee: string;
   type: string;
