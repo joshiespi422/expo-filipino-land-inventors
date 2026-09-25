@@ -338,7 +338,7 @@ export default function TransactionDetails({ transaction, onClose }: Props) {
 
             {/* DETAILS */}
             <View className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-              {accountNumber && String(accountNumber).trim() !== "1" ? (
+              {tx.type && String(tx.type).trim() !== "deposit" ? (
                 <DetailRow label="From" value={tx.from_name || "—"} />
               ) : tx.description ? (
                 <DetailRow label="Note" value={tx.description} />
@@ -346,7 +346,7 @@ export default function TransactionDetails({ transaction, onClose }: Props) {
 
               <DetailRow label="To" value={tx.to_account_name || "—"} />
 
-              {accountNumber && String(accountNumber).trim() !== "1" ? (
+              {tx.type && String(tx.type).trim() !== "deposit" ? (
                 <DetailRow
                   label="Account Number"
                   value={String(accountNumber)}
@@ -392,7 +392,7 @@ export default function TransactionDetails({ transaction, onClose }: Props) {
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={dismiss}
-              className="bg-[#3E4093] rounded-2xl h-14 justify-center items-center"
+              className="bg-primary rounded-2xl h-14 justify-center items-center"
             >
               <Text className="text-white text-center font-bold">Close</Text>
             </TouchableOpacity>
