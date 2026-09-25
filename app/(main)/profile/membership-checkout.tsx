@@ -1,6 +1,9 @@
 import { CustomAlert } from "@/components/CustomAlert";
 import {
+  calculateMembershipFee,
+  getMembershipConfig,
   getPaymentMethods,
+  MembershipConfig,
   payMembership,
   PaymentMethod,
 } from "@/services/membershipService";
@@ -25,6 +28,8 @@ export default function MembershipCheckoutPage() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
     null,
   );
+  const [membershipConfig, setMembershipConfig] =
+    useState<MembershipConfig | null>(null);
 
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [navigating, setNavigating] = useState(false);
@@ -75,6 +80,30 @@ export default function MembershipCheckoutPage() {
     return isNaN(num) ? 0 : Number(num.toFixed(2));
   };
 
+  const parsedAmount = parseAmount(safeAmount);
+
+  // =========================
+  // DYNAMIC FEE
+  // =========================
+  const membershipFee = membershipConfig?.fee
+    ? calculateMembershipFee(parsedAmount, membershipConfig.fee)
+    : 0;
+
+  const totalChargeAmount = parsedAmount + membershipFee;
+
+  // =========================
+  // LOAD FEE CONFIG
+  // =========================
+  const loadFeeConfig = async () => {
+    try {
+      const res = await getMembershipConfig();
+      setMembershipConfig(res.data);
+    } catch (err) {
+      console.log("Failed to load membership fee config", err);
+      // Not fatal — checkout still works, just without a fee breakdown shown
+    }
+  };
+
   // =========================
   // LOAD METHODS
   // =========================
@@ -109,6 +138,7 @@ export default function MembershipCheckoutPage() {
   };
 
   useEffect(() => {
+    loadFeeConfig();
     loadMethods();
   }, []);
 
@@ -119,8 +149,6 @@ export default function MembershipCheckoutPage() {
     try {
       isProcessing.current = true;
       setLoading(true);
-
-      const parsedAmount = parseAmount(safeAmount);
 
       const payload = {
         membership_schedule_id: Number(safeScheduleId),
@@ -161,6 +189,17 @@ export default function MembershipCheckoutPage() {
       const paymentAmount =
         payment?.amount || result?.amount || parsedAmount * 100;
 
+      // The fee actually charged by the gateway, in pesos — prefer the
+      // server's number (payment?.fee is in cents) over our local estimate,
+      // since transaction_fees may have changed between page loads.
+      const serverFeeCents = payment?.fee;
+      const feePesos =
+        typeof serverFeeCents === "number"
+          ? serverFeeCents / 100
+          : membershipFee;
+
+      const totalChargedPesos = Number(paymentAmount) / 100 + feePesos;
+
       // =========================
       // QR FLOW
       // =========================
@@ -172,6 +211,8 @@ export default function MembershipCheckoutPage() {
             qrUrl: String(qr),
             paymentIntentId: String(paymentIntentId || ""),
             amount: String(Number(paymentAmount) / 100),
+            fee: String(feePesos),
+            totalCharged: String(totalChargedPesos),
           },
         });
         return;
@@ -198,10 +239,7 @@ export default function MembershipCheckoutPage() {
       const message =
         error?.response?.data?.message || error?.message || "Payment failed";
 
-      if (
-        message.toLowerCase().includes("already paid") ||
-        message.toLowerCase().includes("already paid")
-      ) {
+      if (message.toLowerCase().includes("already paid")) {
         setAlert({
           visible: true,
           title: "Already Settled",
@@ -248,7 +286,13 @@ export default function MembershipCheckoutPage() {
     setAlert({
       visible: true,
       title: "Confirm Payment",
-      message: `Proceed with payment of ₱${formatAmount(safeAmount)} using ${selectedMethod.name}?`,
+      message: `Proceed with payment of ₱${formatAmount(safeAmount)} using ${
+        selectedMethod.name
+      }?${
+        membershipFee > 0
+          ? ` A ₱${membershipFee.toFixed(2)} fee applies — you'll be charged ₱${totalChargeAmount.toFixed(2)} total.`
+          : ""
+      }`,
       redirectHome: false,
       isConfirmation: true,
       onConfirm: () => {
@@ -296,6 +340,23 @@ export default function MembershipCheckoutPage() {
           <Text className="text-primary text-3xl font-black mt-1">
             ₱{formatAmount(safeAmount)}
           </Text>
+
+          {membershipFee > 0 && (
+            <View className="mt-4 pt-4 border-t border-slate-100">
+              <View className="flex-row justify-between mb-1">
+                <Text className="text-slate-500 text-sm">Processing Fee</Text>
+                <Text className="text-slate-700 text-sm font-semibold">
+                  ₱{membershipFee.toFixed(2)}
+                </Text>
+              </View>
+              <View className="flex-row justify-between">
+                <Text className="text-slate-500 text-sm">Total to Pay</Text>
+                <Text className="text-slate-800 text-sm font-bold">
+                  ₱{totalChargeAmount.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* METHODS */}
@@ -312,12 +373,20 @@ export default function MembershipCheckoutPage() {
               disabled={loading || navigating}
               onPress={() => setSelectedMethod(m)}
               className={`p-4 mb-3 rounded-xl border ${
-                active ? "border-primary bg-blue" : "border-gray-200 bg-white"
+                active
+                  ? "border-primary bg-blue-50/60"
+                  : "border-gray-200 bg-white"
               }`}
             >
-              <Text className="font-semibold">{m.name}</Text>
+              <Text
+                className={`font-semibold ${
+                  active ? "text-primary" : "text-slate-800"
+                }`}
+              >
+                {m.name}
+              </Text>
 
-              <Text className="text-xs text-gray-500 uppercase">
+              <Text className="text-xs text-gray-400 uppercase mt-0.5">
                 {m.gateway_type}
               </Text>
             </TouchableOpacity>
@@ -338,7 +407,10 @@ export default function MembershipCheckoutPage() {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text className="text-white font-bold text-lg">
-              Pay ₱{formatAmount(safeAmount)}
+              Pay ₱
+              {membershipFee > 0
+                ? totalChargeAmount.toFixed(2)
+                : formatAmount(safeAmount)}
             </Text>
           )}
         </TouchableOpacity>

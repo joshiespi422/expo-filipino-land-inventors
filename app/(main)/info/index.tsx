@@ -171,7 +171,7 @@ export default function InfoIndex() {
           <Text className="text-slate-600 leading-6">
             To build a globally recognized innovation cooperative that
             transforms Filipino inventions into sustainable industries, uplifts
-            communities, and strengthens the nation's self-reliance through
+            communities, and strengthens the nation{"'"}s self-reliance through
             science, creativity, and cooperative unity.
           </Text>
         </Card>
@@ -243,16 +243,16 @@ export default function InfoIndex() {
       <View className="px-5 mt-2 mb-10">
         <SectionTitle>Contact Us</SectionTitle>
         <Card>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             className="flex-row items-center py-2"
             onPress={call}
           >
             <Ionicons name="call-outline" size={20} color="#034194" />
             <Text className="text-slate-600 ml-3">(02) 1234-5678</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           <TouchableOpacity
-            className="flex-row items-center py-2 border-t border-slate-100"
+            className="flex-row items-center py-2 border-slate-100"
             onPress={email}
           >
             <Ionicons name="mail-outline" size={20} color="#034194" />
