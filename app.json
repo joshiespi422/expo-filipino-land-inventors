@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "FISMPC",
-    "slug": "fismpc",
+    "name": "expo-filipino-land-inventors",
+    "slug": "expo-filipino-land-inventors",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/applogoicon.jpg",
