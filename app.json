@@ -40,12 +40,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_EXTERNAL_STORAGE",
-        "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
-      ],
+      "permissions": ["USE_BIOMETRIC", "USE_FINGERPRINT"],
       "softwareKeyboardLayoutMode": "resize"
     },
 
@@ -82,7 +77,9 @@
         "expo-media-library",
         {
           "photosPermission": "Allow Filipino Land Inventors to save QR codes to your gallery.",
-          "savePhotosPermission": "Allow Filipino Land Inventors to save QR codes to your gallery."
+          "savePhotosPermission": "Allow Filipino Land Inventors to save QR codes to your gallery.",
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": ["photo"]
         }
       ],
       "expo-sharing",
