@@ -3,7 +3,6 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -147,16 +146,6 @@ function ChatSupportPageInner() {
     try {
       setDownloadingFileId(attachment.id);
 
-      const hasPermission = await requestFilePermissions();
-      if (!hasPermission) {
-        Alert.alert(
-          "Permission Required",
-          "File storage permission is required to download files.",
-        );
-        setDownloadingFileId(null);
-        return;
-      }
-
       let baseDir: string | null = null;
 
       if (FileSystem.cacheDirectory && FileSystem.cacheDirectory.length > 0) {
@@ -174,9 +163,7 @@ function ChatSupportPageInner() {
       }
 
       if (!baseDir || baseDir.length === 0) {
-        throw new Error(
-          "No writable directory available. Try saving to gallery instead.",
-        );
+        throw new Error("No writable directory available.");
       }
 
       if (!baseDir.endsWith("/")) {
@@ -200,36 +187,13 @@ function ChatSupportPageInner() {
       } else {
         Alert.alert("Success", `${fileName} downloaded successfully`);
       }
-
-      setDownloadingFileId(null);
     } catch (error) {
-      try {
-        const mediaPermission = await MediaLibrary.requestPermissionsAsync();
-        if (mediaPermission.status !== "granted") {
-          throw new Error("Media Library permission denied");
-        }
-
-        const tempUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}temp_${Date.now()}_${fileName}`;
-        const downloadResult = await FileSystem.downloadAsync(
-          finalUrl,
-          tempUri,
-        );
-
-        if (downloadResult.status === 200) {
-          const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
-          await MediaLibrary.createAlbumAsync("Downloads", asset, false);
-          Alert.alert("Success", `${fileName} saved to your gallery`);
-          setDownloadingFileId(null);
-          return;
-        }
-      } catch (fallbackError) {
-        console.error("Fallback download failed:", fallbackError);
-      }
-
-      setDownloadingFileId(null);
+      console.error("Download failed:", error);
       const errorMsg =
         error instanceof Error ? error.message : "Unknown error occurred";
       Alert.alert("Download Error", "Could not download file. " + errorMsg);
+    } finally {
+      setDownloadingFileId(null);
     }
   };
 
@@ -439,64 +403,70 @@ function ChatSupportPageInner() {
 
   const handlePickImage = async () => {
     if (sending || !conversationId) return;
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert("Permission Denied", "We need access to add images.");
-      return;
-    }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: false,
-      quality: 0.8,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        quality: 0.8,
+      });
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const targetAsset = result.assets[0];
-      const formData = new FormData();
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const targetAsset = result.assets[0];
+        const formData = new FormData();
 
-      const bodyText = draft.trim();
-      if (bodyText) {
-        formData.append("body", bodyText);
+        const bodyText = draft.trim();
+
+        if (bodyText) {
+          formData.append("body", bodyText);
+        }
+
+        setDraft("");
+        setInputResetKey((k) => k + 1);
+
+        const rawUri = targetAsset.uri;
+
+        const filename =
+          targetAsset.fileName || rawUri.split("/").pop() || "upload.jpg";
+
+        const match = /\.(\w+)$/.exec(filename);
+
+        const mime = match ? `image/${match[1]}` : "image/jpeg";
+
+        formData.append("attachments[]", {
+          uri: rawUri,
+          name: filename,
+          type: mime,
+        } as any);
+
+        const tempId = `temp-${Date.now()}`;
+
+        const tempMessage: Message = {
+          id: tempId as any,
+          conversation_id: Number(conversationId),
+          sender_id: userId as number,
+          body: bodyText || null,
+          created_at: new Date().toISOString(),
+          attachments: [
+            {
+              id: tempId as any,
+              path: rawUri,
+              original_name: filename,
+              mime_type: mime,
+              size: targetAsset.fileSize || 0,
+            },
+          ],
+        };
+
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+        setMessages((prev) => [tempMessage, ...prev]);
+
+        await processMessagePayload(formData, tempId);
       }
-      setDraft("");
-      setInputResetKey((k) => k + 1);
-
-      const rawUri = targetAsset.uri;
-      const filename =
-        targetAsset.fileName || rawUri.split("/").pop() || "upload.jpg";
-      const match = /\.(\w+)$/.exec(filename);
-      const mime = match ? `image/${match[1]}` : `image/jpeg`;
-
-      formData.append("attachments[]", {
-        uri: rawUri,
-        name: filename,
-        type: mime,
-      } as any);
-
-      const tempId = `temp-${Date.now()}`;
-      const tempMessage: Message = {
-        id: tempId as any,
-        conversation_id: Number(conversationId),
-        sender_id: userId as number,
-        body: bodyText || null,
-        created_at: new Date().toISOString(),
-        attachments: [
-          {
-            id: tempId as any,
-            path: rawUri,
-            original_name: filename,
-            mime_type: mime,
-            size: targetAsset.fileSize || 0,
-          },
-        ],
-      };
-
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setMessages((prev) => [tempMessage, ...prev]);
-
-      await processMessagePayload(formData, tempId);
+    } catch (err) {
+      console.error("Image picker failure:", err);
+      Alert.alert("Error", "Could not select the image. Please try again.");
     }
   };
 
